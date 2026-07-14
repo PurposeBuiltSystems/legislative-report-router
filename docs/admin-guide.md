@@ -1,0 +1,70 @@
+# Administrator guide
+
+The admin surface is **Microsoft Lists** — no separate admin app to deploy.
+You create two lists once; coordinators point the add-in at the site in
+Settings.
+
+## 1. Create the routing list
+
+On your chosen SharePoint site, create a list named `LegislativeRoutingMatrix`
+with these columns (all "Single line of text" unless noted):
+
+| Column | Notes |
+| --- | --- |
+| Title | = DivisionCode (SharePoint's built-in Title column) |
+| DivisionCode | MVD, TDD, SOD, ELT, AG Office, … |
+| DivisionName | Motor Vehicle Division, … |
+| Aliases | semicolon-separated alternative names ("Motor Vehicle; Motor Vehicles") |
+| Emails | semicolon-separated targeted-email recipients |
+| TeamsTeamId | Teams team GUID (Teams → team → ⋯ → Get link to team → `groupId=`) |
+| TeamsChannelId | channel ID (⋯ on the channel → Get link to channel → `19:...@thread.tacv2`) |
+| TeamsChannelName | display name (for the review UI) |
+| TeamsTagId | tag GUID — use the add-in's Settings → "Teams tag ID lookup" |
+| TeamsTagName | tag display name as it appears in Teams |
+| MentionUserIds | semicolon-separated Entra object IDs (optional, for individual mentions) |
+| MentionUserEmails | matching display emails (optional) |
+| IsActive | Yes/No |
+| Priority | Number — highest wins when multiple rules match a division |
+| EffectiveStartDate | Date (optional) |
+| EffectiveEndDate | Date (optional) |
+| Notes | free text |
+
+**Rule semantics:** a division token from the report matches a rule when it
+equals the DivisionCode, DivisionName, or any alias (case-insensitive). Among
+matches that are active and within their effective dates, the highest
+Priority wins. Session handoffs = add the new rule with a later
+EffectiveStartDate and end-date the old one; history stays intact.
+
+## 2. Create the audit list
+
+Same site, list named `LegislativeAudit`, columns (Single line of text):
+
+```
+Title (bill number)   ReportKey   IdempotencyKey   TeamId   ChannelId
+TeamsMessageId   Status   Error   Divisions   EmailRecipients
+PublishedBy   SourceSubject
+```
+
+The add-in appends one row per publish attempt. **Do not delete rows** for
+reports that may be re-run — the IdempotencyKey rows are what prevent
+duplicate posts.
+
+## 3. Import the existing Excel routing matrix
+
+Microsoft Lists imports Excel directly: List → ⋯ → "Export/Import" or create
+the list *from* the Excel file, then rename columns to match the table
+above. For tag IDs, use the add-in's tag lookup (Settings → paste the Team
+ID → Fetch tags) and copy each `TeamsTagId` into the matching row.
+
+## 4. Permissions to grant
+
+- Coordinators: **edit** on both lists (audit rows are written as them).
+- Division reviewers: no list access needed — they just receive posts/emails.
+- The Entra app needs one-time admin consent (`docs/permissions.md`).
+
+## 5. Validating a route
+
+In the add-in: Settings → connect the site → parse a test report → the
+Review screen shows exactly which rule each division resolved to and flags
+rules missing tag IDs. Preview shows the rendered post before anything is
+published.

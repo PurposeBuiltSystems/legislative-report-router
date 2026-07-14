@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Legislative Report Router - Outlook add-in (add-in only / XML manifest).
+
+  Task pane on BOTH read and compose surfaces: a legislative coordinator can
+  parse a received Daily Bill Report or a draft before sending. Parse ->
+  review -> preview -> publish to Teams channels with real tag mentions +
+  consolidated division emails, with a SharePoint audit trail and
+  idempotent publication.
+
+  Sign-in uses nested app authentication (MSAL) - no backend. Delegated
+  scopes only; cloud endpoints configurable (Commercial/GCC/GCC High/DoD).
+-->
+<OfficeApp
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0"
+  xsi:type="MailApp">
+
+  <Id>c02ab6d7-a54e-49d4-b440-6a6da79ea34b</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>PurposeBuiltSystems</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="Legislative Report Router" />
+  <Description DefaultValue="Parse a bill report, review the distribution, and publish each bill to the right Teams channel with real tag mentions - plus targeted division emails and a full audit trail." />
+  <IconUrl DefaultValue="https://purposebuiltsystems.github.io/legislative-report-router/assets/icon-64.png" />
+  <HighResolutionIconUrl DefaultValue="https://purposebuiltsystems.github.io/legislative-report-router/assets/icon-128.png" />
+  <SupportUrl DefaultValue="https://purposebuiltsystems.github.io/legislative-report-router/support.html" />
+
+  <AppDomains>
+    <AppDomain>https://purposebuiltsystems.github.io</AppDomain>
+    <AppDomain>https://login.microsoftonline.com</AppDomain>
+    <AppDomain>https://login.microsoftonline.us</AppDomain>
+  </AppDomains>
+
+  <Hosts>
+    <Host Name="Mailbox" />
+  </Hosts>
+
+  <Requirements>
+    <Sets>
+      <Set Name="Mailbox" MinVersion="1.8" />
+    </Sets>
+  </Requirements>
+
+  <FormSettings>
+    <Form xsi:type="ItemRead">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://purposebuiltsystems.github.io/legislative-report-router/src/taskpane/taskpane.html" />
+        <RequestedHeight>350</RequestedHeight>
+      </DesktopSettings>
+    </Form>
+    <Form xsi:type="ItemEdit">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://purposebuiltsystems.github.io/legislative-report-router/src/taskpane/taskpane.html" />
+      </DesktopSettings>
+    </Form>
+  </FormSettings>
+
+  <!-- ReadWriteItem: the pane reads the report body/attachments and, in
+       compose, saves the draft so it can be sent on publish. All other
+       access is delegated Graph as the signed-in coordinator. -->
+  <Permissions>ReadWriteItem</Permissions>
+
+  <Rule xsi:type="RuleCollection" Mode="Or">
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Read" />
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Edit" />
+  </Rule>
+  <DisableEntityHighlighting>false</DisableEntityHighlighting>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Requirements>
+      <bt:Sets DefaultMinVersion="1.8">
+        <bt:Set Name="Mailbox" />
+      </bt:Sets>
+    </Requirements>
+
+    <Hosts>
+      <Host xsi:type="MailHost">
+        <DesktopFormFactor>
+          <ExtensionPoint xsi:type="MessageReadCommandSurface">
+            <OfficeTab id="TabDefault">
+              <Group id="lrrReadGroup">
+                <Label resid="GroupLabel" />
+                <Control xsi:type="Button" id="openLrrRead">
+                  <Label resid="ButtonLabel" />
+                  <Supertip>
+                    <Title resid="ButtonLabel" />
+                    <Description resid="ButtonTip" />
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16" />
+                    <bt:Image size="32" resid="Icon.32" />
+                    <bt:Image size="80" resid="Icon.80" />
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="Taskpane.Url" />
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+          <ExtensionPoint xsi:type="MessageComposeCommandSurface">
+            <OfficeTab id="TabDefault">
+              <Group id="lrrComposeGroup">
+                <Label resid="GroupLabel" />
+                <Control xsi:type="Button" id="openLrrCompose">
+                  <Label resid="ButtonLabel" />
+                  <Supertip>
+                    <Title resid="ButtonLabel" />
+                    <Description resid="ButtonTip" />
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16" />
+                    <bt:Image size="32" resid="Icon.32" />
+                    <bt:Image size="80" resid="Icon.80" />
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="Taskpane.Url" />
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16" DefaultValue="https://purposebuiltsystems.github.io/legislative-report-router/assets/icon-16.png" />
+        <bt:Image id="Icon.32" DefaultValue="https://purposebuiltsystems.github.io/legislative-report-router/assets/icon-32.png" />
+        <bt:Image id="Icon.80" DefaultValue="https://purposebuiltsystems.github.io/legislative-report-router/assets/icon-80.png" />
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://purposebuiltsystems.github.io/legislative-report-router/src/taskpane/taskpane.html" />
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="GroupLabel" DefaultValue="Legislative" />
+        <bt:String id="ButtonLabel" DefaultValue="Report Router" />
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="ButtonTip" DefaultValue="Parse this bill report, review the distribution, and publish each bill to the right Teams channel with real tag mentions." />
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>

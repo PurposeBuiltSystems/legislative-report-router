@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Legislative Report Router</title>
+
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+  <link rel="stylesheet" href="taskpane.css" />
+</head>
+<body>
+  <header class="app-head">
+    <h1>Legislative Report Router</h1>
+    <p class="sub">From bill report to the right people&mdash;without manual routing.</p>
+  </header>
+
+  <nav class="tabs">
+    <button data-screen="overview" class="tab active">Overview</button>
+    <button data-screen="review" class="tab">Review</button>
+    <button data-screen="preview" class="tab">Preview</button>
+    <button data-screen="publish" class="tab">Publish</button>
+    <button data-screen="audit" class="tab">Audit</button>
+  </nav>
+
+  <!-- Screen 1: Overview -->
+  <section id="screen-overview" class="screen">
+    <div class="stat-grid">
+      <div class="stat"><span id="stSubject" class="stat-big">—</span><span>Subject</span></div>
+      <div class="stat"><span id="stBills" class="stat-big">0</span><span>Bills detected</span></div>
+      <div class="stat"><span id="stMatched" class="stat-big">0</span><span>Matched</span></div>
+      <div class="stat"><span id="stUnmatched" class="stat-big stat-warn">0</span><span>Unmatched</span></div>
+      <div class="stat"><span id="stWarnings" class="stat-big stat-warn">0</span><span>With warnings</span></div>
+      <div class="stat"><span id="stSaved" class="stat-big">never</span><span>Last saved</span></div>
+    </div>
+
+    <label>Source
+      <select id="source">
+        <option value="body">Email body</option>
+        <option value="docx">DOCX attachment</option>
+        <option value="both">Email body + DOCX</option>
+      </select>
+    </label>
+
+    <div class="actions-row">
+      <button id="parse" class="primary">Parse Report</button>
+      <button id="loadDraft">Load Saved Draft</button>
+      <button id="saveDraft">Save Draft Distribution</button>
+    </div>
+
+    <details id="settings" class="options">
+      <summary>Settings</summary>
+      <label>Cloud environment
+        <select id="cloud">
+          <option value="commercial">Commercial</option>
+          <option value="gcc">GCC</option>
+          <option value="gcchigh">GCC High</option>
+          <option value="dod">DoD</option>
+        </select>
+      </label>
+      <label>SharePoint site URL (routing + audit lists)
+        <input id="siteUrl" type="text" placeholder="https://yourtenant.sharepoint.com/sites/Legislative" />
+      </label>
+      <div class="row2">
+        <label>Routing list <input id="routingList" type="text" value="LegislativeRoutingMatrix" /></label>
+        <label>Audit list <input id="auditList" type="text" value="LegislativeAudit" /></label>
+      </div>
+      <button id="connectRules">Connect &amp; load routing rules</button>
+      <p id="rulesInfo" class="hint"></p>
+      <label>Comment window text
+        <input id="commentWindow" type="text" value="Review comments requested within 48 business hours." />
+      </label>
+      <details class="options">
+        <summary>Teams tag ID lookup</summary>
+        <label>Team ID <input id="lookupTeamId" type="text" placeholder="GUID from Teams &gt; Get link to team" /></label>
+        <button id="lookupTags">Fetch tags</button>
+        <pre id="tagResults" class="code" hidden></pre>
+      </details>
+    </details>
+
+    <div id="parserWarnings" class="warnbox" hidden></div>
+  </section>
+
+  <!-- Screen 2: Review -->
+  <section id="screen-review" class="screen" hidden>
+    <div class="bulk-row">
+      <label>Bulk apply route to checked
+        <select id="bulkRoute"></select>
+      </label>
+      <button id="bulkApply">Apply</button>
+    </div>
+    <div id="items"></div>
+  </section>
+
+  <!-- Screen 3: Preview -->
+  <section id="screen-preview" class="screen" hidden>
+    <div id="previewList"></div>
+  </section>
+
+  <!-- Screen 4: Publish -->
+  <section id="screen-publish" class="screen" hidden>
+    <div id="publishSummary" class="confirmbox"></div>
+    <div class="modes">
+      <label><input id="optTeams" type="checkbox" checked /> Post to Teams</label>
+      <label><input id="optEmail" type="checkbox" checked /> Send targeted division emails</label>
+      <label><input id="optOriginal" type="checkbox" /> Send the original Outlook message</label>
+    </div>
+    <label class="confirm-check"><input id="confirmBox" type="checkbox" /> I reviewed the distribution and confirm publication.</label>
+    <div class="actions-row">
+      <button id="publishGo" class="primary" disabled>Publish</button>
+      <button id="retryFailed" hidden>Retry failed only</button>
+    </div>
+    <div id="publishLog" class="publog"></div>
+  </section>
+
+  <!-- Screen 5: Audit -->
+  <section id="screen-audit" class="screen" hidden>
+    <button id="refreshAudit">Refresh audit history</button>
+    <div id="auditListView"></div>
+  </section>
+
+  <section id="status" class="status" hidden></section>
+
+  <script src="../parser.js"></script>
+  <script src="../routing.js"></script>
+  <script src="../teams.js"></script>
+  <script src="../docx.js"></script>
+  <script src="../graph.js"></script>
+  <script src="taskpane.js"></script>
+</body>
+</html>

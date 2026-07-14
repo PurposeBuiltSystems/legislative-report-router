@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Support — Legislative Report Router</title>
+  <style>
+    body { font-family: -apple-system, Segoe UI, sans-serif; margin: 3rem auto; max-width: 44rem; padding: 0 1rem; color: #242424; line-height: 1.55; }
+    h1 { color: #0f6cbd; } h2 { margin-top: 2rem; }
+    .muted { color: #616161; }
+  </style>
+</head>
+<body>
+  <h1>Support</h1>
+  <p class="muted">Add-in: <strong>Legislative Report Router</strong></p>
+  <h2>Workflow</h2>
+  <ol>
+    <li>Open (or compose) the Daily Bill Report and click <strong>Report Router</strong> on the ribbon.</li>
+    <li>One-time Settings: cloud environment, SharePoint site URL, then <strong>Connect &amp; load routing rules</strong>.</li>
+    <li><strong>Parse Report</strong> → review each bill's divisions and routes → <strong>Preview</strong> → <strong>Publish</strong> (explicit confirmation required).</li>
+  </ol>
+  <h2>Common issues</h2>
+  <ul>
+    <li><strong>Unknown division</strong> — no active rule matches. Fix the division text, add an alias to the routing list, or exclude the bill.</li>
+    <li><strong>Route has no tag</strong> — the post publishes without a mention; add the TeamsTagId (Settings → tag lookup) to mention the tag.</li>
+    <li><strong>Duplicate protection</strong> — re-publishing a report skips bills already recorded as published in the audit list; only failures re-run.</li>
+    <li><strong>Bills not detected</strong> — the bill number must appear alone on its own line ("HF935"). See the parser rules in the repository docs.</li>
+  </ul>
+  <h2>Privacy</h2>
+  <p>No data collection — parsing and publishing run in your own Microsoft 365 session. See the <a href="privacy-policy.html">Privacy Policy</a>.</p>
+  <h2>Contact</h2>
+  <p><a href="mailto:Matthew@purposebuilt.systems">Matthew@purposebuilt.systems</a></p>
+</body>
+</html>

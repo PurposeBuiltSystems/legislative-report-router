@@ -1,0 +1,78 @@
+/* Legislative Report Router — Fluent-adjacent, quiet, government-friendly. */
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", -apple-system, sans-serif;
+  margin: 0; padding: 0 12px 24px;
+  color: #242424; font-size: 13px; background: #fff;
+}
+.app-head { padding: 12px 0 4px; }
+.app-head h1 { margin: 0; font-size: 17px; color: #0f6cbd; }
+.app-head .sub { margin: 2px 0 0; color: #616161; font-size: 12px; }
+
+.tabs { display: flex; gap: 2px; margin: 10px 0; border-bottom: 1px solid #e1e1e1; }
+.tab { border: none; background: none; padding: 7px 10px; cursor: pointer; font: inherit; color: #424242; border-bottom: 2px solid transparent; }
+.tab.active { color: #0f6cbd; border-bottom-color: #0f6cbd; font-weight: 600; }
+
+.stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+.stat { background: #f8f8f8; border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 2px; color: #616161; font-size: 11px; }
+.stat-big { font-size: 15px; font-weight: 700; color: #242424; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-warn { color: #a4262c; }
+
+label { display: block; margin: 8px 0 0; color: #424242; }
+input[type="text"], select, textarea {
+  width: 100%; margin-top: 2px; padding: 6px 8px;
+  border: 1px solid #d1d1d1; border-radius: 4px; font: inherit;
+}
+textarea { resize: vertical; margin-top: 6px; }
+.row2 { display: flex; gap: 8px; }
+.row2 label { flex: 1; }
+.modes { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.modes label, .confirm-check { display: inline-flex; align-items: center; gap: 6px; }
+.modes input, .confirm-check input { width: auto; }
+
+button { font: inherit; padding: 7px 14px; border-radius: 4px; cursor: pointer; border: 1px solid #d1d1d1; background: #fff; color: #242424; }
+button.primary { background: #0f6cbd; border-color: #0f6cbd; color: #fff; font-weight: 600; }
+button:disabled { opacity: .55; cursor: default; }
+.actions-row { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+
+.options { margin: 10px 0; border: 1px solid #e1e1e1; border-radius: 6px; padding: 8px 10px; }
+.options summary { cursor: pointer; font-weight: 600; color: #424242; }
+.hint { color: #616161; font-size: 12px; margin: 6px 0; }
+.hint.warn { color: #8a6d00; }
+.code { background: #f3f2f1; padding: 8px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 11px; white-space: pre-wrap; }
+
+.warnbox { background: #fff8e6; color: #8a6d00; border-radius: 6px; padding: 9px 11px; margin: 10px 0; font-size: 12.5px; }
+.confirmbox { background: #eff6fc; color: #0f548c; border-radius: 6px; padding: 10px 12px; margin: 10px 0; line-height: 1.6; }
+
+.bulk-row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 8px; }
+.bulk-row label { flex: 1; }
+
+.item { border: 1px solid #e1e1e1; border-left: 4px solid #6bb700; border-radius: 6px; padding: 8px 10px; margin: 8px 0; }
+.item.partially-matched { border-left-color: #f7a800; }
+.item.unmatched { border-left-color: #a4262c; }
+.item.excluded { border-left-color: #c8c8c8; opacity: .6; }
+.item-head { display: flex; align-items: center; gap: 8px; }
+.item-head input[type="checkbox"] { width: auto; }
+.item-head .bill { width: 110px; font-weight: 700; }
+.badge { font-size: 11px; background: #f3f2f1; border-radius: 10px; padding: 2px 8px; color: #424242; }
+.conf { margin-left: auto; font-size: 11px; color: #6bb700; font-weight: 700; }
+.conf.low { color: #a4262c; }
+.unknown { color: #a4262c; font-weight: 600; font-size: 12.5px; margin: 6px 0 0; }
+.routes { margin: 6px 0 0; }
+.chip { display: inline-block; background: #eff6fc; color: #0f548c; border-radius: 10px; padding: 2px 8px; font-size: 11px; margin: 2px 2px 0 0; }
+.chip-warn { color: #a4262c; font-size: 11px; }
+
+.preview-post { border: 1px solid #e1e1e1; border-radius: 6px; padding: 8px 10px; margin: 8px 0; }
+.preview-post.email { border-left: 4px solid #0f6cbd; }
+.preview-body { background: #f8f8f8; border-radius: 4px; padding: 8px 10px; }
+
+.publog p { margin: 3px 0; font-size: 12.5px; }
+.publog .err { color: #a4262c; }
+.publog .warn { color: #8a6d00; }
+.audit-row { border-bottom: 1px solid #f0f0f0; padding: 4px 0; margin: 0; font-size: 12px; }
+.audit-row.err { color: #a4262c; }
+
+.status { margin: 12px 0; padding: 9px 11px; border-radius: 6px; font-size: 12.5px; word-break: break-word; position: sticky; bottom: 8px; }
+.status.info  { background: #e7f2e9; color: #0e5c2f; }
+.status.work  { background: #eff6fc; color: #0f548c; }
+.status.error { background: #fdf3f4; color: #a4262c; }
