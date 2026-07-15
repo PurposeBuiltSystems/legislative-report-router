@@ -20,6 +20,7 @@
 
   <nav class="tabs">
     <button data-screen="overview" class="tab active">Overview</button>
+    <button data-screen="filings" class="tab">Filings</button>
     <button data-screen="review" class="tab">Review</button>
     <button data-screen="preview" class="tab">Preview</button>
     <button data-screen="publish" class="tab">Publish</button>
@@ -68,6 +69,9 @@
         <label>Routing list <input id="routingList" type="text" value="LegislativeRoutingMatrix" /></label>
         <label>Audit list <input id="auditList" type="text" value="LegislativeAudit" /></label>
       </div>
+      <label>Bill tracker list (blank to disable status tracking)
+        <input id="trackerList" type="text" value="BillTracker" />
+      </label>
       <button id="connectRules">Connect &amp; load routing rules</button>
       <p id="rulesInfo" class="hint"></p>
       <label>Comment window text
@@ -82,6 +86,24 @@
     </details>
 
     <div id="parserWarnings" class="warnbox" hidden></div>
+  </section>
+
+  <!-- Screen 1b: New filings (intraday feed — hours ahead of the end-of-day report) -->
+  <section id="screen-filings" class="screen" hidden>
+    <p class="hint">Newly filed bills from the Iowa GA feed (mirrored every 30 minutes) — no waiting for the end-of-day report.</p>
+    <div class="row2">
+      <label>Watch window (days)
+        <input id="watchDays" type="number" min="1" max="14" value="3" />
+      </label>
+      <label>&nbsp;<button id="loadFilings" class="primary" style="width:100%">Check new filings</button></label>
+    </div>
+    <label>Watch terms (comma separated; blank = all bills)
+      <input id="watchTerms" type="text" value="transportation, motor vehicle, highway, executive department, driver, railroad, aviation" />
+    </label>
+    <div id="filingsList"></div>
+    <div class="actions-row">
+      <button id="routeFilings" hidden>Route selected bills →</button>
+    </div>
   </section>
 
   <!-- Screen 2: Review -->
@@ -124,11 +146,12 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js"></script>
-  <script src="../routing.js"></script>
-  <script src="../teams.js"></script>
-  <script src="../docx.js"></script>
-  <script src="../graph.js"></script>
-  <script src="taskpane.js"></script>
+  <script src="../parser.js?v=2"></script>
+  <script src="../routing.js?v=2"></script>
+  <script src="../teams.js?v=2"></script>
+  <script src="../docx.js?v=2"></script>
+  <script src="../graph.js?v=2"></script>
+  <script src="../feed.js?v=2"></script>
+  <script src="taskpane.js?v=2"></script>
 </body>
 </html>

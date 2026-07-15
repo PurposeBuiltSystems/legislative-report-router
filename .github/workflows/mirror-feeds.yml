@@ -1,0 +1,29 @@
+name: Mirror Iowa GA newly-filed feeds
+
+# The Legislature's RSS has a broken CORS header, so the task pane can't
+# fetch it directly. This mirrors the public feeds into the repo so GitHub
+# Pages serves them same-origin. Runs every 30 min on weekdays during
+# working hours (UTC; Iowa is UTC-5/-6), and can be run manually.
+on:
+  schedule:
+    - cron: "*/30 12-23 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch feeds
+        run: |
+          curl -sf "https://www.legis.iowa.gov/subscribe/rss/feeds/IowaBills.xml" -o feeds/IowaBills.xml
+          curl -sf "https://www.legis.iowa.gov/subscribe/rss/feeds/Amendments.xml" -o feeds/Amendments.xml || true
+      - name: Commit if changed
+        run: |
+          git config user.name "feed-mirror"
+          git config user.email "actions@github.com"
+          git add feeds/
+          git diff --cached --quiet && echo "No changes" || (git commit -m "Mirror Iowa GA feeds" && git push)

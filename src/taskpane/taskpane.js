@@ -49,7 +49,7 @@
   // ---------- screens ----------
 
   function show(screen) {
-    ["overview", "review", "preview", "publish", "audit"].forEach(function (s) {
+    ["overview", "filings", "review", "preview", "publish", "audit"].forEach(function (s) {
       byId("screen-" + s).hidden = s !== screen;
     });
     document.querySelectorAll(".tab").forEach(function (t) {
@@ -59,10 +59,12 @@
     if (screen === "publish") { renderPublishSummary(); }
   }
 
+  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "watchTerms", "watchDays"];
+
   Office.onReady(function () {
     var s = settings();
-    ["cloud", "siteUrl", "routingList", "auditList", "commentWindow"].forEach(function (k) {
-      if (s[k]) { byId(k).value = s[k]; }
+    SETTING_KEYS.forEach(function (k) {
+      if (s[k] != null && s[k] !== "") { byId(k).value = s[k]; }
     });
     if (s.cloud) { GraphData.setCloud(s.cloud); }
     if (!s.siteUrl) { byId("settings").setAttribute("open", "open"); }
@@ -82,11 +84,13 @@
     byId("publishGo").addEventListener("click", function () { publish(false); });
     byId("retryFailed").addEventListener("click", function () { publish(true); });
     byId("refreshAudit").addEventListener("click", refreshAudit);
-    ["cloud", "siteUrl", "routingList", "auditList", "commentWindow"].forEach(function (k) {
+    byId("loadFilings").addEventListener("click", loadFilings);
+    byId("routeFilings").addEventListener("click", routeFilings);
+    SETTING_KEYS.forEach(function (k) {
       byId(k).addEventListener("change", function () {
         var p = {}; p[k] = byId(k).value; saveSettings(p);
         if (k === "cloud") { GraphData.setCloud(byId(k).value); state.site = null; }
-        if (k === "siteUrl" || k === "routingList" || k === "auditList") { state.site = null; }
+        if (k === "siteUrl" || k === "routingList" || k === "auditList" || k === "trackerList") { state.site = null; }
       });
     });
 
@@ -314,6 +318,78 @@
     setStatus("info", "Route " + rule.divisionCode + " applied to all included bills.");
   }
 
+  // ---------- new filings (intraday feed) ----------
+
+  var feedSelection = []; // [{entry, checked}]
+
+  async function loadFilings() {
+    byId("loadFilings").disabled = true;
+    try {
+      setStatus("work", "Checking the newly-filed feed…");
+      var res = await fetch("../../feeds/IowaBills.xml?ts=" + Date.now());
+      if (!res.ok) { throw new Error("Feed mirror unavailable (" + res.status + ")"); }
+      var xml = await res.text();
+      var entries = LrrFeed.parseFeed(xml);
+      var terms = byId("watchTerms").value.split(",").map(function (t) { return t.trim(); }).filter(Boolean);
+      var days = Number(byId("watchDays").value) || 3;
+      var hits = LrrFeed.watchFilter(entries, terms, days);
+
+      feedSelection = hits.map(function (e) { return { entry: e, checked: true }; });
+      var host = byId("filingsList");
+      host.innerHTML = "";
+      hits.forEach(function (e, i) {
+        var card = document.createElement("div");
+        card.className = "item matched";
+        var head = document.createElement("div");
+        head.className = "item-head";
+        var cb = document.createElement("input");
+        cb.type = "checkbox"; cb.checked = true;
+        cb.addEventListener("change", function () { feedSelection[i].checked = cb.checked; });
+        var b = document.createElement("strong");
+        b.textContent = e.bill;
+        var when = document.createElement("span");
+        when.className = "hint";
+        when.textContent = e.pubDate.toLocaleString();
+        head.appendChild(cb); head.appendChild(b); head.appendChild(when);
+        var p = document.createElement("p");
+        p.className = "hint";
+        p.textContent = e.description;
+        card.appendChild(head); card.appendChild(p);
+        host.appendChild(card);
+      });
+      byId("routeFilings").hidden = !hits.length;
+      setStatus("info", hits.length
+        ? hits.length + " watched filing(s) in the last " + days + " day(s). Select and route."
+        : "No watched filings in the window. (Feed mirror updates every 30 minutes on weekdays.)");
+    } catch (e) {
+      setStatus("error", "Feed check failed: " + ((e && e.message) || e));
+    } finally {
+      byId("loadFilings").disabled = false;
+    }
+  }
+
+  function routeFilings() {
+    var picked = feedSelection.filter(function (f) { return f.checked; });
+    if (!picked.length) { setStatus("error", "Nothing selected."); return; }
+    if (!state.reportKey) {
+      state.reportKey = "new-filings-" + new Date().toISOString().slice(0, 10);
+      state.subject = "New filings " + new Date().toLocaleDateString();
+    }
+    var existing = {};
+    state.items.forEach(function (it) { existing[it.billNumber] = true; });
+    var added = 0;
+    picked.forEach(function (f, i) {
+      if (existing[f.entry.bill]) { return; }
+      var item = LrrFeed.toLegislativeItem(f.entry, state.reportKey, state.items.length + i);
+      if (state.rules.length) { LrrRouting.routeItem(item, state.rules); }
+      state.items.push(item);
+      added++;
+    });
+    refreshStats(); renderItems();
+    setStatus("info", added + " bill(s) added to the distribution — assign divisions in Review.");
+    show("review");
+  }
+
   // ---------- rules ----------
 
   async function connectRules() {
@@ -324,10 +400,16 @@
       var site = await GraphData.resolveSite(token, byId("siteUrl").value);
       var routingListId = await GraphData.findList(token, site.siteId, byId("routingList").value.trim());
       var auditListId = await GraphData.findList(token, site.siteId, byId("auditList").value.trim());
+      var trackerListId = null;
+      var trackerName = byId("trackerList").value.trim();
+      if (trackerName) {
+        try { trackerListId = await GraphData.findList(token, site.siteId, trackerName); }
+        catch (e) { setStatus("error", 'Tracker list "' + trackerName + '" not found — status tracking disabled until it exists.'); }
+      }
       var raw = await GraphData.listItems(token, site.siteId, routingListId);
       state.rules = raw.map(function (r) { return LrrRouting.ruleFromSharePoint(r.fields || {}, r.id); })
         .filter(function (r) { return r.divisionCode; });
-      state.site = { siteId: site.siteId, routingListId: routingListId, auditListId: auditListId };
+      state.site = { siteId: site.siteId, routingListId: routingListId, auditListId: auditListId, trackerListId: trackerListId };
       byId("rulesInfo").textContent = state.rules.length + " routing rule(s) loaded from " + site.name +
         " (" + state.rules.filter(function (r) { return r.teamsTagId; }).length + " with Teams tags).";
       if (state.items.length) { LrrRouting.routeAll(state.items, state.rules); refreshStats(); renderItems(); }
@@ -523,6 +605,24 @@
                 Status: "published", Divisions: (it.distributedTo || []).join("; "),
                 PublishedBy: (me && me.emailAddress) || "", SourceSubject: state.subject,
               });
+              // Bill tracker: one row per bill × division so the Teams Lists
+              // tab shows per-division status and "who's still waiting".
+              if (state.site.trackerListId) {
+                var due = LrrFeed.addBusinessDays(new Date(), 2);
+                for (var tI = 0; tI < g.rules.length; tI++) {
+                  try {
+                    await GraphData.addListItem(token, state.site.siteId, state.site.trackerListId, {
+                      Title: it.billNumber,
+                      Division: g.rules[tI].divisionCode,
+                      Status: "Pending review",
+                      DueDate: due.toISOString().slice(0, 10),
+                      BillLink: ((it.sourceLinks || [])[0] || {}).href || "",
+                      Brief: String(it.title || it.brief || "").slice(0, 250),
+                      ReportKey: state.reportKey,
+                    });
+                  } catch (e2) { logLine("Tracker row for " + g.rules[tI].divisionCode + " failed: " + e2.message, "warn"); }
+                }
+              }
             } catch (e) {
               failures++;
               state.results[key] = { status: "failed", error: e.message };

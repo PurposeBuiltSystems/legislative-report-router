@@ -49,6 +49,32 @@ The add-in appends one row per publish attempt. **Do not delete rows** for
 reports that may be re-run — the IdempotencyKey rows are what prevent
 duplicate posts.
 
+## 2b. Create the bill tracker list (recommended)
+
+Same site, list named `BillTracker` — this is the shared "who's waiting on
+who" board and replaces individual completeness spreadsheets. Columns:
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| Title | text | bill number (written by the add-in) |
+| Division | text | one row per bill × division |
+| Status | **Choice** | `Pending review` / `In review` / `Commented` / `No comment needed` |
+| DueDate | Date | auto-set to +2 business days at publish |
+| BillLink | text | BillBook URL |
+| Brief | text | first 250 chars |
+| ReportKey | text | which report published it |
+
+The add-in writes one `Pending review` row per bill × division at publish
+time; division staff update Status themselves.
+
+**Pin it in Teams:** in the legislative channel, **+ Add a tab → Lists →
+existing list → BillTracker**. Create these views:
+
+- *My division* — filter Division = yours (the "filter tagged bills" ask)
+- *Still waiting* — Status = Pending review, grouped by Division, sorted by
+  DueDate (the cross-divisional "who's waiting on who" board)
+- *Overdue* — Pending review AND DueDate < today
+
 ## 3. Import the existing Excel routing matrix
 
 Microsoft Lists imports Excel directly: List → ⋯ → "Export/Import" or create
