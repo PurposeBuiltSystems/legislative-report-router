@@ -83,6 +83,14 @@
     return new RegExp("^(" + alts + ")\\s*-?\\s*(\\d+[A-Z]?)$", "i");
   }
 
+  // Amendment entries: "S-5235 filed on SF2284" / "H-8437 filed on SF2478".
+  // The amendment number + "filed on" + parent bill IS the boundary line.
+  var AMENDMENT_LINE_RE = /^([HS])\s*-?\s*(\d{1,6})\s+filed\s+on\s+([A-Z]{1,4})\s*-?\s*(\d+[A-Z]?)\b.*$/i;
+
+  // Column-label rows that appear mid-report ("Amendment Number",
+  // "Distributed To", "Title", ...) — layout furniture, never content.
+  var LABEL_LINE_RE = /^(bill\s+number|bill\s+distributed\s+to|bill\s+comment\s+requested\s+from|bill\s+brief[^:]*|amendment\s+number|distributed\s+to|comment\s+requested\s+from|title)\s*:?\s*$/i;
+
   function referenceRe(identifiers) {
     var alts = (identifiers || DEFAULT_IDENTIFIERS)
       .slice()
@@ -114,8 +122,13 @@
     return toks.every(function (t) {
       var tl = t.toLowerCase();
       if (known.length && (known.indexOf(tl) !== -1)) { return true; }
-      // fall back: short ALL-CAPS-ish code or "<CAPS> Office/Bureau/Division"
-      return /^[A-Z]{2,6}$/.test(t) || /^[A-Z][A-Za-z]{1,10}\s(office|bureau|division)$/i.test(t);
+      // qualifier form: "ELT - awareness" — code plus a lowercase note
+      var codePart = t.split(/\s*[-–]\s*/)[0];
+      if (known.length && known.indexOf(codePart.toLowerCase()) !== -1) { return true; }
+      // fall back: short ALL-CAPS-ish code (with optional qualifier) or
+      // "<Word> Office/Bureau/Division"
+      return /^[A-Z]{2,6}(\s*[-–]\s*\S.*)?$/.test(t) ||
+        /^[A-Z][A-Za-z]{1,10}\s(office|bureau|division)$/i.test(t);
     });
   }
 
@@ -152,16 +165,26 @@
       return { items: [], header: header, warnings: warnings, links: conv.links };
     }
 
-    // slice into blocks at standalone identifier lines
+    // slice into blocks at standalone identifier lines or amendment lines
     var blocks = [];
     var cur = null;
     for (var i = start; i < lines.length; i++) {
       var line = lines[i];
       if (SIGNATURE_RE.test(line)) { break; } // signature onward: stop
+      if (LABEL_LINE_RE.test(line)) { continue; } // column-label furniture
       var m = idRe.exec(line);
+      var am = AMENDMENT_LINE_RE.exec(line);
       if (m) {
         if (cur) { blocks.push(cur); }
-        cur = { billNumber: (m[1].toUpperCase() + m[2].toUpperCase()), documentType: m[1].toUpperCase(), lines: [], source: [line] };
+        cur = { billNumber: (m[1].toUpperCase() + m[2].toUpperCase()), documentType: m[1].toUpperCase(), lines: [], source: [line], relatedBill: "" };
+      } else if (am) {
+        if (cur) { blocks.push(cur); }
+        cur = {
+          billNumber: am[1].toUpperCase() + "-" + am[2],
+          documentType: "Amendment",
+          relatedBill: am[3].toUpperCase() + am[4].toUpperCase(),
+          lines: [], source: [line],
+        };
       } else if (cur) {
         if (FORWARD_RE.test(line) && !cur.lines.length) { continue; }
         cur.lines.push(line);
@@ -215,8 +238,10 @@
       var title = "";
       if (briefLines.length && briefLines[0].length <= 120) { title = briefLines[0]; }
 
-      // referenced bills inside the brief (never boundaries)
+      // referenced bills inside the brief (never boundaries); an
+      // amendment's parent bill leads the list
       var refs = [];
+      if (b.relatedBill) { refs.push(b.relatedBill); }
       var rm;
       refRe.lastIndex = 0;
       while ((rm = refRe.exec(brief)) !== null) {
@@ -235,6 +260,7 @@
         reportId: opts.reportId || "",
         billNumber: b.billNumber,
         documentType: b.documentType,
+        relatedBill: b.relatedBill || "",
         distributedTo: distributedTo,
         commentRequestedFrom: commentFrom,
         title: title,

@@ -232,6 +232,112 @@ check("email to", mail.to, ["mvd-leg@dot.example"]);
 check("email lists both bills", mail.html.indexOf("HF935") !== -1 && mail.html.indexOf("HF954") !== -1, true);
 check("email subject count", mail.subject.indexOf("(2)") !== -1, true);
 
+// ---------- real-world fixture: 4-30-2026 Daily Bill Report (abridged) ----------
+var REAL = [
+  "Daily Bill Report",
+  "2026 Legislative Session – 2nd Session, 91th Iowa General Assembly",
+  "",
+  "Distribution List:       Executive Leadership Team; Administrative Services/Systems Operations/IT/Transportation Development/Motor Vehicle/Field Operations; Division Legislative Coordinators; FHWA; and others.",
+  "",
+  "Division Directors and Legislative Coordinators:",
+  "To comment on a bill or amendment, please use the Microsoft TEAMS Legislation 91th General Assembly Network.",
+  "",
+  "Bill Number:",
+  "Bill Distributed To:",
+  "Bill Comment Requested From:",
+  "Title:",
+  "",
+  "HF2790",
+  "",
+  "ELT",
+  "ELT - awareness",
+  "red tape reduction internet site",
+  "Requires the secretary of state to establish a red tape reduction internet site.",
+  "Amends Code Chapter 9. Successor to HSB747. Appears to be same language.",
+  "",
+  "HF2792",
+  "",
+  "MVD, TDD",
+  "MVD, TDD",
+  "RIIF Appropriations",
+  "DIVISION I",
+  "REBUILD IOWA INFRASTRUCTURE FUND",
+  "12.  DEPARTMENT OF TRANSPORTATION",
+  "   a.  For acquiring, constructing, and improving recreational trails within the state:",
+  "   ...................................................................... $  2,500,000",
+  "Successor to HSB782, as amended.",
+  "",
+  "HF2793",
+  "",
+  "TDD",
+  "TDD",
+  "railway tracks overpass and underpass fund, under control of DOT",
+  "Creates the railway tracks overpass and underpass fund (fund) under the control of the DOT.",
+  "Creates new language in Code 307. Successor to HF882. Appears to be same language.",
+  "",
+  "Amendment Number",
+  "Distributed To",
+  "Comment Requested from",
+  "Title",
+  "",
+  "S-5235 filed on SF2284",
+  "",
+  "SOD",
+  "SOD",
+  "automated systems that detect traffic violations or registration plate information",
+  "S-5235 – amends S-5192 – regarding plate readers adds definition of highway.",
+  "",
+  "H-8437 filed on SF2478",
+  "",
+  "Finance Bureau",
+  "Finance Bureau",
+  "DOT Budget Bill",
+  "H-8437 – Strikes cost associated with motor vehicle division systems modernization.",
+  "",
+  "H-8438 filed on HF2694",
+  "",
+  "Finance Bureau",
+  "Finance Bureau",
+  "Regulations of places of worship by Governor",
+  "H-8438 – adds in continuing appropriations language.",
+].join("\n");
+
+var KNOWN2 = KNOWN.concat(["Finance Bureau"]);
+var real = P.parseReport(REAL, { knownDivisions: KNOWN2 });
+
+// 25. Six entries: three bills + three amendments
+check("real count", real.items.length, 6);
+check("real bills", real.items.map(function (i) { return i.billNumber; }),
+  ["HF2790", "HF2792", "HF2793", "S-5235", "H-8437", "H-8438"]);
+check("amendment type", real.items[3].documentType, "Amendment");
+check("amendment parent", real.items[3].relatedBill, "SF2284");
+check("amendment parent leads refs", real.items[3].referencedBills[0], "SF2284");
+
+// 26. Division qualifier: "ELT - awareness" recognized as a division line
+var hf2790 = real.items[0];
+check("qualifier distributedTo", hf2790.distributedTo, ["ELT"]);
+check("qualifier commentFrom kept verbatim", hf2790.commentRequestedFrom, ["ELT - awareness"]);
+check("qualifier brief intact", hf2790.brief.indexOf("red tape reduction") === 0, true);
+
+// 27. Label furniture rows never leak into briefs
+check("no label leak", real.items[2].brief.indexOf("Amendment Number") === -1, true);
+check("no label leak 2", real.items[2].brief.indexOf("Comment Requested") === -1, true);
+
+// 28. Long appropriations brief stays whole; dollar lines survive
+check("approps brief has dollars", real.items[1].brief.indexOf("$  2,500,000") !== -1, true);
+check("approps divisions", real.items[1].distributedTo, ["MVD", "TDD"]);
+
+// 29. "Finance Bureau" is a valid multi-word division
+check("finance bureau", real.items[4].distributedTo, ["Finance Bureau"]);
+
+// 30. Qualifier routing: "ELT - awareness" matches the ELT rule
+var eltRule = [{ id: "9", divisionCode: "ELT", divisionName: "Executive Leadership Team", aliases: [],
+  emails: [], teamsTeamId: "T1", teamsChannelId: "C5", teamsTagId: "TAG9", teamsTagName: "ELT Legislation",
+  mentionUserIds: [], mentionUserEmails: [], isActive: true, priority: 1 }];
+var routedQ = R.routeItem(JSON.parse(JSON.stringify(hf2790)), eltRule);
+check("qualifier routes", routedQ.routingStatus, "matched");
+check("qualifier rule id", routedQ.matchedRoutingRules, ["9"]);
+
 if (failures) {
   console.error("\n" + failures + " test(s) FAILED");
   process.exit(1);

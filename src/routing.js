@@ -39,12 +39,21 @@
 
   /**
    * Find active rules for one division token, highest priority first.
+   * Tolerates qualifier suffixes from real reports: "ELT - awareness"
+   * matches the ELT rule (full token tried first, then the code part).
    */
   function rulesForDivision(division, rules, date) {
-    var d = norm(division);
-    return (rules || [])
-      .filter(function (r) { return ruleActive(r, date) && ruleNames(r).indexOf(d) !== -1; })
-      .sort(function (a, b) { return (b.priority || 0) - (a.priority || 0); });
+    var candidates = [norm(division)];
+    var codePart = norm(String(division || "").split(/\s*[-–]\s*/)[0]);
+    if (codePart && candidates.indexOf(codePart) === -1) { candidates.push(codePart); }
+    for (var i = 0; i < candidates.length; i++) {
+      var d = candidates[i];
+      var hits = (rules || [])
+        .filter(function (r) { return ruleActive(r, date) && ruleNames(r).indexOf(d) !== -1; })
+        .sort(function (a, b) { return (b.priority || 0) - (a.priority || 0); });
+      if (hits.length) { return hits; }
+    }
+    return [];
   }
 
   /**
