@@ -10,6 +10,11 @@ on:
   schedule:
     - cron: "*/30 12-23 * * 1-5"
   workflow_dispatch:
+    inputs:
+      days:
+        description: "created_since window in days"
+        default: "21"
+        required: false
 
 permissions:
   contents: write
@@ -28,7 +33,7 @@ jobs:
       - name: Fetch Open States (per states.json)
         if: ${{ env.KEY != '' }}
         run: |
-          since=$(date -u -d "21 days ago" +%Y-%m-%d)
+          since=$(date -u -d "${{ github.event.inputs.days || '21' }} days ago" +%Y-%m-%d)
           jq -r '.mirror[]' states.json | while read -r state; do
             slug=$(echo "$state" | tr '[:upper:] ' '[:lower:]-')
             curl -sf -G "https://v3.openstates.org/bills" \
