@@ -17,6 +17,8 @@ permissions:
 jobs:
   mirror:
     runs-on: ubuntu-latest
+    env:
+      KEY: ${{ secrets.OPENSTATES_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - name: Fetch Iowa RSS
@@ -24,9 +26,7 @@ jobs:
           curl -sf "https://www.legis.iowa.gov/subscribe/rss/feeds/IowaBills.xml" -o feeds/IowaBills.xml || true
           curl -sf "https://www.legis.iowa.gov/subscribe/rss/feeds/Amendments.xml" -o feeds/Amendments.xml || true
       - name: Fetch Open States (per states.json)
-        if: ${{ secrets.OPENSTATES_API_KEY != '' }}
-        env:
-          KEY: ${{ secrets.OPENSTATES_API_KEY }}
+        if: ${{ env.KEY != '' }}
         run: |
           since=$(date -u -d "21 days ago" +%Y-%m-%d)
           jq -r '.mirror[]' states.json | while read -r state; do
