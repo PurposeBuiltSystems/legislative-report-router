@@ -37,6 +37,14 @@ Pure-logic modules (offline-testable, no Office/Graph imports):
   throttle retry and cloud endpoint map.
 - `src/taskpane/` — Overview / Review / Preview / Publish / Audit screens.
 
+## National use
+
+State presets (Settings → State) configure the parser's bill identifiers
+for all 50 states + Congress; the newly-filed feed comes from Iowa's own
+RSS or, for any other state, the Open States API via the scheduled mirror
+(`states.json` + `OPENSTATES_API_KEY` secret). Org profiles let a
+coordinator configure once and share a paste-code with the whole team.
+
 ## Configuration
 
 Two SharePoint lists on a site of your choice (see `docs/admin-guide.md` for

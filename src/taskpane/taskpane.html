@@ -62,6 +62,14 @@
           <option value="dod">DoD</option>
         </select>
       </label>
+      <div class="row2">
+        <label>State / legislature
+          <select id="stateName"></select>
+        </label>
+        <label>Bill identifiers (editable)
+          <input id="identifiers" type="text" value="HF, SF, HSB, SSB, HJR, SJR, HCR, SCR, HR, SR" />
+        </label>
+      </div>
       <label>SharePoint site URL (routing + audit lists)
         <input id="siteUrl" type="text" placeholder="https://yourtenant.sharepoint.com/sites/Legislative" />
       </label>
@@ -77,6 +85,15 @@
       <label>Comment window text
         <input id="commentWindow" type="text" value="Review comments requested within 48 business hours." />
       </label>
+      <details class="options">
+        <summary>Org profile (share setup with your team)</summary>
+        <p class="hint">Coordinators: configure above, Copy profile, send the code. Teammates: paste and Apply.</p>
+        <textarea id="profileBlob" rows="3" placeholder="Profile code"></textarea>
+        <div class="row2">
+          <button id="profileCopy">Copy profile</button>
+          <button id="profileApply">Apply profile</button>
+        </div>
+      </details>
       <details class="options">
         <summary>Teams tag ID lookup</summary>
         <label>Team ID <input id="lookupTeamId" type="text" placeholder="GUID from Teams &gt; Get link to team" /></label>
@@ -146,12 +163,13 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=2"></script>
-  <script src="../routing.js?v=2"></script>
-  <script src="../teams.js?v=2"></script>
-  <script src="../docx.js?v=2"></script>
-  <script src="../graph.js?v=2"></script>
-  <script src="../feed.js?v=2"></script>
-  <script src="taskpane.js?v=2"></script>
+  <script src="../parser.js?v=3"></script>
+  <script src="../routing.js?v=3"></script>
+  <script src="../teams.js?v=3"></script>
+  <script src="../docx.js?v=3"></script>
+  <script src="../graph.js?v=3"></script>
+  <script src="../presets.js?v=3"></script>
+  <script src="../feed.js?v=3"></script>
+  <script src="taskpane.js?v=3"></script>
 </body>
 </html>

@@ -1,9 +1,11 @@
-name: Mirror Iowa GA newly-filed feeds
+name: Mirror legislative feeds
 
-# The Legislature's RSS has a broken CORS header, so the task pane can't
-# fetch it directly. This mirrors the public feeds into the repo so GitHub
-# Pages serves them same-origin. Runs every 30 min on weekdays during
-# working hours (UTC; Iowa is UTC-5/-6), and can be run manually.
+# Two sources, both public data, mirrored so the task pane can fetch
+# same-origin from GitHub Pages:
+#   1. Iowa GA RSS (their CORS header is broken)
+#   2. Open States API for any state listed in states.json
+#      (client-side use would expose the API key; mirroring keeps it a
+#      repo secret and spends ~1 request per state per run)
 on:
   schedule:
     - cron: "*/30 12-23 * * 1-5"
@@ -17,13 +19,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch feeds
+      - name: Fetch Iowa RSS
         run: |
-          curl -sf "https://www.legis.iowa.gov/subscribe/rss/feeds/IowaBills.xml" -o feeds/IowaBills.xml
+          curl -sf "https://www.legis.iowa.gov/subscribe/rss/feeds/IowaBills.xml" -o feeds/IowaBills.xml || true
           curl -sf "https://www.legis.iowa.gov/subscribe/rss/feeds/Amendments.xml" -o feeds/Amendments.xml || true
+      - name: Fetch Open States (per states.json)
+        if: ${{ secrets.OPENSTATES_API_KEY != '' }}
+        env:
+          KEY: ${{ secrets.OPENSTATES_API_KEY }}
+        run: |
+          since=$(date -u -d "21 days ago" +%Y-%m-%d)
+          jq -r '.mirror[]' states.json | while read -r state; do
+            slug=$(echo "$state" | tr '[:upper:] ' '[:lower:]-')
+            curl -sf -G "https://v3.openstates.org/bills" \
+              --data-urlencode "jurisdiction=$state" \
+              --data-urlencode "created_since=$since" \
+              --data-urlencode "per_page=20" \
+              --data-urlencode "page=1" \
+              -H "X-API-KEY: $KEY" \
+              -o "feeds/openstates-$slug.json" || echo "openstates fetch failed for $state"
+            sleep 2
+          done
       - name: Commit if changed
         run: |
           git config user.name "feed-mirror"
           git config user.email "actions@github.com"
           git add feeds/
-          git diff --cached --quiet && echo "No changes" || (git commit -m "Mirror Iowa GA feeds" && git push)
+          git diff --cached --quiet && echo "No changes" || (git commit -m "Mirror legislative feeds" && git push)

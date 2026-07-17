@@ -77,6 +77,32 @@
     };
   }
 
+  /**
+   * Open States mirror JSON → same entry shape as parseFeed.
+   * Mirror emits {results:[{identifier, title, first_action_date,
+   * created_at, openstates_url, latest_action_description}]}.
+   */
+  function parseOpenStates(jsonText) {
+    var data;
+    try { data = typeof jsonText === "string" ? JSON.parse(jsonText) : jsonText; }
+    catch (e) { return []; }
+    var out = [];
+    (data.results || []).forEach(function (b) {
+      var bill = String(b.identifier || "").replace(/\s+/g, "").toUpperCase();
+      if (!/^[A-Z]{1,8}\d+[A-Z]?$/.test(bill)) { return; }
+      var when = b.first_action_date || b.created_at || "";
+      out.push({
+        bill: bill,
+        description: (b.title || "") +
+          (b.latest_action_description ? " — Latest action: " + b.latest_action_description : ""),
+        link: b.openstates_url || "",
+        pubDate: new Date(String(when).slice(0, 10) + "T12:00:00"),
+      });
+    });
+    out.sort(function (a, b) { return b.pubDate - a.pubDate; });
+    return out;
+  }
+
   /** Due date = start + n business days (skips Sat/Sun), same clock time. */
   function addBusinessDays(start, n) {
     var d = new Date(start);
@@ -91,6 +117,7 @@
 
   var api = {
     parseFeed: parseFeed,
+    parseOpenStates: parseOpenStates,
     watchFilter: watchFilter,
     toLegislativeItem: toLegislativeItem,
     addBusinessDays: addBusinessDays,

@@ -1,0 +1,4 @@
+{
+  "comment": "States mirrored from the Open States API (jurisdiction names). Iowa also has its direct RSS feed. Requires the OPENSTATES_API_KEY repo secret.",
+  "mirror": ["Iowa"]
+}

@@ -94,3 +94,22 @@ In the add-in: Settings → connect the site → parse a test report → the
 Review screen shows exactly which rule each division resolved to and flags
 rules missing tag IDs. Preview shows the rendered post before anything is
 published.
+
+## 6. Using a different state (or Congress)
+
+The add-in is state-configurable:
+
+1. Settings → **State / legislature** — pick your state. This presets the
+   bill identifier prefixes the parser recognizes (editable — e.g. add
+   "LB" for Nebraska's unicameral if needed).
+2. **New-filings feed:** Iowa uses the Legislature's own RSS. Every other
+   state (and Congress) uses the Open States API via the deployment's
+   feed mirror: add the state's name to `states.json` in the repository
+   and set the `OPENSTATES_API_KEY` repository secret (free key from
+   openstates.org). The scheduled mirror then publishes
+   `feeds/openstates-<state>.json` automatically.
+3. Everything else (routing matrix, tracker, audit) is already
+   org-specific — each organization points at its own SharePoint site.
+4. **Org profile:** after configuring, use Settings → Org profile → Copy
+   profile, and send the code to your team; they paste + Apply and are
+   fully configured.

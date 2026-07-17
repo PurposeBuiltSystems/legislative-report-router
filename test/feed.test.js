@@ -64,6 +64,33 @@ var due = F.addBusinessDays(new Date("2026-07-17T10:00:00"), 2); // Friday
 check("skips weekend", due.getDay(), 2); // Tuesday
 check("due date", due.toISOString().slice(0, 10), "2026-07-21");
 
+// 7. Open States mirror JSON -> entries
+var OS = JSON.stringify({ results: [
+  { identifier: "AB 123", title: "Vehicle registration modernization.",
+    first_action_date: "2026-07-10", openstates_url: "https://openstates.org/ca/bills/20252026/AB123/",
+    latest_action_description: "Referred to Com. on TRANS." },
+  { identifier: "SB 9", title: "Highway funding.", created_at: "2026-07-14T08:00:00", openstates_url: "https://openstates.org/x" },
+  { identifier: "weird", title: "not a bill" },
+]});
+var os = F.parseOpenStates(OS);
+check("os count (bad id dropped)", os.length, 2);
+check("os normalized bill", os[1].bill, "AB123");
+check("os newest first", os[0].bill, "SB9");
+check("os latest action in description", os[1].description.indexOf("Referred to Com.") !== -1, true);
+
+// 8. State presets drive the parser: New York bare-letter identifiers
+var P2 = require("../src/parser.js");
+var Presets = require("../src/presets.js");
+var ny = Presets.presetFor("New York");
+check("ny ids", ny.identifiers, ["A", "S"]);
+check("ny feed source", ny.feed, "openstates");
+check("iowa feed source", Presets.presetFor("Iowa").feed, "iowa-rss");
+check("default ids for Texas", Presets.presetFor("Texas").identifiers.indexOf("HB") !== -1, true);
+var nyReport = P2.parseReport("A1234\nDMV\nDMV\nrelating to vehicle inspections.", { identifiers: ny.identifiers });
+check("ny boundary", nyReport.items.length, 1);
+check("ny bill", nyReport.items[0].billNumber, "A1234");
+check("50 states + congress", Presets.ALL_STATE_NAMES.length, 51);
+
 if (failures) {
   console.error("\n" + failures + " feed test(s) FAILED");
   process.exit(1);

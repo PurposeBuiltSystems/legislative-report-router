@@ -59,7 +59,8 @@
     if (screen === "publish") { renderPublishSummary(); }
   }
 
-  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "watchTerms", "watchDays"];
+  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "watchTerms", "watchDays", "stateName", "identifiers"];
+  var PROFILE_KEYS = SETTING_KEYS.concat([]);
 
   Office.onReady(function () {
     var s = settings();
@@ -68,6 +69,22 @@
     });
     if (s.cloud) { GraphData.setCloud(s.cloud); }
     if (!s.siteUrl) { byId("settings").setAttribute("open", "open"); }
+
+    var sel = byId("stateName");
+    LrrPresets.ALL_STATE_NAMES.forEach(function (n) {
+      var o = document.createElement("option");
+      o.value = o.textContent = n;
+      sel.appendChild(o);
+    });
+    sel.value = s.stateName || "Iowa";
+    if (!s.identifiers) { byId("identifiers").value = LrrPresets.presetFor(sel.value).identifiers.join(", "); }
+    sel.addEventListener("change", function () {
+      var preset = LrrPresets.presetFor(sel.value);
+      byId("identifiers").value = preset.identifiers.join(", ");
+      saveSettings({ stateName: sel.value, identifiers: byId("identifiers").value });
+    });
+    byId("profileCopy").addEventListener("click", profileCopy);
+    byId("profileApply").addEventListener("click", profileApply);
 
     document.querySelectorAll(".tab").forEach(function (t) {
       t.addEventListener("click", function () { show(t.getAttribute("data-screen")); });
@@ -172,7 +189,8 @@
             return acc;
           }, [])
         : [];
-      var res = LrrParser.parseReport(text, { knownDivisions: known, reportId: state.reportKey });
+      var ids = byId("identifiers").value.split(",").map(function (t) { return t.trim().toUpperCase(); }).filter(Boolean);
+      var res = LrrParser.parseReport(text, { knownDivisions: known, reportId: state.reportKey, identifiers: ids.length ? ids : undefined });
       state.items = res.items;
       state.results = {};
 
@@ -318,6 +336,36 @@
     setStatus("info", "Route " + rule.divisionCode + " applied to all included bills.");
   }
 
+  // ---------- org profile ----------
+
+  function profileCopy() {
+    var st = settings();
+    var out = {};
+    PROFILE_KEYS.forEach(function (k) { if (st[k]) { out[k] = st[k]; } });
+    var blob = btoa(unescape(encodeURIComponent(JSON.stringify(out))));
+    byId("profileBlob").value = blob;
+    byId("profileBlob").select();
+    try { document.execCommand("copy"); } catch (e) { /* manual copy */ }
+    setStatus("info", "Profile code is in the box (and copied). Send it to your team.");
+  }
+
+  function profileApply() {
+    try {
+      var raw = byId("profileBlob").value.trim();
+      if (!raw) { setStatus("error", "Paste the profile code first."); return; }
+      var p = JSON.parse(decodeURIComponent(escape(atob(raw))));
+      var patch = {};
+      PROFILE_KEYS.forEach(function (k) { if (p[k] != null) { patch[k] = p[k]; } });
+      saveSettings(patch);
+      SETTING_KEYS.forEach(function (k) { if (patch[k] != null) { byId(k).value = patch[k]; } });
+      if (patch.cloud) { GraphData.setCloud(patch.cloud); }
+      state.site = null;
+      setStatus("info", "Profile applied — click \"Connect & load routing rules\" to finish.");
+    } catch (e) {
+      setStatus("error", "That doesn't look like a valid profile code.");
+    }
+  }
+
   // ---------- new filings (intraday feed) ----------
 
   var feedSelection = []; // [{entry, checked}]
@@ -326,10 +374,19 @@
     byId("loadFilings").disabled = true;
     try {
       setStatus("work", "Checking the newly-filed feed…");
-      var res = await fetch("../../feeds/IowaBills.xml?ts=" + Date.now());
-      if (!res.ok) { throw new Error("Feed mirror unavailable (" + res.status + ")"); }
-      var xml = await res.text();
-      var entries = LrrFeed.parseFeed(xml);
+      var preset = LrrPresets.presetFor(byId("stateName").value || "Iowa");
+      var entries;
+      if (preset.feed === "iowa-rss") {
+        var res = await fetch("../../feeds/IowaBills.xml?ts=" + Date.now());
+        if (!res.ok) { throw new Error("Feed mirror unavailable (" + res.status + ")"); }
+        entries = LrrFeed.parseFeed(await res.text());
+      } else {
+        var res2 = await fetch("../../feeds/openstates-" + preset.slug + ".json?ts=" + Date.now());
+        if (!res2.ok) {
+          throw new Error("No mirrored feed for " + preset.state + " yet — add it to states.json in the deployment repo (requires the Open States API key; see the admin guide).");
+        }
+        entries = LrrFeed.parseOpenStates(await res2.text());
+      }
       var terms = byId("watchTerms").value.split(",").map(function (t) { return t.trim(); }).filter(Boolean);
       var days = Number(byId("watchDays").value) || 3;
       var hits = LrrFeed.watchFilter(entries, terms, days);
