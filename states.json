@@ -1,8 +1,7 @@
 {
-  "comment": "States mirrored from the Open States API (jurisdiction names). Iowa also has its direct RSS feed. Requires the OPENSTATES_API_KEY repo secret.",
+  "comment": "States mirrored from the Open States API (jurisdiction names). Iowa also has its direct RSS feed. Requires the OPENSTATES_API_KEY repo secret. NOTE: Open States covers states only - Congress needs a congress.gov API adapter (future).",
   "mirror": [
     "Iowa",
-    "Texas",
-    "United States"
+    "Texas"
   ]
 }

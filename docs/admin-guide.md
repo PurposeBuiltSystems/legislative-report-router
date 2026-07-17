@@ -103,8 +103,11 @@ The add-in is state-configurable:
    bill identifier prefixes the parser recognizes (editable — e.g. add
    "LB" for Nebraska's unicameral if needed).
 2. **New-filings feed:** Iowa uses the Legislature's own RSS. Every other
-   state (and Congress) uses the Open States API via the deployment's
-   feed mirror: add the state's name to `states.json` in the repository
+   state uses the Open States API via the deployment's feed mirror
+   (verified live: Iowa 1,917 and Texas 1,185 bills in a 1-year window).
+   Congress: the parser preset works for federal bill reports, but Open
+   States carries state data only - a congress.gov API adapter is a
+   planned addition for the federal new-filings feed. Mirror setup: add the state's name to `states.json` in the repository
    and set the `OPENSTATES_API_KEY` repository secret (free key from
    openstates.org). The scheduled mirror then publishes
    `feeds/openstates-<state>.json` automatically.
