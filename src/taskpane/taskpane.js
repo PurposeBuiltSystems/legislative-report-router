@@ -59,7 +59,7 @@
     if (screen === "publish") { renderPublishSummary(); }
   }
 
-  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "watchTerms", "watchDays", "stateName", "identifiers"];
+  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters"];
   var PROFILE_KEYS = SETTING_KEYS.concat([]);
 
   Office.onReady(function () {
@@ -77,6 +77,7 @@
       sel.appendChild(o);
     });
     sel.value = s.stateName || "Iowa";
+    if (!s.trackedChapters) { byId("trackedChapters").value = LrrChapters.DEFAULT_TRACKED.join(", "); }
     if (!s.identifiers) { byId("identifiers").value = LrrPresets.presetFor(sel.value).identifiers.join(", "); }
     sel.addEventListener("change", function () {
       var preset = LrrPresets.presetFor(sel.value);
@@ -193,6 +194,7 @@
       var res = LrrParser.parseReport(text, { knownDivisions: known, reportId: state.reportKey, identifiers: ids.length ? ids : undefined });
       state.items = res.items;
       state.results = {};
+      annotateChapters();
 
       if (state.rules.length) { LrrRouting.routeAll(state.items, state.rules); }
       refreshStats();
@@ -211,6 +213,18 @@
     } finally {
       byId("parse").disabled = false;
     }
+  }
+
+  function trackedList() {
+    return LrrChapters.parseTrackedText(byId("trackedChapters").value);
+  }
+
+  function annotateChapters() {
+    var tracked = trackedList();
+    state.items.forEach(function (it) {
+      it.codeChapters = LrrChapters.extractChapters(it.brief || "");
+      it.trackedChapters = LrrChapters.matchTracked(it.codeChapters, tracked);
+    });
   }
 
   function refreshStats() {
@@ -301,6 +315,36 @@
         card.appendChild(pw);
       }
 
+      if (it.codeChapters && it.codeChapters.length) {
+        var chap = document.createElement("p");
+        chap.className = "routes";
+        chap.innerHTML = "Code: " + it.codeChapters.map(function (c) {
+          var hit = (it.trackedChapters || []).indexOf(c) !== -1;
+          return '<span class="chip' + (hit ? "" : " chip-dim") + '">' + esc(c) + (hit ? " ✓" : "") + "</span>";
+        }).join(" ");
+        card.appendChild(chap);
+      }
+      if ((it.routingStatus === "unmatched" || (it.unknownDivisions || []).length) && state.rules.length) {
+        var sugs = LrrChapters.suggestRules(it.codeChapters || [], state.rules);
+        if (sugs.length) {
+          var sp = document.createElement("p");
+          sp.className = "routes";
+          sp.appendChild(document.createTextNode("Suggested by Code chapter: "));
+          sugs.slice(0, 3).forEach(function (sg) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "chip-btn";
+            b.textContent = sg.rule.divisionCode + " (" + sg.chapters.join(", ") + ")";
+            b.addEventListener("click", function () {
+              if (it.distributedTo.indexOf(sg.rule.divisionCode) === -1) { it.distributedTo.push(sg.rule.divisionCode); }
+              LrrRouting.routeItem(it, state.rules);
+              refreshStats(); renderItems();
+            });
+            sp.appendChild(b);
+          });
+          card.appendChild(sp);
+        }
+      }
       var routes = document.createElement("p");
       routes.className = "routes";
       routes.innerHTML = (it.routes || []).map(function (r) {
@@ -390,6 +434,16 @@
       var terms = byId("watchTerms").value.split(",").map(function (t) { return t.trim(); }).filter(Boolean);
       var days = Number(byId("watchDays").value) || 3;
       var hits = LrrFeed.watchFilter(entries, terms, days);
+      if (byId("watchChapters").checked) {
+        var tracked = trackedList();
+        var inWindow = LrrFeed.watchFilter(entries, [], days);
+        inWindow.forEach(function (e) {
+          if (hits.indexOf(e) !== -1) { return; }
+          var chapters = LrrChapters.extractChapters(e.description || "");
+          if (LrrChapters.matchTracked(chapters, tracked).length) { hits.push(e); }
+        });
+        hits.sort(function (a, b) { return b.pubDate - a.pubDate; });
+      }
 
       feedSelection = hits.map(function (e) { return { entry: e, checked: true }; });
       var host = byId("filingsList");
@@ -514,6 +568,7 @@
       if (!d) { setStatus("info", "No saved draft."); return; }
       state.items = d.items || [];
       state.reportKey = d.reportKey || "";
+      annotateChapters();
       if (state.rules.length) { LrrRouting.routeAll(state.items, state.rules); }
       refreshStats(); renderItems();
       setStatus("info", "Draft from " + new Date(d.savedAt).toLocaleString() + " loaded (" + state.items.length + " bills).");

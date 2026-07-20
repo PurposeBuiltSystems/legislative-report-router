@@ -76,3 +76,11 @@ button:disabled { opacity: .55; cursor: default; }
 .status.info  { background: #e7f2e9; color: #0e5c2f; }
 .status.work  { background: #eff6fc; color: #0f548c; }
 .status.error { background: #fdf3f4; color: #a4262c; }
+
+.chip-dim { opacity: .55; }
+.chip-btn {
+  font: inherit; font-size: 11px; padding: 2px 8px; margin: 2px 2px 0 0;
+  border-radius: 10px; border: 1px dashed #0f6cbd; background: #fff;
+  color: #0f548c; cursor: pointer;
+}
+.chip-btn:hover { background: #eff6fc; }

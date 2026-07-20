@@ -139,6 +139,7 @@
       teamsChannelName: fields.TeamsChannelName || "",
       teamsTagId: fields.TeamsTagId || "",
       teamsTagName: fields.TeamsTagName || "",
+      codeChapters: splitList(fields.CodeChapters),
       mentionUserIds: splitList(fields.MentionUserIds),
       mentionUserEmails: splitList(fields.MentionUserEmails),
       isActive: fields.IsActive !== false && fields.IsActive !== "No" && fields.IsActive !== "false",

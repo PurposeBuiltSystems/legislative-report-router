@@ -21,6 +21,7 @@ with these columns (all "Single line of text" unless noted):
 | TeamsChannelName | display name (for the review UI) |
 | TeamsTagId | tag GUID — use the add-in's Settings → "Teams tag ID lookup" |
 | TeamsTagName | tag display name as it appears in Teams |
+| CodeChapters | semicolon-separated Iowa Code chapters this division owns ("321; 321A; 322") — powers division SUGGESTIONS for unrouted bills (optional) |
 | MentionUserIds | semicolon-separated Entra object IDs (optional, for individual mentions) |
 | MentionUserEmails | matching display emails (optional) |
 | IsActive | Yes/No |
@@ -116,3 +117,20 @@ The add-in is state-configurable:
 4. **Org profile:** after configuring, use Settings → Org profile → Copy
    profile, and send the code to your team; they paste + Apply and are
    fully configured.
+
+## 7. Code chapter tracking
+
+Bill briefs reference the Iowa Code ("Amends Code Chapter 9", "Code
+chapters 6A and 6B"). The add-in extracts these references and:
+
+- shows them as chips on each bill in Review (checkmarked when they hit
+  the agency's tracked list),
+- flags newly filed bills in the Filings tab whose descriptions touch
+  tracked chapters (even when no watch term matches),
+- suggests divisions for unrouted bills when routing rules claim
+  chapters via the optional `CodeChapters` column.
+
+The tracked list ships seeded from the DOT's 2015 tracking list
+(Settings → "Tracked Code chapters") and is FULLY EDITABLE — the 2015
+list predates several Code changes, so review it with your legislative
+coordinator and paste the updated set. It travels with org profiles.
