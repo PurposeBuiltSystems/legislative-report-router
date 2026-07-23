@@ -2,11 +2,14 @@
 
 The admin surface is **Microsoft Lists** — no separate admin app to deploy.
 
-**Fastest setup:** in the add-in, Settings → enter the SharePoint site URL →
-**Create missing lists**. The add-in creates all three lists below with the
-correct columns (and a sample routing rule to edit), then connects. Requires
-edit rights on the site. The sections below document the schemas for admins
-who prefer to create or audit the lists manually.
+**Fastest setup — entirely inside the add-in, no IDs to find:**
+1. Settings → search for your SharePoint site by name and pick it (or paste a URL).
+2. **Create missing lists** — all three lists are created with the correct columns.
+3. **Add a division route** — team, channel, and tag are dropdowns populated from
+   your own Teams memberships; the add-in writes the routing rule for you.
+Repeat step 3 per division. Requires edit rights on the site. The sections below
+document the schemas for admins who prefer to create or audit everything manually
+in Microsoft Lists (both paths produce identical lists).
 
 ## 1. Create the routing list
 
