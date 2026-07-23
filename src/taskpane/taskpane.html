@@ -80,7 +80,10 @@
       <label>Bill tracker list (blank to disable status tracking)
         <input id="trackerList" type="text" value="BillTracker" />
       </label>
-      <button id="connectRules">Connect &amp; load routing rules</button>
+      <div class="row2">
+        <button id="createLists">Create missing lists</button>
+        <button id="connectRules">Connect &amp; load routing rules</button>
+      </div>
       <p id="rulesInfo" class="hint"></p>
       <label>Tracked Code chapters (comma/space separated; from your agency's tracking list)
         <textarea id="trackedChapters" rows="3"></textarea>
@@ -167,14 +170,15 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=4"></script>
-  <script src="../routing.js?v=4"></script>
-  <script src="../teams.js?v=4"></script>
-  <script src="../docx.js?v=4"></script>
-  <script src="../graph.js?v=4"></script>
-  <script src="../presets.js?v=4"></script>
-  <script src="../chapters.js?v=4"></script>
-  <script src="../feed.js?v=4"></script>
-  <script src="taskpane.js?v=4"></script>
+  <script src="../parser.js?v=5"></script>
+  <script src="../routing.js?v=5"></script>
+  <script src="../teams.js?v=5"></script>
+  <script src="../docx.js?v=5"></script>
+  <script src="../graph.js?v=5"></script>
+  <script src="../presets.js?v=5"></script>
+  <script src="../provision.js?v=5"></script>
+  <script src="../chapters.js?v=5"></script>
+  <script src="../feed.js?v=5"></script>
+  <script src="taskpane.js?v=5"></script>
 </body>
 </html>

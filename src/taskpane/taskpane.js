@@ -94,6 +94,7 @@
     byId("saveDraft").addEventListener("click", saveDraft);
     byId("loadDraft").addEventListener("click", loadDraft);
     byId("connectRules").addEventListener("click", connectRules);
+    byId("createLists").addEventListener("click", createLists);
     byId("lookupTags").addEventListener("click", lookupTags);
     byId("bulkApply").addEventListener("click", bulkApply);
     byId("confirmBox").addEventListener("change", function () {
@@ -502,6 +503,45 @@
   }
 
   // ---------- rules ----------
+
+  async function createLists() {
+    var siteUrl = byId("siteUrl").value.trim();
+    if (!siteUrl) { setStatus("error", "Enter the SharePoint site URL first."); return; }
+    byId("createLists").disabled = true;
+    try {
+      setStatus("work", "Checking the site\u2026");
+      var token = await GraphData.getToken();
+      var site = await GraphData.resolveSite(token, siteUrl);
+      var defs = LrrProvision.listDefinitions();
+      var wanted = [
+        { name: byId("routingList").value.trim() || "LegislativeRoutingMatrix", def: defs.routing, role: "routing" },
+        { name: byId("auditList").value.trim() || "LegislativeAudit", def: defs.audit, role: "audit" },
+        { name: byId("trackerList").value.trim() || "BillTracker", def: defs.tracker, role: "tracker" },
+      ];
+      var report = [];
+      for (var i = 0; i < wanted.length; i++) {
+        var w = wanted[i];
+        var exists = true;
+        try { await GraphData.findList(token, site.siteId, w.name); }
+        catch (e) { exists = false; }
+        if (exists) { report.push(w.name + ": already exists"); continue; }
+        setStatus("work", "Creating " + w.name + "\u2026");
+        var created = await GraphData.createList(token, site.siteId, w.name, w.def);
+        report.push(w.name + ": created");
+        if (w.role === "routing" && created && created.id) {
+          try { await GraphData.addListItem(token, site.siteId, created.id, LrrProvision.sampleRoutingRule()); }
+          catch (e2) { /* sample row is best-effort */ }
+        }
+      }
+      setStatus("info", report.join(" \u00b7 ") + " \u2014 connecting\u2026");
+      await connectRules();
+    } catch (e) {
+      setStatus("error", "List setup failed: " + ((e && e.message) || e) +
+        " \u2014 you need edit rights on the site; see the admin guide to create lists manually.");
+    } finally {
+      byId("createLists").disabled = false;
+    }
+  }
 
   async function connectRules() {
     byId("connectRules").disabled = true;

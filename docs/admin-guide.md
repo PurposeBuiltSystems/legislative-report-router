@@ -1,8 +1,12 @@
 # Administrator guide
 
 The admin surface is **Microsoft Lists** — no separate admin app to deploy.
-You create two lists once; coordinators point the add-in at the site in
-Settings.
+
+**Fastest setup:** in the add-in, Settings → enter the SharePoint site URL →
+**Create missing lists**. The add-in creates all three lists below with the
+correct columns (and a sample routing rule to edit), then connects. Requires
+edit rights on the site. The sections below document the schemas for admins
+who prefer to create or audit the lists manually.
 
 ## 1. Create the routing list
 

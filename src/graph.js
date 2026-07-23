@@ -105,6 +105,15 @@
     return out;
   }
 
+  async function createList(token, siteId, displayName, definition) {
+    return graphJson(token, "POST", "/sites/" + siteId + "/lists", {
+      displayName: displayName,
+      description: definition.description || "",
+      columns: definition.columns,
+      list: { template: "genericList" },
+    });
+  }
+
   async function addListItem(token, siteId, listId, fields) {
     return graphJson(token, "POST", "/sites/" + siteId + "/lists/" + listId + "/items", { fields: fields });
   }
@@ -155,6 +164,7 @@
     resolveSite: resolveSite,
     findList: findList,
     listItems: listItems,
+    createList: createList,
     addListItem: addListItem,
     postChannelMessage: postChannelMessage,
     listTeamTags: listTeamTags,
