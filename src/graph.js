@@ -120,6 +120,21 @@
 
   // ---------- Teams ----------
 
+  async function joinedTeams(token) {
+    var res = await graphJson(token, "GET", "/me/joinedTeams?$select=id,displayName");
+    return (res.value || []).sort(function (a, b) { return a.displayName.localeCompare(b.displayName); });
+  }
+
+  async function listChannels(token, teamId) {
+    var res = await graphJson(token, "GET", "/teams/" + teamId + "/channels?$select=id,displayName");
+    return (res.value || []).sort(function (a, b) { return a.displayName.localeCompare(b.displayName); });
+  }
+
+  async function searchSites(token, query) {
+    var res = await graphJson(token, "GET", "/sites?search=" + encodeURIComponent(query) + "&$select=id,displayName,webUrl");
+    return res.value || [];
+  }
+
   async function postChannelMessage(token, teamId, channelId, payload) {
     return graphJson(token, "POST", "/teams/" + teamId + "/channels/" + channelId + "/messages", payload);
   }
@@ -166,6 +181,9 @@
     listItems: listItems,
     createList: createList,
     addListItem: addListItem,
+    joinedTeams: joinedTeams,
+    listChannels: listChannels,
+    searchSites: searchSites,
     postChannelMessage: postChannelMessage,
     listTeamTags: listTeamTags,
     sendMail: sendMail,

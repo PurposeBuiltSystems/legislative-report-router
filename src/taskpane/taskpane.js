@@ -95,6 +95,19 @@
     byId("loadDraft").addEventListener("click", loadDraft);
     byId("connectRules").addEventListener("click", connectRules);
     byId("createLists").addEventListener("click", createLists);
+    byId("siteSearchGo").addEventListener("click", siteSearch);
+    byId("siteResults").addEventListener("change", function () {
+      if (byId("siteResults").value) {
+        byId("siteUrl").value = byId("siteResults").value;
+        saveSettings({ siteUrl: byId("siteResults").value });
+        state.site = null;
+      }
+    });
+    byId("routeBuilder").addEventListener("toggle", function () {
+      if (byId("routeBuilder").open) { loadTeamsPicker(); }
+    });
+    byId("rbTeam").addEventListener("change", loadChannelsAndTags);
+    byId("rbAdd").addEventListener("click", addRoute);
     byId("lookupTags").addEventListener("click", lookupTags);
     byId("bulkApply").addEventListener("click", bulkApply);
     byId("confirmBox").addEventListener("change", function () {
@@ -503,6 +516,135 @@
   }
 
   // ---------- rules ----------
+
+  async function siteSearch() {
+    var q = byId("siteSearch").value.trim();
+    if (!q) { setStatus("error", "Type part of the site's name first."); return; }
+    byId("siteSearchGo").disabled = true;
+    try {
+      setStatus("work", "Searching your sites\u2026");
+      var token = await GraphData.getToken();
+      var sites = await GraphData.searchSites(token, q);
+      var sel = byId("siteResults");
+      sel.innerHTML = "";
+      if (!sites.length) { setStatus("info", "No sites matched \u2014 paste the site URL instead."); sel.hidden = true; return; }
+      var opt0 = document.createElement("option");
+      opt0.value = ""; opt0.textContent = "Pick a site (" + sites.length + " found)\u2026";
+      sel.appendChild(opt0);
+      sites.forEach(function (st) {
+        var o = document.createElement("option");
+        o.value = st.webUrl;
+        o.textContent = st.displayName || st.webUrl;
+        sel.appendChild(o);
+      });
+      sel.hidden = false;
+      setStatus("info", sites.length + " site(s) found \u2014 pick one.");
+    } catch (e) {
+      setStatus("error", "Site search failed: " + ((e && e.message) || e));
+    } finally {
+      byId("siteSearchGo").disabled = false;
+    }
+  }
+
+  var teamsCache = null;
+
+  async function loadTeamsPicker() {
+    if (teamsCache) { return; }
+    try {
+      var token = await GraphData.getToken();
+      teamsCache = await GraphData.joinedTeams(token);
+      var sel = byId("rbTeam");
+      sel.innerHTML = "";
+      var o0 = document.createElement("option");
+      o0.value = ""; o0.textContent = "Pick a team\u2026";
+      sel.appendChild(o0);
+      teamsCache.forEach(function (t) {
+        var o = document.createElement("option");
+        o.value = t.id; o.textContent = t.displayName;
+        sel.appendChild(o);
+      });
+    } catch (e) {
+      byId("rbInfo").textContent = "Couldn't load your teams: " + ((e && e.message) || e);
+    }
+  }
+
+  async function loadChannelsAndTags() {
+    var teamId = byId("rbTeam").value;
+    var chSel = byId("rbChannel");
+    var tagSel = byId("rbTag");
+    chSel.innerHTML = ""; tagSel.innerHTML = "";
+    if (!teamId) { return; }
+    try {
+      var token = await GraphData.getToken();
+      var channels = await GraphData.listChannels(token, teamId);
+      channels.forEach(function (c) {
+        var o = document.createElement("option");
+        o.value = c.id; o.textContent = c.displayName;
+        chSel.appendChild(o);
+      });
+      var oNone = document.createElement("option");
+      oNone.value = ""; oNone.textContent = "(no tag mention)";
+      tagSel.appendChild(oNone);
+      try {
+        var tags = await GraphData.listTeamTags(token, teamId);
+        tags.forEach(function (t) {
+          var o = document.createElement("option");
+          o.value = t.id; o.textContent = t.displayName;
+          tagSel.appendChild(o);
+        });
+        byId("rbInfo").textContent = tags.length ? "" : "This team has no tags yet \u2014 create one in Teams (Manage team > Tags) to @mention a group.";
+      } catch (eTags) {
+        byId("rbInfo").textContent = "Tags unavailable for this team (posting still works without a mention).";
+      }
+    } catch (e) {
+      byId("rbInfo").textContent = "Couldn't load channels: " + ((e && e.message) || e);
+    }
+  }
+
+  async function addRoute() {
+    var code = byId("rbCode").value.trim();
+    var teamId = byId("rbTeam").value;
+    var channelId = byId("rbChannel").value;
+    if (!code) { byId("rbInfo").textContent = "Division code is required."; return; }
+    if (!teamId || !channelId) { byId("rbInfo").textContent = "Pick a team and channel."; return; }
+    byId("rbAdd").disabled = true;
+    try {
+      setStatus("work", "Saving route " + code + "\u2026");
+      var token = await GraphData.getToken();
+      if (!state.site) {
+        var site = await GraphData.resolveSite(token, byId("siteUrl").value);
+        var routingListId = await GraphData.findList(token, site.siteId, byId("routingList").value.trim() || "LegislativeRoutingMatrix");
+        state.site = { siteId: site.siteId, routingListId: routingListId };
+      }
+      if (!state.site.routingListId) {
+        state.site.routingListId = await GraphData.findList(token, state.site.siteId, byId("routingList").value.trim() || "LegislativeRoutingMatrix");
+      }
+      var teamName = (teamsCache || []).filter(function (t) { return t.id === teamId; })[0];
+      await GraphData.addListItem(token, state.site.siteId, state.site.routingListId, {
+        Title: code,
+        DivisionCode: code,
+        DivisionName: byId("rbName").value.trim(),
+        Emails: byId("rbEmails").value.trim(),
+        TeamsTeamId: teamId,
+        TeamsChannelId: channelId,
+        TeamsChannelName: byId("rbChannel").selectedOptions[0] ? byId("rbChannel").selectedOptions[0].textContent : "",
+        TeamsTagId: byId("rbTag").value,
+        TeamsTagName: byId("rbTag").selectedOptions[0] && byId("rbTag").value ? byId("rbTag").selectedOptions[0].textContent : "",
+        CodeChapters: byId("rbChapters").value.trim(),
+        IsActive: true,
+        Priority: 1,
+        Notes: "Created via the add-in setup" + (teamName ? " (team: " + teamName.displayName + ")" : ""),
+      });
+      byId("rbInfo").textContent = "Route " + code + " saved.";
+      byId("rbCode").value = ""; byId("rbName").value = ""; byId("rbEmails").value = ""; byId("rbChapters").value = "";
+      await connectRules();
+    } catch (e) {
+      byId("rbInfo").textContent = "Saving failed: " + ((e && e.message) || e);
+      setStatus("error", "Route not saved \u2014 " + ((e && e.message) || e));
+    } finally {
+      byId("rbAdd").disabled = false;
+    }
+  }
 
   async function createLists() {
     var siteUrl = byId("siteUrl").value.trim();

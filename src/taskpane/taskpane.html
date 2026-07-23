@@ -53,7 +53,8 @@
     </div>
 
     <details id="settings" class="options">
-      <summary>Settings</summary>
+      <summary>Setup &amp; Settings</summary>
+      <p class="hint"><strong>First-time setup, three steps:</strong> ① pick your SharePoint site &nbsp;② create the lists &nbsp;③ add a route per division — team, channel, and tag are pickers, no IDs to paste.</p>
       <label>Cloud environment
         <select id="cloud">
           <option value="commercial">Commercial</option>
@@ -70,7 +71,14 @@
           <input id="identifiers" type="text" value="HF, SF, HSB, SSB, HJR, SJR, HCR, SCR, HR, SR" />
         </label>
       </div>
-      <label>SharePoint site URL (routing + audit lists)
+      <label>① SharePoint site — search by name, or paste a URL below
+        <input id="siteSearch" type="text" placeholder="e.g. Legislative" />
+      </label>
+      <div class="row2">
+        <button id="siteSearchGo">Search my sites</button>
+        <select id="siteResults" hidden></select>
+      </div>
+      <label>Site URL
         <input id="siteUrl" type="text" placeholder="https://yourtenant.sharepoint.com/sites/Legislative" />
       </label>
       <div class="row2">
@@ -81,9 +89,31 @@
         <input id="trackerList" type="text" value="BillTracker" />
       </label>
       <div class="row2">
-        <button id="createLists">Create missing lists</button>
+        <button id="createLists">② Create missing lists</button>
         <button id="connectRules">Connect &amp; load routing rules</button>
       </div>
+      <details id="routeBuilder" class="options">
+        <summary>③ Add a division route (pickers — no IDs)</summary>
+        <div class="row2">
+          <label>Division code <input id="rbCode" type="text" placeholder="MVD" /></label>
+          <label>Division name <input id="rbName" type="text" placeholder="Motor Vehicle Division" /></label>
+        </div>
+        <label>Team
+          <select id="rbTeam"><option value="">Loading your teams…</option></select>
+        </label>
+        <div class="row2">
+          <label>Channel <select id="rbChannel"><option value="">Pick a team first</option></select></label>
+          <label>Tag (optional) <select id="rbTag"><option value="">Pick a team first</option></select></label>
+        </div>
+        <label>Notification emails (semicolon separated, optional)
+          <input id="rbEmails" type="text" placeholder="mvd-leg@agency.gov" />
+        </label>
+        <label>Code chapters this division owns (optional)
+          <input id="rbChapters" type="text" placeholder="321; 321A; 322" />
+        </label>
+        <button id="rbAdd" class="primary">Add route</button>
+        <p id="rbInfo" class="hint"></p>
+      </details>
       <p id="rulesInfo" class="hint"></p>
       <label>Tracked Code chapters (comma/space separated; from your agency's tracking list)
         <textarea id="trackedChapters" rows="3"></textarea>
@@ -170,15 +200,15 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=5"></script>
-  <script src="../routing.js?v=5"></script>
-  <script src="../teams.js?v=5"></script>
-  <script src="../docx.js?v=5"></script>
-  <script src="../graph.js?v=5"></script>
-  <script src="../presets.js?v=5"></script>
-  <script src="../provision.js?v=5"></script>
-  <script src="../chapters.js?v=5"></script>
-  <script src="../feed.js?v=5"></script>
-  <script src="taskpane.js?v=5"></script>
+  <script src="../parser.js?v=6"></script>
+  <script src="../routing.js?v=6"></script>
+  <script src="../teams.js?v=6"></script>
+  <script src="../docx.js?v=6"></script>
+  <script src="../graph.js?v=6"></script>
+  <script src="../presets.js?v=6"></script>
+  <script src="../provision.js?v=6"></script>
+  <script src="../chapters.js?v=6"></script>
+  <script src="../feed.js?v=6"></script>
+  <script src="taskpane.js?v=6"></script>
 </body>
 </html>
