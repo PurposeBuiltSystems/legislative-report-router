@@ -8,7 +8,14 @@ The admin surface is **Microsoft Lists** — no separate admin app to deploy.
 3. **Add a division route** — team, channel, and tag are dropdowns populated from
    your own Teams memberships; the add-in writes the routing rule for you.
 Repeat step 3 per division. Requires edit rights on the site.
-4. **Import the contact list** — Settings → "Import contact list": paste
+4. **Test my setup** — Settings → "✅ Test my setup" → Run all checks. Verifies
+   sign-in, the site and all three lists, every routing rule (live check that
+   each channel and tag actually exists in its team), the bill feed, the
+   parser, and tracker write access — without posting anything. Two opt-in
+   live tests send a clearly-labeled test post to a channel of your choice
+   and a test email to yourself. "Copy results" produces a report you can
+   email if something fails.
+5. **Import the contact list** — Settings → "Import contact list": paste
    Name/Email/Division rows straight from the coordinator's spreadsheet or
    contacts export (divisions like "MVD/TDD" assign both). Preview shows
    exactly what merges where; emails are added to each division's rule and

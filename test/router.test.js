@@ -338,6 +338,26 @@ var routedQ = R.routeItem(JSON.parse(JSON.stringify(hf2790)), eltRule);
 check("qualifier routes", routedQ.routingStatus, "matched");
 check("qualifier rule id", routedQ.matchedRoutingRules, ["9"]);
 
+// ---------- setup validator (powers the "Test my setup" panel) ----------
+var vGood = [{ id: "1", divisionCode: "MVD", aliases: [], emails: ["a@x.gov"],
+  teamsTeamId: "T", teamsChannelId: "C", teamsTagId: "G", isActive: true, priority: 1 }];
+check("valid setup -> no findings", R.validateRules(vGood).length, 0);
+
+var vBad = [
+  { id: "1", divisionCode: "MVD", aliases: [], emails: ["not-an-email"],
+    teamsTeamId: "T", teamsChannelId: "C", teamsTagId: "", isActive: true },
+  { id: "2", divisionCode: "TDD", aliases: [], emails: [],
+    teamsTeamId: "", teamsChannelId: "", teamsTagId: "", isActive: true },
+];
+var findings = R.validateRules(vBad);
+check("no-tag info", findings.some(function (f) { return f.level === "info" && f.division === "MVD"; }), true);
+check("bad email warn", findings.some(function (f) { return f.level === "warn" && f.message.indexOf("not-an-email") !== -1; }), true);
+check("no-channel warn", findings.some(function (f) { return f.division === "TDD" && f.message.indexOf("No Teams channel") !== -1; }), true);
+check("dead-end rule warn", findings.some(function (f) { return f.message.indexOf("neither a channel nor emails") !== -1; }), true);
+
+check("empty rules -> error", R.validateRules([])[0].level, "error");
+check("inactive only -> error", R.validateRules([{ id: "1", divisionCode: "X", isActive: false }])[0].level, "error");
+
 if (failures) {
   console.error("\n" + failures + " test(s) FAILED");
   process.exit(1);

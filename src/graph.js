@@ -122,6 +122,10 @@
     return graphJson(token, "PATCH", "/sites/" + siteId + "/lists/" + listId + "/items/" + itemId + "/fields", fields);
   }
 
+  async function deleteListItem(token, siteId, listId, itemId) {
+    return graphJson(token, "DELETE", "/sites/" + siteId + "/lists/" + listId + "/items/" + itemId);
+  }
+
   // ---------- Teams ----------
 
   async function joinedTeams(token) {
@@ -186,6 +190,7 @@
     createList: createList,
     addListItem: addListItem,
     updateListItemFields: updateListItemFields,
+    deleteListItem: deleteListItem,
     joinedTeams: joinedTeams,
     listChannels: listChannels,
     searchSites: searchSites,

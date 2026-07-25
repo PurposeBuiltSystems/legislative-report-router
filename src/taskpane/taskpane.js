@@ -110,6 +110,8 @@
     byId("rbAdd").addEventListener("click", addRoute);
     byId("contactPreview").addEventListener("click", contactPreview);
     byId("contactApply").addEventListener("click", contactApply);
+    byId("runChecks").addEventListener("click", runChecks);
+    byId("copyChecks").addEventListener("click", copyChecks);
     byId("lookupTags").addEventListener("click", lookupTags);
     byId("bulkApply").addEventListener("click", bulkApply);
     byId("confirmBox").addEventListener("change", function () {
@@ -768,6 +770,19 @@
       state.site = { siteId: site.siteId, routingListId: routingListId, auditListId: auditListId, trackerListId: trackerListId };
       byId("rulesInfo").textContent = state.rules.length + " routing rule(s) loaded from " + site.name +
         " (" + state.rules.filter(function (r) { return r.teamsTagId; }).length + " with Teams tags).";
+      var tpSel = byId("testPostRoute");
+      tpSel.innerHTML = "";
+      state.rules.filter(function (r) { return r.teamsTeamId && r.teamsChannelId; }).forEach(function (r) {
+        var o = document.createElement("option");
+        o.value = r.id;
+        o.textContent = r.divisionCode + " \u2192 " + (r.teamsChannelName || r.teamsChannelId.slice(0, 18) + "\u2026");
+        tpSel.appendChild(o);
+      });
+      if (!tpSel.children.length) {
+        var o0 = document.createElement("option");
+        o0.value = ""; o0.textContent = "(no rules with a Teams channel yet)";
+        tpSel.appendChild(o0);
+      }
       if (state.items.length) { LrrRouting.routeAll(state.items, state.rules); refreshStats(); renderItems(); }
       setStatus("info", "Routing connected.");
     } catch (e) {
@@ -791,6 +806,184 @@
     } catch (e) {
       setStatus("error", "Tag lookup failed: " + ((e && e.message) || e));
     }
+  }
+
+  // ---------- setup health check ----------
+
+  var checkLog = [];
+
+  function logCheck(ok, label, detail) {
+    checkLog.push({ ok: ok, label: label, detail: detail || "" });
+    var p = document.createElement("p");
+    p.className = ok === true ? "" : (ok === "warn" ? "warn" : "err");
+    p.textContent = (ok === true ? "\u2713 " : ok === "warn" ? "\u26a0 " : "\u2717 ") + label + (detail ? " \u2014 " + detail : "");
+    byId("checkResults").appendChild(p);
+  }
+
+  async function runChecks() {
+    byId("runChecks").disabled = true;
+    byId("checkResults").innerHTML = "";
+    byId("copyChecks").hidden = true;
+    checkLog = [];
+    try {
+      // 1. sign-in
+      var token;
+      try {
+        token = await GraphData.getToken();
+        logCheck(true, "Sign-in", "token acquired for this mailbox");
+      } catch (e) {
+        logCheck(false, "Sign-in", (e && e.message) || String(e));
+        setStatus("error", "Sign-in failed \u2014 fix that first; nothing else can work.");
+        return;
+      }
+
+      // 2. parser self-test (pure, proves the code loaded intact)
+      try {
+        var sample = LrrParser.parseReport("HF935\nMVD\nMVD\ntest brief. Successor to HSB171.", {});
+        var okParse = sample.items.length === 1 && sample.items[0].billNumber === "HF935" &&
+          sample.items[0].referencedBills[0] === "HSB171";
+        logCheck(okParse ? true : false, "Parser", okParse ? "sample report parses correctly" : "unexpected parse result");
+      } catch (e) { logCheck(false, "Parser", (e && e.message) || String(e)); }
+
+      // 3. site + lists
+      var siteOk = false;
+      try {
+        var site = await GraphData.resolveSite(token, byId("siteUrl").value);
+        logCheck(true, "SharePoint site", site.name);
+        siteOk = true;
+        var names = [byId("routingList").value.trim() || "LegislativeRoutingMatrix",
+                     byId("auditList").value.trim() || "LegislativeAudit"];
+        var trackerName = byId("trackerList").value.trim();
+        if (trackerName) { names.push(trackerName); }
+        for (var li = 0; li < names.length; li++) {
+          try {
+            await GraphData.findList(token, site.siteId, names[li]);
+            logCheck(true, 'List "' + names[li] + '"', "found");
+          } catch (e) {
+            logCheck(false, 'List "' + names[li] + '"', "missing \u2014 use \u2461 Create missing lists");
+          }
+        }
+      } catch (e) {
+        logCheck(false, "SharePoint site", (e && e.message) || String(e));
+      }
+
+      // 4. rules + pure validation
+      if (!state.rules.length && siteOk) {
+        try { await connectRules(); } catch (e) { /* reported below */ }
+      }
+      if (state.rules.length) {
+        logCheck(true, "Routing rules", state.rules.length + " loaded");
+        LrrRouting.validateRules(state.rules).forEach(function (v) {
+          logCheck(v.level === "error" ? false : "warn", "Rule check" + (v.division ? " (" + v.division + ")" : ""), v.message);
+        });
+      } else {
+        logCheck(false, "Routing rules", "none loaded \u2014 connect the site and add routes");
+      }
+
+      // 5. live Teams validation: channels + tags per unique team (cap 5)
+      var teams = {};
+      state.rules.forEach(function (r) { if (r.teamsTeamId) { teams[r.teamsTeamId] = teams[r.teamsTeamId] || []; teams[r.teamsTeamId].push(r); } });
+      var teamIds = Object.keys(teams).slice(0, 5);
+      for (var ti = 0; ti < teamIds.length; ti++) {
+        var tid = teamIds[ti];
+        try {
+          var channels = await GraphData.listChannels(token, tid);
+          var chanIds = channels.map(function (c) { return c.id; });
+          var tags = [];
+          try { tags = await GraphData.listTeamTags(token, tid); } catch (eT) { /* tags optional */ }
+          var tagIds = tags.map(function (t) { return t.id; });
+          teams[tid].forEach(function (r) {
+            var chanOk = chanIds.indexOf(r.teamsChannelId) !== -1;
+            logCheck(chanOk ? true : false, "Teams channel (" + r.divisionCode + ")",
+              chanOk ? (r.teamsChannelName || "reachable") : "channel ID not found in that team \u2014 re-pick it in the route builder");
+            if (r.teamsTagId) {
+              var tagOk = tagIds.indexOf(r.teamsTagId) !== -1;
+              logCheck(tagOk ? true : "warn", "Teams tag (" + r.divisionCode + ")",
+                tagOk ? (r.teamsTagName || "found") : "tag ID not found \u2014 mention would be dropped; re-pick the tag");
+            }
+          });
+        } catch (e) {
+          logCheck(false, "Teams team", "can't reach team for " + teams[tid].map(function (r) { return r.divisionCode; }).join("/") +
+            " \u2014 are you a member? (" + ((e && e.message) || e).slice(0, 120) + ")");
+        }
+      }
+
+      // 6. feed mirror
+      try {
+        var preset = LrrPresets.presetFor(byId("stateName").value || "Iowa");
+        var feedUrl = preset.feed === "iowa-rss" ? "../../feeds/IowaBills.xml" : "../../feeds/openstates-" + preset.slug + ".json";
+        var fr = await fetch(feedUrl + "?ts=" + Date.now());
+        if (fr.ok) {
+          var body = await fr.text();
+          var n = preset.feed === "iowa-rss" ? (body.match(/<item>/g) || []).length : (LrrFeed.parseOpenStates(body) || []).length;
+          logCheck(true, "New-filings feed", n + " bills in the mirror");
+        } else { logCheck("warn", "New-filings feed", "mirror not available (" + fr.status + ") \u2014 Filings tab won't load, everything else works"); }
+      } catch (e) { logCheck("warn", "New-filings feed", "unreachable \u2014 Filings tab won't load, everything else works"); }
+
+      // 7. tracker write test (add + delete a row)
+      if (state.site && state.site.trackerListId) {
+        try {
+          var row = await GraphData.addListItem(token, state.site.siteId, state.site.trackerListId,
+            { Title: "SETUP TEST \u2014 safe to ignore", Division: "TEST", Status: "Pending review", ReportKey: "setup-check" });
+          await GraphData.deleteListItem(token, state.site.siteId, state.site.trackerListId, row.id);
+          logCheck(true, "Tracker write", "test row created and removed");
+        } catch (e) { logCheck(false, "Tracker write", (e && e.message || e).slice(0, 140)); }
+      }
+
+      // 8. optional live: test post
+      if (byId("optTestPost").checked) {
+        var rid = byId("testPostRoute").value;
+        var rule = state.rules.filter(function (r) { return r.id === rid; })[0];
+        if (!rule) { logCheck("warn", "Test post", "pick a route first"); }
+        else {
+          try {
+            var mentionRules = byId("optTestMention").checked ? [rule] : [{}];
+            var payload = LrrTeams.buildChannelMessage({
+              billNumber: "TEST", title: "",
+              brief: "\ud83e\uddea Legislative Report Router setup test \u2014 safe to ignore. Posted by " +
+                ((Office.context.mailbox.userProfile || {}).displayName || "the coordinator") + " from the add-in's setup check.",
+              distributedTo: [rule.divisionCode], commentRequestedFrom: [], sourceLinks: [],
+            }, mentionRules, { template: { commentWindow: "" } });
+            var msg = await GraphData.postChannelMessage(token, rule.teamsTeamId, rule.teamsChannelId, payload);
+            logCheck(true, "Test post", "posted to " + (rule.teamsChannelName || "the channel") +
+              (byId("optTestMention").checked ? " with the tag mention" : "") + " (message " + String(msg.id).slice(0, 12) + "\u2026)");
+            await writeAudit(token, { Title: "TEST", ReportKey: "setup-check", IdempotencyKey: "setup-check-" + msg.id,
+              TeamId: rule.teamsTeamId, ChannelId: rule.teamsChannelId, TeamsMessageId: msg.id || "",
+              Status: "published", Divisions: rule.divisionCode,
+              PublishedBy: ((Office.context.mailbox.userProfile || {}).emailAddress) || "", SourceSubject: "Setup check" });
+            logCheck(true, "Audit write", "test post recorded in the audit list");
+          } catch (e) { logCheck(false, "Test post", (e && e.message || e).slice(0, 200)); }
+        }
+      }
+
+      // 9. optional live: test email to self
+      if (byId("optTestEmail").checked) {
+        try {
+          var me = ((Office.context.mailbox.userProfile || {}).emailAddress) || "";
+          await GraphData.sendMail(token, [me], "Legislative Report Router setup test",
+            "<p>\ud83e\uddea This is the add-in's setup-check email. If you can read this, division emails will send. Safe to delete.</p>");
+          logCheck(true, "Test email", "sent to " + me);
+        } catch (e) { logCheck(false, "Test email", (e && e.message || e).slice(0, 200)); }
+      }
+
+      var fails = checkLog.filter(function (c) { return c.ok === false; }).length;
+      var warns = checkLog.filter(function (c) { return c.ok === "warn"; }).length;
+      setStatus(fails ? "error" : "info",
+        fails ? fails + " check(s) failed, " + warns + " warning(s) \u2014 fix the \u2717 items above."
+              : (warns ? "Setup works \u2014 " + warns + " warning(s) worth a look." : "All checks passed \u2014 you're ready to publish. \ud83c\udf89"));
+      byId("copyChecks").hidden = false;
+    } finally {
+      byId("runChecks").disabled = false;
+    }
+  }
+
+  function copyChecks() {
+    var text = checkLog.map(function (c) {
+      return (c.ok === true ? "PASS" : c.ok === "warn" ? "WARN" : "FAIL") + "  " + c.label + (c.detail ? " - " + c.detail : "");
+    }).join("\n");
+    navigator.clipboard.writeText("Legislative Report Router setup check\n" + new Date().toLocaleString() + "\n\n" + text)
+      .then(function () { setStatus("info", "Results copied \u2014 paste into an email if you need help."); })
+      .catch(function () { setStatus("error", "Copy failed \u2014 select the results manually."); });
   }
 
   // ---------- draft save/load ----------

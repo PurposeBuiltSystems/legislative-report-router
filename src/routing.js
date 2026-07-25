@@ -126,6 +126,38 @@
     return order.map(function (id) { return byId[id]; });
   }
 
+  var EMAIL_RE = /^[^\s@;,]+@[^\s@;,]+\.[^\s@;,]+$/;
+
+  /**
+   * Setup-quality report for a rule set. Pure — no network. Returns
+   * [{level:"error"|"warn"|"info", division, message}].
+   */
+  function validateRules(rules) {
+    var out = [];
+    var active = (rules || []).filter(function (r) { return ruleActive(r); });
+    if (!active.length) {
+      out.push({ level: "error", division: "", message: "No active routing rules — nothing can be routed or published." });
+      return out;
+    }
+    active.forEach(function (r) {
+      var d = r.divisionCode || "(unnamed)";
+      if (!r.teamsTeamId || !r.teamsChannelId) {
+        out.push({ level: "warn", division: d, message: "No Teams channel — bills for " + d + " can't be posted (emails still send)." });
+      } else if (!r.teamsTagId) {
+        out.push({ level: "info", division: d, message: "No tag — posts to " + d + "'s channel won't @mention anyone." });
+      }
+      (r.emails || []).forEach(function (e) {
+        if (!EMAIL_RE.test(String(e).trim())) {
+          out.push({ level: "warn", division: d, message: 'Email "' + e + '" doesn\'t look valid.' });
+        }
+      });
+      if (!(r.emails || []).length && (!r.teamsTeamId || !r.teamsChannelId)) {
+        out.push({ level: "warn", division: d, message: d + " has neither a channel nor emails — publishing would do nothing for it." });
+      }
+    });
+    return out;
+  }
+
   /** Map a raw SharePoint list item (fields object) to a RoutingRule. */
   function ruleFromSharePoint(fields, id) {
     return {
@@ -157,6 +189,7 @@
     routeAll: routeAll,
     groupByRule: groupByRule,
     ruleFromSharePoint: ruleFromSharePoint,
+    validateRules: validateRules,
     splitList: splitList,
   };
   if (typeof module !== "undefined" && module.exports) { module.exports = api; }

@@ -131,6 +131,19 @@
       <label>Comment window text
         <input id="commentWindow" type="text" value="Review comments requested within 48 business hours." />
       </label>
+      <details id="healthPanel" class="options">
+        <summary>\u2705 Test my setup</summary>
+        <p class="hint">Checks every flow without posting anything: sign-in, SharePoint lists, routing rules, Teams channels and tags, the bill feed, and the parser. The two live tests below are optional and clearly labeled.</p>
+        <button id="runChecks" class="primary">Run all checks</button>
+        <div id="checkResults" class="publog"></div>
+        <div class="modes" style="margin-top:8px">
+          <label><input id="optTestPost" type="checkbox" /> Also send a TEST POST to a channel:</label>
+          <select id="testPostRoute"><option value="">(connect rules first)</option></select>
+          <label><input id="optTestMention" type="checkbox" /> Include the tag mention in the test post (notifies the tag's members!)</label>
+          <label><input id="optTestEmail" type="checkbox" /> Also email a test message to me (only to my own address)</label>
+        </div>
+        <button id="copyChecks" hidden>Copy results</button>
+      </details>
       <details class="options">
         <summary>Org profile (share setup with your team)</summary>
         <p class="hint">Coordinators: configure above, Copy profile, send the code. Teammates: paste and Apply.</p>
@@ -210,16 +223,16 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=7"></script>
-  <script src="../routing.js?v=7"></script>
-  <script src="../teams.js?v=7"></script>
-  <script src="../docx.js?v=7"></script>
-  <script src="../graph.js?v=7"></script>
-  <script src="../presets.js?v=7"></script>
-  <script src="../provision.js?v=7"></script>
-  <script src="../contacts.js?v=7"></script>
-  <script src="../chapters.js?v=7"></script>
-  <script src="../feed.js?v=7"></script>
-  <script src="taskpane.js?v=7"></script>
+  <script src="../parser.js?v=8"></script>
+  <script src="../routing.js?v=8"></script>
+  <script src="../teams.js?v=8"></script>
+  <script src="../docx.js?v=8"></script>
+  <script src="../graph.js?v=8"></script>
+  <script src="../presets.js?v=8"></script>
+  <script src="../provision.js?v=8"></script>
+  <script src="../contacts.js?v=8"></script>
+  <script src="../chapters.js?v=8"></script>
+  <script src="../feed.js?v=8"></script>
+  <script src="taskpane.js?v=8"></script>
 </body>
 </html>
