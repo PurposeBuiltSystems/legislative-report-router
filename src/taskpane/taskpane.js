@@ -108,6 +108,8 @@
     });
     byId("rbTeam").addEventListener("change", loadChannelsAndTags);
     byId("rbAdd").addEventListener("click", addRoute);
+    byId("contactPreview").addEventListener("click", contactPreview);
+    byId("contactApply").addEventListener("click", contactApply);
     byId("lookupTags").addEventListener("click", lookupTags);
     byId("bulkApply").addEventListener("click", bulkApply);
     byId("confirmBox").addEventListener("change", function () {
@@ -643,6 +645,67 @@
       setStatus("error", "Route not saved \u2014 " + ((e && e.message) || e));
     } finally {
       byId("rbAdd").disabled = false;
+    }
+  }
+
+  var contactPlanCache = null;
+
+  function contactPreview() {
+    var parsed = LrrContacts.parseContactRows(byId("contactRows").value);
+    var plan = LrrContacts.mergePlan(parsed.rows, state.rules);
+    contactPlanCache = plan;
+    var lines = [];
+    plan.forEach(function (pl) {
+      lines.push("<b>" + pl.division + "</b>: " +
+        (pl.addEmails.length ? "+" + pl.addEmails.length + " address(es)" : "nothing new") +
+        (pl.rule ? " (rule exists, " + pl.existingCount + " already)"
+                 : " \u2014 <b>new rule will be created</b> (add its Teams channel afterward)"));
+    });
+    parsed.errors.forEach(function (er) { lines.push('<span style="color:#a4262c">' + er + "</span>"); });
+    if (!plan.length && !parsed.errors.length) { lines.push("Nothing to import \u2014 paste rows first."); }
+    byId("contactPlan").innerHTML = lines.join("<br>");
+    byId("contactApply").disabled = !plan.some(function (pl) { return pl.addEmails.length; });
+    if (!state.rules.length) {
+      byId("contactPlan").innerHTML += "<br><span style=\"color:#8a6d00\">Connect the routing list first (\u2461/Connect) so imports merge into existing rules.</span>";
+    }
+  }
+
+  async function contactApply() {
+    if (!contactPlanCache) { return; }
+    if (!state.site || !state.site.routingListId) {
+      setStatus("error", "Connect the SharePoint routing list first (Settings \u2192 Connect)."); return;
+    }
+    byId("contactApply").disabled = true;
+    try {
+      var token = await GraphData.getToken();
+      var applied = 0, created = 0;
+      for (var i = 0; i < contactPlanCache.length; i++) {
+        var pl = contactPlanCache[i];
+        if (!pl.addEmails.length) { continue; }
+        if (pl.rule) {
+          var merged = (pl.rule.emails || []).concat(pl.addEmails).join("; ");
+          setStatus("work", "Updating " + pl.division + "\u2026");
+          await GraphData.updateListItemFields(token, state.site.siteId, state.site.routingListId, pl.rule.id, { Emails: merged });
+          applied++;
+        } else {
+          setStatus("work", "Creating rule for " + pl.division + "\u2026");
+          await GraphData.addListItem(token, state.site.siteId, state.site.routingListId, {
+            Title: pl.division, DivisionCode: pl.division,
+            Emails: pl.addEmails.join("; "),
+            IsActive: true, Priority: 1,
+            Notes: "Created by contact import \u2014 add a Teams channel in the route builder.",
+          });
+          created++;
+        }
+      }
+      contactPlanCache = null;
+      byId("contactRows").value = "";
+      byId("contactPlan").innerHTML = "";
+      setStatus("info", "Contact import done: " + applied + " rule(s) updated, " + created + " created. Reloading rules\u2026");
+      await connectRules();
+    } catch (e) {
+      setStatus("error", "Import failed: " + ((e && e.message) || e));
+      byId("contactApply").disabled = false;
     }
   }
 

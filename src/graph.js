@@ -118,6 +118,10 @@
     return graphJson(token, "POST", "/sites/" + siteId + "/lists/" + listId + "/items", { fields: fields });
   }
 
+  async function updateListItemFields(token, siteId, listId, itemId, fields) {
+    return graphJson(token, "PATCH", "/sites/" + siteId + "/lists/" + listId + "/items/" + itemId + "/fields", fields);
+  }
+
   // ---------- Teams ----------
 
   async function joinedTeams(token) {
@@ -181,6 +185,7 @@
     listItems: listItems,
     createList: createList,
     addListItem: addListItem,
+    updateListItemFields: updateListItemFields,
     joinedTeams: joinedTeams,
     listChannels: listChannels,
     searchSites: searchSites,

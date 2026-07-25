@@ -7,7 +7,13 @@ The admin surface is **Microsoft Lists** — no separate admin app to deploy.
 2. **Create missing lists** — all three lists are created with the correct columns.
 3. **Add a division route** — team, channel, and tag are dropdowns populated from
    your own Teams memberships; the add-in writes the routing rule for you.
-Repeat step 3 per division. Requires edit rights on the site. The sections below
+Repeat step 3 per division. Requires edit rights on the site.
+4. **Import the contact list** — Settings → "Import contact list": paste
+   Name/Email/Division rows straight from the coordinator's spreadsheet or
+   contacts export (divisions like "MVD/TDD" assign both). Preview shows
+   exactly what merges where; emails are added to each division's rule and
+   never removed. Unknown divisions become new rules flagged to receive a
+   Teams channel. The sections below
 document the schemas for admins who prefer to create or audit everything manually
 in Microsoft Lists (both paths produce identical lists).
 
