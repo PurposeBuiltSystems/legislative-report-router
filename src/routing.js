@@ -130,8 +130,9 @@
 
   /**
    * Which of a rule's routing keywords appear in the text? Single words
-   * match on word boundaries ("rail" won't fire inside "trailer");
-   * phrases match as substrings.
+   * match at word STARTS — "driver" catches "drivers", "rail" catches
+   * "railroad", but "rail" never fires inside "trailer". Phrases match
+   * as substrings.
    */
   function keywordHits(text, keywords) {
     var t = String(text || "").toLowerCase();
@@ -141,7 +142,7 @@
       if (!kl) { return; }
       var ok;
       if (/^[a-z0-9'-]+$/.test(kl)) {
-        ok = new RegExp("\\b" + kl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(t);
+        ok = new RegExp("\\b" + kl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(t);
       } else {
         ok = t.indexOf(kl) !== -1;
       }

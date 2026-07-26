@@ -371,6 +371,8 @@ var KW_RULES = [
 // word-boundary: "rail" must NOT fire inside "trailer"
 check("boundary no false hit", R.keywordHits("trailer registration fees", ["rail"]), []);
 check("boundary real hit", R.keywordHits("light rail expansion", ["rail"]), ["rail"]);
+check("word-start prefix hit", R.keywordHits("railroad electrification", ["rail"]), ["rail"]);
+check("plural hit", R.keywordHits("licensing of drivers", ["driver"]), ["driver"]);
 
 // phrases match as substrings
 check("phrase hit", R.keywordHits("a railroad crossing safety bill", ["railroad crossing"]), ["railroad crossing"]);
@@ -381,7 +383,7 @@ check("multi hits", R.keywordHits("CDL requirements for drivers", ["cdl", "drive
 // suggester: right rules, inactive rules never suggest
 var kwSug = R.suggestByKeywords("relating to CDL holders at railroad crossings", KW_RULES);
 check("suggest rules", kwSug.map(function (x) { return x.rule.divisionCode; }), ["MVD", "TDD"]);
-check("suggest why", kwSug[0].keywords, ["CDL"]);
+check("suggest why", kwSug[0].keywords, ["CDL", "rail"]); // rail prefix-hits railroad — intended
 check("inactive rule silent", kwSug.some(function (x) { return x.rule.divisionCode === "OLD"; }), false);
 
 // SharePoint mapping carries RoutingKeywords
