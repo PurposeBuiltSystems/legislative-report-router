@@ -75,10 +75,19 @@
 
   // ---------- SharePoint (routing matrix + audit) ----------
 
-  /** "https://x.sharepoint.com/sites/Y" → Graph siteId. */
+  /**
+   * "https://x.sharepoint.com/sites/Y" → Graph siteId. Tolerates what
+   * people actually paste: URLs copied from a page inside the site
+   * (/SitePages/Home.aspx, /Lists/..., /_layouts/...), query strings,
+   * and trailing slashes. Access is evaluated as the signed-in user, so
+   * org-only / private sites work exactly like public ones.
+   */
   async function resolveSite(token, siteUrl) {
     var u = new URL(String(siteUrl).trim());
-    var path = u.pathname.replace(/\/+$/, "");
+    var path = u.pathname
+      .replace(/\/(SitePages|Lists|Shared%20Documents|Shared Documents|_layouts|Forms)\/.*$/i, "")
+      .replace(/\/+$/, "");
+    if (!path) { path = "/"; } // tenant root site
     var site = await graphJson(token, "GET", "/sites/" + u.hostname + ":" + path + "?$select=id,displayName");
     return { siteId: site.id, name: site.displayName };
   }
