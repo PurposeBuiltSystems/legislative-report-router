@@ -165,6 +165,14 @@
     });
   }
 
+  async function createDraftMessage(token, to, subject, html) {
+    return graphJson(token, "POST", "/me/messages", {
+      subject: subject,
+      body: { contentType: "HTML", content: html },
+      toRecipients: (to || []).map(function (a) { return { emailAddress: { address: a } }; }),
+    });
+  }
+
   async function sendDraft(token, messageId) {
     return graphJson(token, "POST", "/me/messages/" + encodeURIComponent(messageId) + "/send");
   }
@@ -197,6 +205,7 @@
     postChannelMessage: postChannelMessage,
     listTeamTags: listTeamTags,
     sendMail: sendMail,
+    createDraftMessage: createDraftMessage,
     sendDraft: sendDraft,
     getAttachments: getAttachments,
     getAttachmentBytes: getAttachmentBytes,

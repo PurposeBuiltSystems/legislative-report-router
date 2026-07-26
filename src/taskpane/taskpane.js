@@ -86,6 +86,32 @@
   }
 
   var autoParsed = false;
+  var REPORTED_KEY = "lrr.reported";
+
+  function reportedBills() {
+    try { return (JSON.parse(Office.context.roamingSettings.get(REPORTED_KEY) || "{}").bills) || []; }
+    catch (e) { return []; }
+  }
+
+  function markReported(items) {
+    try {
+      var bills = reportedBills();
+      items.forEach(function (it) {
+        if (bills.indexOf(it.billNumber) === -1) { bills.push(it.billNumber); }
+      });
+      Office.context.roamingSettings.set(REPORTED_KEY, JSON.stringify({
+        bills: bills.slice(-800), last: new Date().toISOString(),
+      }));
+      Office.context.roamingSettings.saveAsync(function () {});
+    } catch (e) { /* best-effort */ }
+  }
+
+  function updateDistInfo() {
+    var el = byId("distInfo");
+    if (!el) { return; }
+    var n = LrrReportGen.extractEmails(byId("distList").value).length;
+    el.textContent = n ? n + " address(es) recognized." : "Paste the To: line from a past report \u2014 names and brackets are fine.";
+  }
 
   function maybeAutoParse() {
     if (autoParsed || state.items.length) { return; }
@@ -110,7 +136,7 @@
     if (screen === "publish") { renderPublishSummary(); }
   }
 
-  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters"];
+  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distList"];
   var PROFILE_KEYS = SETTING_KEYS.concat([]);
 
   Office.onReady(function () {
@@ -163,6 +189,8 @@
     byId("contactApply").addEventListener("click", contactApply);
     byId("runChecks").addEventListener("click", runChecks);
     byId("copyChecks").addEventListener("click", copyChecks);
+    byId("distList").addEventListener("input", updateDistInfo);
+    updateDistInfo();
     byId("lookupTags").addEventListener("click", lookupTags);
     byId("bulkApply").addEventListener("click", bulkApply);
     byId("confirmBox").addEventListener("change", function () {
@@ -527,6 +555,13 @@
       var terms = byId("watchTerms").value.split(",").map(function (t) { return t.trim(); }).filter(Boolean);
       var days = Number(byId("watchDays").value) || 3;
       var hits = LrrFeed.watchFilter(entries, terms, days);
+      if (byId("hideReported").checked) {
+        var before = hits.length;
+        hits = LrrReportGen.filterNew(hits, reportedBills());
+        if (before !== hits.length) {
+          setStatus("work", (before - hits.length) + " bill(s) hidden (already in a past report)\u2026");
+        }
+      }
       if (byId("watchChapters").checked) {
         var tracked = trackedList();
         var inWindow = LrrFeed.watchFilter(entries, [], days);
@@ -582,15 +617,29 @@
     var existing = {};
     state.items.forEach(function (it) { existing[it.billNumber] = true; });
     var added = 0;
+    var tracked = trackedList();
     picked.forEach(function (f, i) {
       if (existing[f.entry.bill]) { return; }
       var item = LrrFeed.toLegislativeItem(f.entry, state.reportKey, state.items.length + i);
+      item.codeChapters = LrrChapters.extractChapters(item.brief || "");
+      item.trackedChapters = LrrChapters.matchTracked(item.codeChapters, tracked);
+      if (!item.distributedTo.length && state.rules.length) {
+        var sugs = LrrChapters.suggestRules(item.codeChapters, state.rules);
+        if (sugs.length) {
+          item.distributedTo = sugs.map(function (sg) { return sg.rule.divisionCode; });
+          item.commentRequestedFrom = item.distributedTo.slice();
+          item.parserWarnings = ["Divisions auto-suggested from Code chapters (" +
+            sugs.map(function (sg) { return sg.chapters.join(",") ; }).join("; ") + ") — verify."];
+        }
+      }
       if (state.rules.length) { LrrRouting.routeItem(item, state.rules); }
       state.items.push(item);
       added++;
     });
     refreshStats(); renderItems();
-    setStatus("info", added + " bill(s) added to the distribution — assign divisions in Review.");
+    if (byId("optDailyReport")) { byId("optDailyReport").checked = true; }
+    var auto = state.items.filter(function (it) { return it.routingStatus === "matched"; }).length;
+    setStatus("info", added + " bill(s) added — " + auto + " auto-routed from Code chapters. Verify in Review, then Publish (the Daily Bill Report draft is pre-ticked).");
     show("review");
   }
 
@@ -1162,7 +1211,11 @@
       "<strong>" + posts + "</strong> Teams post(s) will be created.<br>" +
       "<strong>" + Object.keys(tags).length + "</strong> division tag(s) will be mentioned.<br>" +
       "<strong>" + Object.keys(recipients).length + "</strong> recipient(s) will receive targeted email." +
-      (byId("optOriginal").checked ? "<br>The original Outlook message will be sent." : "");
+      (byId("optOriginal").checked ? "<br>The original Outlook message will be sent." : "") +
+      (byId("optDailyReport").checked
+        ? "<br>The <strong>Daily Bill Report draft</strong> will be created for <strong>" +
+          LrrReportGen.extractEmails((settings().distList || "")).length + "</strong> recipients (review in Drafts, then send)."
+        : "");
   }
 
   function logLine(text, kind) {
@@ -1288,6 +1341,29 @@
             failures++;
             logLine("✗ Email to " + mg.rule.divisionCode + ": " + e.message, "err");
           }
+        }
+      }
+
+      if (byId("optDailyReport").checked && !retryOnly) {
+        try {
+          var st2 = settings();
+          var recips = LrrReportGen.extractEmails(st2.distList || "");
+          if (!recips.length) {
+            logLine("\u26a0 Daily Bill Report skipped: no distribution list set (Setup \u2192 Daily Bill Report generation).", "warn");
+          } else {
+            var rep = LrrReportGen.buildDailyReport(included(), {
+              sessionName: st2.sessionName || "",
+              commentWindow: byId("commentWindow").value,
+              preparedBy: (me && me.displayName) || "",
+            });
+            await GraphData.createDraftMessage(token, recips, rep.subject, rep.html);
+            markReported(included());
+            logLine("\u2713 Daily Bill Report draft created — " + rep.count + " bills, " + recips.length +
+              " recipients. Review it in your Drafts folder and send.");
+          }
+        } catch (e) {
+          failures++;
+          logLine("\u2717 Daily Bill Report draft failed: " + e.message, "err");
         }
       }
 

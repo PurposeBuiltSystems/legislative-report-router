@@ -86,6 +86,17 @@
         <button id="createLists">② Create missing lists</button>
         <button id="connectRules">Connect &amp; load routing rules</button>
       </div>
+      <details id="dailyReport" class="options">
+        <summary>Daily Bill Report generation</summary>
+        <p class="hint">Publish can draft the Daily Bill Report email itself \u2014 built from the routed bills \u2014 addressed to your distribution list. It lands in <b>your Drafts for review</b>; nothing sends by itself.</p>
+        <label>Session name (report header)
+          <input id="sessionName" type="text" placeholder="2027 Legislative Session \u2013 1st Session, 92nd Iowa General Assembly" />
+        </label>
+        <label>Distribution list \u2014 paste your report's To: line (addresses are extracted automatically)
+          <textarea id="distList" rows="3" placeholder="Doe, Jane &lt;jane.doe@iowadot.us&gt;; Roe, Bob &lt;bob.roe@iowadot.us&gt;; \u2026"></textarea>
+        </label>
+        <p id="distInfo" class="hint"></p>
+      </details>
       <details id="contactImport" class="options">
         <summary>Import contact list (paste from Excel/Outlook)</summary>
         <p class="hint">Paste rows of <b>Name, Email, Division</b> (or just Email, Division) — straight from the coordinator's spreadsheet or contacts export. Divisions like "MVD/TDD" assign a person to both. Emails merge into each division's routing rule; nothing is removed.</p>
@@ -182,6 +193,7 @@
     <label>Watch terms (comma separated; blank = all bills)
       <input id="watchTerms" type="text" value="transportation, motor vehicle, highway, executive department, driver, railroad, aviation" />
     </label>
+    <label class="modes" style="margin-top:4px"><input id="hideReported" type="checkbox" checked /> Hide bills already included in a past daily report</label>
     <div id="filingsList"></div>
     <div class="actions-row">
       <button id="routeFilings" hidden>Route selected bills →</button>
@@ -211,6 +223,7 @@
       <label><input id="optTeams" type="checkbox" checked /> Post to Teams</label>
       <label><input id="optEmail" type="checkbox" checked /> Send targeted division emails</label>
       <label><input id="optOriginal" type="checkbox" /> Send the original Outlook message</label>
+      <label><input id="optDailyReport" type="checkbox" /> Draft the Daily Bill Report email to the distribution list</label>
     </div>
     <label class="confirm-check"><input id="confirmBox" type="checkbox" /> I reviewed the distribution and confirm publication.</label>
     <div class="actions-row">
@@ -228,16 +241,17 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=9"></script>
-  <script src="../routing.js?v=9"></script>
-  <script src="../teams.js?v=9"></script>
-  <script src="../docx.js?v=9"></script>
-  <script src="../graph.js?v=9"></script>
-  <script src="../presets.js?v=9"></script>
-  <script src="../provision.js?v=9"></script>
-  <script src="../contacts.js?v=9"></script>
-  <script src="../chapters.js?v=9"></script>
-  <script src="../feed.js?v=9"></script>
-  <script src="taskpane.js?v=9"></script>
+  <script src="../parser.js?v=10"></script>
+  <script src="../routing.js?v=10"></script>
+  <script src="../teams.js?v=10"></script>
+  <script src="../docx.js?v=10"></script>
+  <script src="../graph.js?v=10"></script>
+  <script src="../presets.js?v=10"></script>
+  <script src="../provision.js?v=10"></script>
+  <script src="../contacts.js?v=10"></script>
+  <script src="../reportgen.js?v=10"></script>
+  <script src="../chapters.js?v=10"></script>
+  <script src="../feed.js?v=10"></script>
+  <script src="taskpane.js?v=10"></script>
 </body>
 </html>
