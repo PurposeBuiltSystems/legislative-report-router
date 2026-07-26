@@ -154,3 +154,23 @@ The tracked list ships seeded from the DOT's 2015 tracking list
 (Settings → "Tracked Code chapters") and is FULLY EDITABLE — the 2015
 list predates several Code changes, so review it with your legislative
 coordinator and paste the updated set. It travels with org profiles.
+
+## 8. Generating the Daily Bill Report (feed → report → everywhere)
+
+The Router can compose the daily report itself:
+
+1. Setup → **Daily Bill Report generation**: paste the report's To: line
+   (addresses extract automatically) and set the session name.
+2. Each morning: **Filings** tab → Check new filings. Bills already
+   included in past reports are hidden; new ones show with watch-term and
+   tracked-chapter matches. Select → **Route selected bills**.
+3. Divisions are auto-suggested from each rule's CodeChapters column —
+   verify on Review (auto-suggested items carry a warning until you look).
+4. **Publish** with "Draft the Daily Bill Report email" ticked (pre-ticked
+   for feed-originated bills): one Teams post per bill with mentions,
+   consolidated division emails, tracker rows, audit — and the formatted
+   Daily Bill Report lands in YOUR DRAFTS addressed to the distribution
+   list. Review it, send it. Nothing ever sends by itself.
+
+The generated report's text round-trips through the Router's own parser,
+so recipient agencies running their own Router can parse it directly.

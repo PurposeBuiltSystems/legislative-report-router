@@ -27,7 +27,7 @@ check("subject", G.subjectFor(new Date(2026, 6, 26)), "7-26-2026 Daily Bill Repo
 // 2. Build: excluded bills stay out; both formats carry the content
 var rep = G.buildDailyReport(items, { sessionName: "2027 Session", commentWindow: "48 business hours.", date: new Date(2026, 6, 26) });
 check("count excludes excluded", rep.count, 2);
-check("html has link", rep.html.indexOf("BillBook?ga=91&ba=HF2801") !== -1, true);
+check("html has link (escaped)", rep.html.indexOf("BillBook?ga=91&amp;ba=HF2801") !== -1, true);
 check("html divisions", rep.html.indexOf("MVD") !== -1 && rep.html.indexOf("TDD, SOD") !== -1, true);
 check("html session", rep.html.indexOf("2027 Session") !== -1, true);
 check("html no excluded bill", rep.html.indexOf("HF2802") === -1, true);
