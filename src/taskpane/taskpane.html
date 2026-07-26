@@ -29,6 +29,7 @@
 
   <!-- Screen 1: Overview -->
   <section id="screen-overview" class="screen">
+    <div id="connBanner" class="conn-banner">Checking your saved setup…</div>
     <div class="stat-grid">
       <div class="stat"><span id="stSubject" class="stat-big">—</span><span>Subject</span></div>
       <div class="stat"><span id="stBills" class="stat-big">0</span><span>Bills detected</span></div>
@@ -53,16 +54,9 @@
     </div>
 
     <details id="settings" class="options">
-      <summary>Setup &amp; Settings</summary>
+      <summary>⚙️ Setup (one-time)</summary>
+      <p class="hint"><b>Everything here is saved to your account</b> — set it up once and the add-in reconnects automatically on every email, on every device. You never repeat these steps.</p>
       <p class="hint"><strong>First-time setup, three steps:</strong> ① pick your SharePoint site &nbsp;② create the lists &nbsp;③ add a route per division — team, channel, and tag are pickers, no IDs to paste.</p>
-      <label>Cloud environment
-        <select id="cloud">
-          <option value="commercial">Commercial</option>
-          <option value="gcc">GCC</option>
-          <option value="gcchigh">GCC High</option>
-          <option value="dod">DoD</option>
-        </select>
-      </label>
       <div class="row2">
         <label>State / legislature
           <select id="stateName"></select>
@@ -125,12 +119,6 @@
         <p id="rbInfo" class="hint"></p>
       </details>
       <p id="rulesInfo" class="hint"></p>
-      <label>Tracked Code chapters (comma/space separated; from your agency's tracking list)
-        <textarea id="trackedChapters" rows="3"></textarea>
-      </label>
-      <label>Comment window text
-        <input id="commentWindow" type="text" value="Review comments requested within 48 business hours." />
-      </label>
       <details id="healthPanel" class="options">
         <summary>\u2705 Test my setup</summary>
         <p class="hint">Checks every flow without posting anything: sign-in, SharePoint lists, routing rules, Teams channels and tags, the bill feed, and the parser. The two live tests below are optional and clearly labeled.</p>
@@ -145,6 +133,8 @@
         <button id="copyChecks" hidden>Copy results</button>
       </details>
       <details class="options">
+        <summary>Advanced (rarely needed)</summary>
+      <details class="options">
         <summary>Org profile (share setup with your team)</summary>
         <p class="hint">Coordinators: configure above, Copy profile, send the code. Teammates: paste and Apply.</p>
         <textarea id="profileBlob" rows="3" placeholder="Profile code"></textarea>
@@ -153,11 +143,26 @@
           <button id="profileApply">Apply profile</button>
         </div>
       </details>
+      <label>Tracked Code chapters (comma/space separated; from your agency's tracking list)
+        <textarea id="trackedChapters" rows="3"></textarea>
+      </label>
+      <label>Comment window text
+        <input id="commentWindow" type="text" value="Review comments requested within 48 business hours." />
+      </label>
+      <label>Cloud environment
+        <select id="cloud">
+          <option value="commercial">Commercial</option>
+          <option value="gcc">GCC</option>
+          <option value="gcchigh">GCC High</option>
+          <option value="dod">DoD</option>
+        </select>
+      </label>
       <details class="options">
         <summary>Teams tag ID lookup</summary>
         <label>Team ID <input id="lookupTeamId" type="text" placeholder="GUID from Teams &gt; Get link to team" /></label>
         <button id="lookupTags">Fetch tags</button>
         <pre id="tagResults" class="code" hidden></pre>
+      </details>
       </details>
     </details>
 
@@ -223,16 +228,16 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=8"></script>
-  <script src="../routing.js?v=8"></script>
-  <script src="../teams.js?v=8"></script>
-  <script src="../docx.js?v=8"></script>
-  <script src="../graph.js?v=8"></script>
-  <script src="../presets.js?v=8"></script>
-  <script src="../provision.js?v=8"></script>
-  <script src="../contacts.js?v=8"></script>
-  <script src="../chapters.js?v=8"></script>
-  <script src="../feed.js?v=8"></script>
-  <script src="taskpane.js?v=8"></script>
+  <script src="../parser.js?v=9"></script>
+  <script src="../routing.js?v=9"></script>
+  <script src="../teams.js?v=9"></script>
+  <script src="../docx.js?v=9"></script>
+  <script src="../graph.js?v=9"></script>
+  <script src="../presets.js?v=9"></script>
+  <script src="../provision.js?v=9"></script>
+  <script src="../contacts.js?v=9"></script>
+  <script src="../chapters.js?v=9"></script>
+  <script src="../feed.js?v=9"></script>
+  <script src="taskpane.js?v=9"></script>
 </body>
 </html>

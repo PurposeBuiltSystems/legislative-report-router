@@ -12,6 +12,7 @@
 
   var SETTINGS_KEY = "lrr.settings";
   var DRAFT_KEY = "lrr.draft";
+  var RULES_CACHE_KEY = "lrr.rulesCache";
 
   var state = {
     subject: "",
@@ -44,6 +45,56 @@
     Office.context.roamingSettings.set(SETTINGS_KEY, JSON.stringify(s));
     Office.context.roamingSettings.saveAsync(function () {});
     return s;
+  }
+
+  function updateConnBanner() {
+    var el = byId("connBanner");
+    if (!el) { return; }
+    var st = settings();
+    if (!st.siteUrl) {
+      el.className = "conn-banner setup";
+      el.innerHTML = "<b>First time?</b> Open \u2699\ufe0f Setup below \u2014 about 10 minutes, one time only. After that this pane is ready on every email automatically.";
+    } else if (state.rules.length) {
+      el.className = "conn-banner ok";
+      el.textContent = "\u2713 Setup saved \u2014 " + state.rules.length + " division route(s) connected. Nothing to redo: just Parse.";
+    } else {
+      el.className = "conn-banner";
+      el.textContent = "Saved setup found \u2014 reconnecting\u2026";
+    }
+  }
+
+  function saveRulesCache() {
+    try {
+      var blob = JSON.stringify({ site: state.site, rules: state.rules, at: new Date().toISOString() });
+      if (blob.length < 24000) {
+        Office.context.roamingSettings.set(RULES_CACHE_KEY, blob);
+        Office.context.roamingSettings.saveAsync(function () {});
+      }
+    } catch (e) { /* cache is best-effort */ }
+  }
+
+  function loadRulesCache() {
+    try {
+      var c = JSON.parse(Office.context.roamingSettings.get(RULES_CACHE_KEY) || "null");
+      if (c && c.site && c.rules && c.rules.length) {
+        state.site = c.site;
+        state.rules = c.rules;
+        return true;
+      }
+    } catch (e) { /* ignore */ }
+    return false;
+  }
+
+  var autoParsed = false;
+
+  function maybeAutoParse() {
+    if (autoParsed || state.items.length) { return; }
+    if (!/bill\s+report|daily\s+bill/i.test(state.subject || "")) { return; }
+    var item = Office.context.mailbox.item;
+    if (!item || !item.itemId) { return; } // read mode only
+    autoParsed = true;
+    setStatus("info", "This looks like a bill report \u2014 parsing it now\u2026");
+    parseReport();
   }
 
   // ---------- screens ----------
@@ -93,7 +144,7 @@
     byId("parse").addEventListener("click", parseReport);
     byId("saveDraft").addEventListener("click", saveDraft);
     byId("loadDraft").addEventListener("click", loadDraft);
-    byId("connectRules").addEventListener("click", connectRules);
+    byId("connectRules").addEventListener("click", function () { connectRules(false).catch(function () {}); });
     byId("createLists").addEventListener("click", createLists);
     byId("siteSearchGo").addEventListener("click", siteSearch);
     byId("siteResults").addEventListener("change", function () {
@@ -141,6 +192,30 @@
           byId("stSubject").textContent = state.subject;
         }
       });
+    }
+
+    // Saved setup: reconnect without being asked. Cached rules make the pane
+    // useful instantly; a silent refresh follows. If sign-in needs interaction
+    // (first run on a new device), we say so calmly instead of erroring.
+    var hadCache = loadRulesCache();
+    updateConnBanner();
+    if (hadCache) {
+      byId("rulesInfo").textContent = state.rules.length + " routing rule(s) from saved setup.";
+      maybeAutoParse();
+    }
+    if (s.siteUrl) {
+      setTimeout(function () {
+        connectRules(true).then(function () {
+          updateConnBanner();
+          maybeAutoParse();
+        }).catch(function () {
+          if (!hadCache) {
+            var el = byId("connBanner");
+            el.className = "conn-banner setup";
+            el.textContent = "Saved setup found \u2014 click \u2699\ufe0f Setup \u2192 \u201cConnect & load routing rules\u201d to sign in on this device (one time).";
+          }
+        });
+      }, 350);
     }
   });
 
@@ -784,9 +859,12 @@
         tpSel.appendChild(o0);
       }
       if (state.items.length) { LrrRouting.routeAll(state.items, state.rules); refreshStats(); renderItems(); }
-      setStatus("info", "Routing connected.");
+      saveRulesCache();
+      updateConnBanner();
+      if (!quiet) { setStatus("info", "Routing connected."); }
     } catch (e) {
-      setStatus("error", "Routing connection failed: " + ((e && e.message) || e));
+      if (!quiet) { setStatus("error", "Routing connection failed: " + ((e && e.message) || e)); }
+      throw e;
     } finally {
       byId("connectRules").disabled = false;
     }
