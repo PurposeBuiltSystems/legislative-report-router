@@ -185,6 +185,7 @@
     });
     byId("rbTeam").addEventListener("change", loadChannelsAndTags);
     byId("rbAdd").addEventListener("click", addRoute);
+    byId("onlyUnassigned").addEventListener("change", function () { renderItems(); });
     byId("contactPreview").addEventListener("click", contactPreview);
     byId("contactApply").addEventListener("click", contactApply);
     byId("runChecks").addEventListener("click", runChecks);
@@ -446,18 +447,29 @@
         card.appendChild(chap);
       }
       if ((it.routingStatus === "unmatched" || (it.unknownDivisions || []).length) && state.rules.length) {
-        var sugs = LrrChapters.suggestRules(it.codeChapters || [], state.rules);
-        if (sugs.length) {
+        var byRule = {};
+        LrrChapters.suggestRules(it.codeChapters || [], state.rules).forEach(function (sg) {
+          byRule[sg.rule.id] = { rule: sg.rule, why: "ch. " + sg.chapters.join(", ") };
+        });
+        LrrRouting.suggestByKeywords((it.title || "") + "\n" + (it.brief || ""), state.rules).forEach(function (sg) {
+          var why = '\u201c' + sg.keywords.join('\u201d, \u201c') + '\u201d';
+          if (byRule[sg.rule.id]) { byRule[sg.rule.id].why += " + " + why; }
+          else { byRule[sg.rule.id] = { rule: sg.rule, why: why }; }
+        });
+        var sugIds = Object.keys(byRule);
+        if (sugIds.length) {
           var sp = document.createElement("p");
           sp.className = "routes";
-          sp.appendChild(document.createTextNode("Suggested by Code chapter: "));
-          sugs.slice(0, 3).forEach(function (sg) {
+          sp.appendChild(document.createTextNode("Suggested: "));
+          sugIds.slice(0, 4).forEach(function (idKey) {
+            var sg = byRule[idKey];
             var b = document.createElement("button");
             b.type = "button";
             b.className = "chip-btn";
-            b.textContent = sg.rule.divisionCode + " (" + sg.chapters.join(", ") + ")";
+            b.textContent = sg.rule.divisionCode + " (" + sg.why + ")";
             b.addEventListener("click", function () {
               if (it.distributedTo.indexOf(sg.rule.divisionCode) === -1) { it.distributedTo.push(sg.rule.divisionCode); }
+              if (!it.commentRequestedFrom.length) { it.commentRequestedFrom = it.distributedTo.slice(); }
               LrrRouting.routeItem(it, state.rules);
               refreshStats(); renderItems();
             });
@@ -465,6 +477,41 @@
           });
           card.appendChild(sp);
         }
+        // Teach the router: save a keyword onto a division's rule, apply
+        // everywhere in this report, remembered for every future report.
+        var teach = document.createElement("div");
+        teach.className = "teach";
+        var tIn = document.createElement("input");
+        tIn.type = "text";
+        tIn.placeholder = "keyword or phrase\u2026";
+        var tSel = document.createElement("select");
+        state.rules.forEach(function (r) {
+          var o = document.createElement("option");
+          o.value = r.id; o.textContent = r.divisionCode;
+          tSel.appendChild(o);
+        });
+        var tBtn = document.createElement("button");
+        tBtn.type = "button";
+        tBtn.textContent = "Teach";
+        tBtn.title = "Save this keyword to the division's routing rule and route matching bills";
+        tBtn.addEventListener("click", function () { teachKeyword(it, tIn.value.trim(), tSel.value, tBtn); });
+        teach.appendChild(tIn); teach.appendChild(tSel); teach.appendChild(tBtn);
+        // clickable word chips from the title seed the keyword box
+        var STOP = { with: 1, from: 1, that: 1, this: 1, certain: 1, relating: 1, regarding: 1, department: 1, state: 1, iowa: 1, bill: 1, act: 1, code: 1 };
+        var words = String(it.title || it.brief || "").toLowerCase().replace(/[^a-z0-9' -]/g, " ").split(/\s+/)
+          .filter(function (w) { return w.length >= 4 && !STOP[w]; }).slice(0, 6);
+        if (words.length) {
+          var wc = document.createElement("div");
+          wc.className = "teach-words";
+          words.forEach(function (w) {
+            var wb = document.createElement("button");
+            wb.type = "button"; wb.className = "chip-btn"; wb.textContent = w;
+            wb.addEventListener("click", function () { tIn.value = tIn.value ? tIn.value + " " + w : w; });
+            wc.appendChild(wb);
+          });
+          teach.appendChild(wc);
+        }
+        card.appendChild(teach);
       }
       var routes = document.createElement("p");
       routes.className = "routes";
@@ -486,6 +533,43 @@
 
   function statusText(it) {
     return { matched: "matched", "partially-matched": "partial", unmatched: "unmatched", excluded: "excluded" }[it.routingStatus] || it.routingStatus;
+  }
+
+  async function teachKeyword(sourceItem, keyword, ruleId, btn) {
+    if (!keyword) { setStatus("error", "Type a keyword first (or click a word chip)."); return; }
+    var rule = state.rules.filter(function (r) { return r.id === ruleId; })[0];
+    if (!rule) { return; }
+    if (!state.site || !state.site.routingListId) {
+      setStatus("error", "Connect the routing list first so the keyword can be saved."); return;
+    }
+    btn.disabled = true;
+    try {
+      setStatus("work", 'Saving \u201c' + keyword + '\u201d to ' + rule.divisionCode + "\u2026");
+      var token = await GraphData.getToken();
+      var merged = (rule.keywords || []).concat([keyword]);
+      await GraphData.updateListItemFields(token, state.site.siteId, state.site.routingListId, rule.id,
+        { RoutingKeywords: merged.join("; ") });
+      rule.keywords = merged;
+      saveRulesCache();
+      // apply across every unassigned bill in this report
+      var applied = 0;
+      state.items.forEach(function (it) {
+        if (it.routingStatus === "excluded") { return; }
+        var hit = LrrRouting.keywordHits((it.title || "") + "\n" + (it.brief || ""), [keyword]).length;
+        if (hit && it.distributedTo.indexOf(rule.divisionCode) === -1) {
+          it.distributedTo.push(rule.divisionCode);
+          if (!it.commentRequestedFrom.length) { it.commentRequestedFrom = [rule.divisionCode]; }
+          LrrRouting.routeItem(it, state.rules);
+          applied++;
+        }
+      });
+      refreshStats(); renderItems();
+      setStatus("info", '\u201c' + keyword + '\u201d saved to ' + rule.divisionCode +
+        " \u2014 routed " + applied + " bill(s) now, and every future report remembers it.");
+    } catch (e) {
+      setStatus("error", "Couldn't save the keyword: " + ((e && e.message) || e));
+      btn.disabled = false;
+    }
   }
 
   function bulkApply() {
@@ -624,12 +708,20 @@
       item.codeChapters = LrrChapters.extractChapters(item.brief || "");
       item.trackedChapters = LrrChapters.matchTracked(item.codeChapters, tracked);
       if (!item.distributedTo.length && state.rules.length) {
-        var sugs = LrrChapters.suggestRules(item.codeChapters, state.rules);
-        if (sugs.length) {
-          item.distributedTo = sugs.map(function (sg) { return sg.rule.divisionCode; });
-          item.commentRequestedFrom = item.distributedTo.slice();
-          item.parserWarnings = ["Divisions auto-suggested from Code chapters (" +
-            sugs.map(function (sg) { return sg.chapters.join(",") ; }).join("; ") + ") — verify."];
+        var why = [];
+        var codes = [];
+        LrrChapters.suggestRules(item.codeChapters, state.rules).forEach(function (sg) {
+          if (codes.indexOf(sg.rule.divisionCode) === -1) { codes.push(sg.rule.divisionCode); }
+          why.push(sg.rule.divisionCode + ": ch. " + sg.chapters.join(","));
+        });
+        LrrRouting.suggestByKeywords(item.brief || "", state.rules).forEach(function (sg) {
+          if (codes.indexOf(sg.rule.divisionCode) === -1) { codes.push(sg.rule.divisionCode); }
+          why.push(sg.rule.divisionCode + ': "' + sg.keywords.join('", "') + '"');
+        });
+        if (codes.length) {
+          item.distributedTo = codes;
+          item.commentRequestedFrom = codes.slice();
+          item.parserWarnings = ["Divisions auto-suggested (" + why.join("; ") + ") — verify."];
         }
       }
       if (state.rules.length) { LrrRouting.routeItem(item, state.rules); }
@@ -759,6 +851,7 @@
         TeamsTagId: byId("rbTag").value,
         TeamsTagName: byId("rbTag").selectedOptions[0] && byId("rbTag").value ? byId("rbTag").selectedOptions[0].textContent : "",
         CodeChapters: byId("rbChapters").value.trim(),
+        RoutingKeywords: byId("rbKeywords").value.trim(),
         IsActive: true,
         Priority: 1,
         Notes: "Created via the add-in setup" + (teamName ? " (team: " + teamName.displayName + ")" : ""),

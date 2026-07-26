@@ -358,6 +358,41 @@ check("dead-end rule warn", findings.some(function (f) { return f.message.indexO
 check("empty rules -> error", R.validateRules([])[0].level, "error");
 check("inactive only -> error", R.validateRules([{ id: "1", divisionCode: "X", isActive: false }])[0].level, "error");
 
+// ---------- keyword routing (Renee's teach-the-router loop) ----------
+var KW_RULES = [
+  { id: "1", divisionCode: "MVD", aliases: [], emails: [], isActive: true, priority: 1,
+    keywords: ["motor vehicle", "driver", "CDL", "rail"] },
+  { id: "2", divisionCode: "TDD", aliases: [], emails: [], isActive: true, priority: 1,
+    keywords: ["railroad crossing", "transit"] },
+  { id: "3", divisionCode: "OLD", aliases: [], emails: [], isActive: false, priority: 1,
+    keywords: ["driver"] },
+];
+
+// word-boundary: "rail" must NOT fire inside "trailer"
+check("boundary no false hit", R.keywordHits("trailer registration fees", ["rail"]), []);
+check("boundary real hit", R.keywordHits("light rail expansion", ["rail"]), ["rail"]);
+
+// phrases match as substrings
+check("phrase hit", R.keywordHits("a railroad crossing safety bill", ["railroad crossing"]), ["railroad crossing"]);
+
+// case-insensitive, multiple hits reported
+check("multi hits", R.keywordHits("CDL requirements for drivers", ["cdl", "driver"]), ["cdl", "driver"]);
+
+// suggester: right rules, inactive rules never suggest
+var kwSug = R.suggestByKeywords("relating to CDL holders at railroad crossings", KW_RULES);
+check("suggest rules", kwSug.map(function (x) { return x.rule.divisionCode; }), ["MVD", "TDD"]);
+check("suggest why", kwSug[0].keywords, ["CDL"]);
+check("inactive rule silent", kwSug.some(function (x) { return x.rule.divisionCode === "OLD"; }), false);
+
+// SharePoint mapping carries RoutingKeywords
+var kwRule = R.ruleFromSharePoint({ DivisionCode: "MVD", RoutingKeywords: "driver; CDL", IsActive: true }, 7);
+check("sp keywords", kwRule.keywords, ["driver", "CDL"]);
+
+// provision includes the new column
+var Prov = require("../src/provision.js");
+check("provision column", Prov.listDefinitions().routing.columns.some(function (c) { return c.name === "RoutingKeywords"; }), true);
+check("provision sample", !!Prov.sampleRoutingRule().RoutingKeywords, true);
+
 if (failures) {
   console.error("\n" + failures + " test(s) FAILED");
   process.exit(1);

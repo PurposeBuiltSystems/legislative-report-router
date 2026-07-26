@@ -129,6 +129,42 @@
   var EMAIL_RE = /^[^\s@;,]+@[^\s@;,]+\.[^\s@;,]+$/;
 
   /**
+   * Which of a rule's routing keywords appear in the text? Single words
+   * match on word boundaries ("rail" won't fire inside "trailer");
+   * phrases match as substrings.
+   */
+  function keywordHits(text, keywords) {
+    var t = String(text || "").toLowerCase();
+    var hits = [];
+    (keywords || []).forEach(function (k) {
+      var kl = String(k || "").toLowerCase().trim();
+      if (!kl) { return; }
+      var ok;
+      if (/^[a-z0-9'-]+$/.test(kl)) {
+        ok = new RegExp("\\b" + kl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(t);
+      } else {
+        ok = t.indexOf(kl) !== -1;
+      }
+      if (ok) { hits.push(k); }
+    });
+    return hits;
+  }
+
+  /**
+   * Division suggestions from routing keywords: rules whose keywords
+   * appear in the text. [{rule, keywords:[matched...]}]
+   */
+  function suggestByKeywords(text, rules, date) {
+    var out = [];
+    (rules || []).forEach(function (r) {
+      if (!ruleActive(r, date) || !(r.keywords || []).length) { return; }
+      var hits = keywordHits(text, r.keywords);
+      if (hits.length) { out.push({ rule: r, keywords: hits }); }
+    });
+    return out;
+  }
+
+  /**
    * Setup-quality report for a rule set. Pure — no network. Returns
    * [{level:"error"|"warn"|"info", division, message}].
    */
@@ -172,6 +208,7 @@
       teamsTagId: fields.TeamsTagId || "",
       teamsTagName: fields.TeamsTagName || "",
       codeChapters: splitList(fields.CodeChapters),
+      keywords: splitList(fields.RoutingKeywords),
       mentionUserIds: splitList(fields.MentionUserIds),
       mentionUserEmails: splitList(fields.MentionUserEmails),
       isActive: fields.IsActive !== false && fields.IsActive !== "No" && fields.IsActive !== "false",
@@ -190,6 +227,8 @@
     groupByRule: groupByRule,
     ruleFromSharePoint: ruleFromSharePoint,
     validateRules: validateRules,
+    keywordHits: keywordHits,
+    suggestByKeywords: suggestByKeywords,
     splitList: splitList,
   };
   if (typeof module !== "undefined" && module.exports) { module.exports = api; }

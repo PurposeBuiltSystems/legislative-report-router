@@ -126,6 +126,9 @@
         <label>Code chapters this division owns (optional)
           <input id="rbChapters" type="text" placeholder="321; 321A; 322" />
         </label>
+        <label>Routing keywords (optional — auto-suggest this division when a bill mentions\u2026)
+          <input id="rbKeywords" type="text" placeholder="motor vehicle; driver; CDL" />
+        </label>
         <button id="rbAdd" class="primary">Add route</button>
         <p id="rbInfo" class="hint"></p>
       </details>
@@ -202,6 +205,7 @@
 
   <!-- Screen 2: Review -->
   <section id="screen-review" class="screen" hidden>
+    <label class="modes" style="margin:4px 0"><input id="onlyUnassigned" type="checkbox" /> Show unassigned bills only (fine-tuning view)</label>
     <div class="bulk-row">
       <label>Bulk apply route to checked
         <select id="bulkRoute"></select>
@@ -241,17 +245,17 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=10"></script>
-  <script src="../routing.js?v=10"></script>
-  <script src="../teams.js?v=10"></script>
-  <script src="../docx.js?v=10"></script>
-  <script src="../graph.js?v=10"></script>
-  <script src="../presets.js?v=10"></script>
-  <script src="../provision.js?v=10"></script>
-  <script src="../contacts.js?v=10"></script>
-  <script src="../reportgen.js?v=10"></script>
-  <script src="../chapters.js?v=10"></script>
-  <script src="../feed.js?v=10"></script>
-  <script src="taskpane.js?v=10"></script>
+  <script src="../parser.js?v=11"></script>
+  <script src="../routing.js?v=11"></script>
+  <script src="../teams.js?v=11"></script>
+  <script src="../docx.js?v=11"></script>
+  <script src="../graph.js?v=11"></script>
+  <script src="../presets.js?v=11"></script>
+  <script src="../provision.js?v=11"></script>
+  <script src="../contacts.js?v=11"></script>
+  <script src="../reportgen.js?v=11"></script>
+  <script src="../chapters.js?v=11"></script>
+  <script src="../feed.js?v=11"></script>
+  <script src="taskpane.js?v=11"></script>
 </body>
 </html>
