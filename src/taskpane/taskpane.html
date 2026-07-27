@@ -54,79 +54,63 @@
     </div>
 
     <details id="settings" class="options">
-      <summary>⚙️ Setup (one-time)</summary>
-      <p class="hint"><b>Everything here is saved to your account</b> — set it up once and the add-in reconnects automatically on every email, on every device. You never repeat these steps.</p>
+      <summary>⚙️ Setup (one-time, guided)</summary>
+      <p class="hint"><b>Everything here is saved to your account</b> — walk through it once and the add-in reconnects automatically on every email, on every device.</p>
       <div id="setupChecklist"></div>
-      <p class="hint"><strong>First-time setup, three steps:</strong> ① pick your SharePoint site &nbsp;② create the lists &nbsp;③ add a route per division — team, channel, and tag are pickers, no IDs to paste.</p>
-      <div class="row2">
-        <label>State / legislature
-          <select id="stateName"></select>
-        </label>
-        <label>Bill identifiers (editable)
-          <input id="identifiers" type="text" value="HF, SF, HSB, SSB, HJR, SJR, HCR, SCR, HR, SR" />
-        </label>
+
+      <div class="wiz-nav">
+        <button id="wizPrev">← Back</button>
+        <span id="wizPos" class="hint" style="margin:0">Step 1 of 6</span>
+        <button id="wizNext" class="primary">Next →</button>
       </div>
-      <label>① Where should your lists live? Search your SharePoint sites by name
-        <input id="siteSearch" type="text" placeholder="e.g. Legislative" />
-      </label>
-      <div class="row2">
-        <button id="siteSearchGo">Find my sites</button>
-        <select id="siteResults" hidden></select>
-      </div>
-      <label>Site URL
-        <input id="siteUrl" type="text" placeholder="https://yourtenant.sharepoint.com/sites/Legislative" />
-      </label>
-      <div class="row2">
-        <label>Routing list <input id="routingList" type="text" value="LegislativeRoutingMatrix" /></label>
-        <label>Audit list <input id="auditList" type="text" value="LegislativeAudit" /></label>
-      </div>
-      <label>Bill tracker list (blank to disable status tracking)
-        <input id="trackerList" type="text" value="BillTracker" />
-      </label>
-      <div class="row2">
-        <button id="createLists">② Create my lists</button>
-        <button id="connectRules">Connect</button>
-      </div>
-      <details id="dailyReport" class="options">
-        <summary>Let the add-in write the Daily Bill Report</summary>
-        <p class="hint">Publish can draft the Daily Bill Report email itself \u2014 built from the routed bills \u2014 addressed to your distribution list. It lands in <b>your Drafts for review</b>; nothing sends by itself.</p>
-        <label>Session name (report header)
-          <input id="sessionName" type="text" placeholder="2027 Legislative Session \u2013 1st Session, 92nd Iowa General Assembly" />
-        </label>
-        <label>Distribution list \u2014 paste your report's To: line (addresses are extracted automatically)
-          <textarea id="distList" rows="3" placeholder="Doe, Jane &lt;jane.doe@iowadot.us&gt;; Roe, Bob &lt;bob.roe@iowadot.us&gt;; \u2026"></textarea>
-        </label>
-        <p id="distInfo" class="hint"></p>
+
+      <!-- Step 1: sign in + state -->
+      <div class="wiz-step" data-wiz="1">
+        <h3 class="wiz-h">1 · Sign in &amp; choose your legislature</h3>
         <div class="row2">
-          <label class="check" style="align-self:end"><input id="autoDaily" type="checkbox" /> Draft it for me each morning</label>
-          <label>at
-            <input id="autoDailyTime" type="time" value="07:30" />
+          <label>State / legislature
+            <select id="stateName"></select>
+          </label>
+          <label>Bill identifiers (auto-filled)
+            <input id="identifiers" type="text" value="HF, SF, HSB, SSB, HJR, SJR, HCR, SCR, HR, SR" />
           </label>
         </div>
-        <p class="hint">Runs while this pane is open (\ud83d\udccc pin the pane to keep it open all day). Creates the draft and assigns divisions automatically \u2014 you still review, publish to Teams, and press Send yourself. If Outlook was closed at that time, it catches up the next time the pane opens.</p>
-      </details>
-      <details id="contactImport" class="options">
-        <summary>Add people to divisions (one at a time, or paste a list)</summary>
-        <p class="hint">Paste rows of <b>Name, Email, Division</b> (or just Email, Division) — straight from the coordinator's spreadsheet or contacts export. Divisions like "MVD/TDD" assign a person to both. Emails merge into each division's routing rule; nothing is removed.</p>
+        <button id="wizSignIn" class="primary">Sign in to Microsoft 365</button>
+        <p id="wizSignInInfo" class="hint">One popup, one time. The add-in only ever acts as you.</p>
+      </div>
+
+      <!-- Step 2: site + lists -->
+      <div class="wiz-step" data-wiz="2" hidden>
+        <h3 class="wiz-h">2 · Where should your lists live?</h3>
+        <label>Search your SharePoint sites by name
+          <input id="siteSearch" type="text" placeholder="e.g. Legislative" />
+        </label>
         <div class="row2">
-          <label>Quick add one person
-            <input id="quickEmail" type="text" placeholder="jane.doe@iowadot.us" />
-          </label>
-          <label>to division
-            <select id="quickDivision"><option value="">(connect rules first)</option></select>
-          </label>
+          <button id="siteSearchGo">Find my sites</button>
+          <select id="siteResults" hidden></select>
         </div>
-        <button id="quickAdd">Add contact</button>
-        <p class="hint" style="margin-top:10px">Or paste many at once:</p>
-        <textarea id="contactRows" rows="5" placeholder="Jane Doe&#9;jane.doe@iowadot.us&#9;MVD&#10;Bob Roe&#9;bob.roe@iowadot.us&#9;MVD/TDD"></textarea>
+        <label>Site URL (fills in when you pick — or paste one)
+          <input id="siteUrl" type="text" placeholder="https://yourtenant.sharepoint.com/sites/Legislative" />
+        </label>
         <div class="row2">
-          <button id="contactPreview">Preview</button>
-          <button id="contactApply" class="primary" disabled>Apply to routing rules</button>
+          <label>Routing list <input id="routingList" type="text" value="LegislativeRoutingMatrix" /></label>
+          <label>Audit list <input id="auditList" type="text" value="LegislativeAudit" /></label>
         </div>
-        <div id="contactPlan" class="hint"></div>
-      </details>
-      <details id="routeBuilder" class="options">
-        <summary>③ Add a division and pick its Teams channel</summary>
+        <label>Bill tracker list (blank to disable status tracking)
+          <input id="trackerList" type="text" value="BillTracker" />
+        </label>
+        <div class="row2">
+          <button id="createLists" class="primary">Create my lists</button>
+          <button id="connectRules">Connect</button>
+        </div>
+        <p id="rulesInfo" class="hint"></p>
+      </div>
+
+      <!-- Step 3: divisions, channels, tags -->
+      <div class="wiz-step" data-wiz="3" hidden>
+        <h3 class="wiz-h">3 · Add each division — its channel and its tag</h3>
+        <p class="hint">One or many channels: add a division again with a second channel and bills post to both. <b>Every division should have a tag</b> — that's what makes the right people get notified. No tag yet? Create one right here.</p>
+        <div id="routesSummary" class="hint"></div>
         <div class="row2">
           <label>Division code <input id="rbCode" type="text" placeholder="MVD" /></label>
           <label>Division name <input id="rbName" type="text" placeholder="Motor Vehicle Division" /></label>
@@ -136,24 +120,67 @@
         </label>
         <div class="row2">
           <label>Channel <select id="rbChannel"><option value="">Pick a team first</option></select></label>
-          <label>Tag (optional) <select id="rbTag"><option value="">Pick a team first</option></select></label>
+          <label>Tag <select id="rbTag"><option value="">Pick a team first</option></select></label>
         </div>
+        <button id="tagCreate">➕ Create the tag for this division</button>
         <label>Notification emails (semicolon separated, optional)
           <input id="rbEmails" type="text" placeholder="mvd-leg@agency.gov" />
         </label>
-        <label>Code chapters this division owns (optional)
-          <input id="rbChapters" type="text" placeholder="321; 321A; 322" />
-        </label>
-        <label>Routing keywords (optional — auto-suggest this division when a bill mentions\u2026)
-          <input id="rbKeywords" type="text" placeholder="motor vehicle; driver; CDL" />
-        </label>
-        <button id="rbAdd" class="primary">Add route</button>
+        <div class="row2">
+          <label>Code chapters (optional)
+            <input id="rbChapters" type="text" placeholder="321; 321A; 322" />
+          </label>
+          <label>Routing keywords (optional)
+            <input id="rbKeywords" type="text" placeholder="motor vehicle; driver; CDL" />
+          </label>
+        </div>
+        <button id="rbAdd" class="primary">Add this division</button>
         <p id="rbInfo" class="hint"></p>
-      </details>
-      <p id="rulesInfo" class="hint"></p>
-      <details id="healthPanel" class="options">
-        <summary>\u2705 Test my setup</summary>
-        <p class="hint">Checks every flow without posting anything: sign-in, SharePoint lists, routing rules, Teams channels and tags, the bill feed, and the parser. The two live tests below are optional and clearly labeled.</p>
+      </div>
+
+      <!-- Step 4: people -->
+      <div class="wiz-step" data-wiz="4" hidden>
+        <h3 class="wiz-h">4 · Put people on divisions</h3>
+        <div class="row2">
+          <label>Quick add one person
+            <input id="quickEmail" type="text" placeholder="jane.doe@iowadot.us" />
+          </label>
+          <label>to division
+            <select id="quickDivision"><option value="">(connect first)</option></select>
+          </label>
+        </div>
+        <button id="quickAdd">Add contact</button>
+        <p class="hint" style="margin-top:10px">Or paste many at once (Name, Email, Division — straight from Excel; "MVD/TDD" assigns both):</p>
+        <textarea id="contactRows" rows="4" placeholder="Jane Doe&#9;jane.doe@iowadot.us&#9;MVD&#10;Bob Roe&#9;bob.roe@iowadot.us&#9;MVD/TDD"></textarea>
+        <div class="row2">
+          <button id="contactPreview">Preview</button>
+          <button id="contactApply" class="primary" disabled>Apply</button>
+        </div>
+        <div id="contactPlan" class="hint"></div>
+      </div>
+
+      <!-- Step 5: the daily report -->
+      <div class="wiz-step" data-wiz="5" hidden>
+        <h3 class="wiz-h">5 · Let it write the Daily Bill Report</h3>
+        <label>Session name (report header)
+          <input id="sessionName" type="text" placeholder="2027 Legislative Session – 1st Session, 92nd Iowa General Assembly" />
+        </label>
+        <label>Distribution list — paste your report's To: line (addresses extract automatically)
+          <textarea id="distList" rows="3" placeholder="Doe, Jane &lt;jane.doe@iowadot.us&gt;; Roe, Bob &lt;bob.roe@iowadot.us&gt;; …"></textarea>
+        </label>
+        <p id="distInfo" class="hint"></p>
+        <div class="row2">
+          <label class="check" style="align-self:end"><input id="autoDaily" type="checkbox" /> Draft it for me each morning</label>
+          <label>at
+            <input id="autoDailyTime" type="time" value="07:30" />
+          </label>
+        </div>
+        <p class="hint">Runs while this pane is open (📌 pin the pane to keep it open all day). It drafts and assigns — you still review, publish, and press Send.</p>
+      </div>
+
+      <!-- Step 6: test everything -->
+      <div class="wiz-step" data-wiz="6" hidden>
+        <h3 class="wiz-h">6 · Prove it all works</h3>
         <button id="runChecks" class="primary">Run all checks</button>
         <div id="checkResults" class="publog"></div>
         <div class="modes" style="margin-top:8px">
@@ -163,7 +190,8 @@
           <label><input id="optTestEmail" type="checkbox" /> Also email a test message to me (only to my own address)</label>
         </div>
         <button id="copyChecks" hidden>Copy results</button>
-      </details>
+      </div>
+
       <details class="options">
         <summary>Advanced (rarely needed)</summary>
       <details class="options">
@@ -194,7 +222,6 @@
         <label>Team ID <input id="lookupTeamId" type="text" placeholder="GUID from Teams &gt; Get link to team" /></label>
         <button id="lookupTags">Fetch tags</button>
         <pre id="tagResults" class="code" hidden></pre>
-      </details>
       </details>
     </details>
 
@@ -263,17 +290,17 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=15"></script>
-  <script src="../routing.js?v=15"></script>
-  <script src="../teams.js?v=15"></script>
-  <script src="../docx.js?v=15"></script>
-  <script src="../graph.js?v=15"></script>
-  <script src="../presets.js?v=15"></script>
-  <script src="../provision.js?v=15"></script>
-  <script src="../contacts.js?v=15"></script>
-  <script src="../reportgen.js?v=15"></script>
-  <script src="../chapters.js?v=15"></script>
-  <script src="../feed.js?v=15"></script>
-  <script src="taskpane.js?v=15"></script>
+  <script src="../parser.js?v=16"></script>
+  <script src="../routing.js?v=16"></script>
+  <script src="../teams.js?v=16"></script>
+  <script src="../docx.js?v=16"></script>
+  <script src="../graph.js?v=16"></script>
+  <script src="../presets.js?v=16"></script>
+  <script src="../provision.js?v=16"></script>
+  <script src="../contacts.js?v=16"></script>
+  <script src="../reportgen.js?v=16"></script>
+  <script src="../chapters.js?v=16"></script>
+  <script src="../feed.js?v=16"></script>
+  <script src="taskpane.js?v=16"></script>
 </body>
 </html>

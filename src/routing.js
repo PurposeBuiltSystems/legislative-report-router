@@ -74,11 +74,16 @@
     wanted.forEach(function (dv) {
       var found = rulesForDivision(dv, rules, date);
       if (!found.length) { unknown.push(dv); return; }
-      var top = found[0]; // highest priority wins per division
-      if (matchedIds.indexOf(top.id) === -1) {
-        matchedIds.push(top.id);
-        routes.push(top);
-      }
+      // Every rule at the TOP priority is included — a division can fan
+      // out to several channels by having several equal-priority rules.
+      // Lower-priority rules stay dormant (session-handoff semantics).
+      var topPri = found[0].priority || 0;
+      found.filter(function (r) { return (r.priority || 0) === topPri; }).forEach(function (r) {
+        if (matchedIds.indexOf(r.id) === -1) {
+          matchedIds.push(r.id);
+          routes.push(r);
+        }
+      });
     });
 
     var status;

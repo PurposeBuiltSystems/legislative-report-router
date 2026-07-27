@@ -220,15 +220,26 @@
         state.site = null;
       }
     });
-    byId("routeBuilder").addEventListener("toggle", function () {
-      if (byId("routeBuilder").open) { loadTeamsPicker(); }
-    });
+
     byId("rbTeam").addEventListener("change", loadChannelsAndTags);
     byId("rbAdd").addEventListener("click", addRoute);
     byId("onlyUnassigned").addEventListener("change", function () { renderItems(); });
     byId("contactPreview").addEventListener("click", contactPreview);
     byId("contactApply").addEventListener("click", contactApply);
     byId("quickAdd").addEventListener("click", quickAddContact);
+    byId("wizPrev").addEventListener("click", function () { wizShow(wizStep - 1); });
+    byId("wizNext").addEventListener("click", function () { wizShow(wizStep + 1); });
+    byId("wizSignIn").addEventListener("click", async function () {
+      byId("wizSignIn").disabled = true;
+      try {
+        await GraphData.getToken();
+        byId("wizSignInInfo").textContent = "\u2713 Signed in. Click Next.";
+      } catch (e) {
+        byId("wizSignInInfo").textContent = friendly(e);
+      } finally { byId("wizSignIn").disabled = false; }
+    });
+    byId("tagCreate").addEventListener("click", createDivisionTag);
+    wizShow(1);
     byId("runChecks").addEventListener("click", runChecks);
     byId("copyChecks").addEventListener("click", copyChecks);
     byId("distList").addEventListener("input", updateDistInfo);
@@ -633,6 +644,64 @@
     setStatus("info", "Route " + rule.divisionCode + " applied to all included bills.");
   }
 
+  // ---------- setup wizard ----------
+
+  var wizStep = 1;
+  var WIZ_MAX = 6;
+
+  function wizShow(n) {
+    wizStep = Math.max(1, Math.min(WIZ_MAX, n));
+    document.querySelectorAll(".wiz-step").forEach(function (el) {
+      el.hidden = Number(el.getAttribute("data-wiz")) !== wizStep;
+    });
+    byId("wizPos").textContent = "Step " + wizStep + " of " + WIZ_MAX;
+    byId("wizPrev").disabled = wizStep === 1;
+    byId("wizNext").textContent = wizStep === WIZ_MAX ? "Done \u2713" : "Next \u2192";
+    if (wizStep === 3) { loadTeamsPicker(); renderRoutesSummary(); }
+    if (wizStep === 4 || wizStep === 6) { /* dropdowns already refreshed on connect */ }
+    if (wizStep === WIZ_MAX && byId("wizNext").textContent === "Done \u2713") {
+      byId("wizNext").onclick = null;
+    }
+  }
+
+  function renderRoutesSummary() {
+    var el = byId("routesSummary");
+    if (!el) { return; }
+    if (!state.rules.length) { el.innerHTML = "No divisions yet \u2014 add your first below."; return; }
+    el.innerHTML = state.rules.map(function (r) {
+      var chan = r.teamsChannelId ? (r.teamsChannelName || "channel set") : "\u26a0 no channel";
+      var tag = r.teamsTagId ? "\ud83c\udff7 " + (r.teamsTagName || "tag set") : "\u26a0 no tag";
+      return "<b>" + r.divisionCode + "</b> \u2192 " + chan + " \u00b7 " + tag;
+    }).join("<br>");
+  }
+
+  async function createDivisionTag() {
+    var teamId = byId("rbTeam").value;
+    var code = byId("rbCode").value.trim();
+    if (!teamId) { byId("rbInfo").textContent = "Pick a team first."; return; }
+    if (!code) { byId("rbInfo").textContent = "Type the division code first (the tag will be named after it)."; return; }
+    var name = (byId("rbName").value.trim() || code) + " Legislation";
+    byId("tagCreate").disabled = true;
+    try {
+      setStatus("work", 'Creating tag \u201c' + name + '\u201d\u2026');
+      var token = await GraphData.getToken();
+      var tag = await GraphData.createTeamTag(token, teamId, name);
+      var sel = byId("rbTag");
+      var o = document.createElement("option");
+      o.value = tag.id; o.textContent = tag.displayName;
+      sel.appendChild(o);
+      sel.value = tag.id;
+      byId("rbInfo").textContent = '\u2713 Tag \u201c' + name + '\u201d created with you as its first member \u2014 add the division\u2019s people to it in Teams (Manage team \u2192 Tags).';
+      setStatus("info", "Tag created and selected.");
+    } catch (e) {
+      byId("rbInfo").textContent = "Couldn't create the tag: " + friendly(e) +
+        " (You can also create it in Teams: Manage team \u2192 Tags.)";
+      setStatus("error", "Tag creation failed \u2014 details above the button.");
+    } finally {
+      byId("tagCreate").disabled = false;
+    }
+  }
+
   // ---------- org profile ----------
 
   function profileCopy() {
@@ -904,7 +973,8 @@
         Priority: 1,
         Notes: "Created via the add-in setup" + (teamName ? " (team: " + teamName.displayName + ")" : ""),
       });
-      byId("rbInfo").textContent = "Route " + code + " saved.";
+      byId("rbInfo").textContent = "Division " + code + " saved." +
+        (byId("rbTag").value ? "" : " \u26a0 No tag \u2014 its posts won't notify anyone; use \u2795 Create the tag.");
       byId("rbCode").value = ""; byId("rbName").value = ""; byId("rbEmails").value = ""; byId("rbChapters").value = "";
       await connectRules();
     } catch (e) {
@@ -1087,6 +1157,7 @@
       saveRulesCache();
       updateConnBanner();
       updateSetupChecklist();
+      renderRoutesSummary();
       if (!quiet) { setStatus("info", "Routing connected."); }
     } catch (e) {
       if (!quiet) { setStatus("error", "Routing connection failed: " + friendly(e)); }

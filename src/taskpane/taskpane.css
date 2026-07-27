@@ -101,3 +101,8 @@ button:disabled { opacity: .55; cursor: default; }
 #setupChecklist p { margin: 4px 0; font-size: 12.5px; }
 #setupChecklist .done { color: #0e5c2f; }
 #setupChecklist .todo { color: #616161; }
+
+.wiz-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 10px 0; padding: 6px 0; border-top: 1px solid #e1e1e1; border-bottom: 1px solid #e1e1e1; }
+.wiz-h { font-size: 13.5px; color: #0f6cbd; margin: 10px 0 6px; }
+.wiz-step { padding-bottom: 6px; }

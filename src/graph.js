@@ -22,7 +22,7 @@
     dod:        { graph: "https://dod-graph.microsoft.us", authority: "https://login.microsoftonline.us/common" },
   };
 
-  var SCOPES = ["Mail.ReadWrite", "Mail.Send", "ChannelMessage.Send", "Sites.ReadWrite.All", "TeamworkTag.Read"];
+  var SCOPES = ["Mail.ReadWrite", "Mail.Send", "ChannelMessage.Send", "Sites.ReadWrite.All", "TeamworkTag.Read", "TeamworkTag.ReadWrite"];
 
   var cloudKey = "commercial";
   var pcaPromise = null;
@@ -156,6 +156,23 @@
     return graphJson(token, "POST", "/teams/" + teamId + "/channels/" + channelId + "/messages", payload);
   }
 
+  function oidFromToken(token) {
+    try {
+      var payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+      return payload.oid || "";
+    } catch (e) { return ""; }
+  }
+
+  /** Create a Teams tag with the signed-in coordinator as first member. */
+  async function createTeamTag(token, teamId, displayName) {
+    var oid = oidFromToken(token);
+    if (!oid) { throw new Error("couldn't read your user id from the sign-in token"); }
+    return graphJson(token, "POST", "/teams/" + teamId + "/tags", {
+      displayName: displayName,
+      members: [{ userId: oid }],
+    });
+  }
+
   async function listTeamTags(token, teamId) {
     var res = await graphJson(token, "GET", "/teams/" + teamId + "/tags");
     return res.value || [];
@@ -213,6 +230,7 @@
     searchSites: searchSites,
     postChannelMessage: postChannelMessage,
     listTeamTags: listTeamTags,
+    createTeamTag: createTeamTag,
     sendMail: sendMail,
     createDraftMessage: createDraftMessage,
     sendDraft: sendDraft,

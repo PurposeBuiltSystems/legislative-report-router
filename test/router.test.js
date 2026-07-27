@@ -395,6 +395,21 @@ var Prov = require("../src/provision.js");
 check("provision column", Prov.listDefinitions().routing.columns.some(function (c) { return c.name === "RoutingKeywords"; }), true);
 check("provision sample", !!Prov.sampleRoutingRule().RoutingKeywords, true);
 
+// ---------- multi-channel: one division, many channels ----------
+var MC_RULES = [
+  { id: "a", divisionCode: "MVD", aliases: [], emails: [], isActive: true, priority: 1,
+    teamsTeamId: "T1", teamsChannelId: "C-main", teamsTagId: "G1" },
+  { id: "b", divisionCode: "MVD", aliases: [], emails: [], isActive: true, priority: 1,
+    teamsTeamId: "T1", teamsChannelId: "C-leadership", teamsTagId: "G2" },
+  { id: "c", divisionCode: "MVD", aliases: [], emails: [], isActive: true, priority: 0,
+    teamsTeamId: "T1", teamsChannelId: "C-old", teamsTagId: "" },
+];
+var mcItem = { distributedTo: ["MVD"], commentRequestedFrom: [], routingStatus: "unmatched" };
+R.routeItem(mcItem, MC_RULES);
+check("both top-priority channels", mcItem.matchedRoutingRules, ["a", "b"]);
+check("dormant lower priority excluded", mcItem.matchedRoutingRules.indexOf("c"), -1);
+check("multi-channel matched", mcItem.routingStatus, "matched");
+
 if (failures) {
   console.error("\n" + failures + " test(s) FAILED");
   process.exit(1);
