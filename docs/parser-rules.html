@@ -1,0 +1,50 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Parser rules — Legislative Report Router</title><style>
+body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 3rem auto; max-width: 46rem;
+  padding: 0 1rem; color: #242424; line-height: 1.6; }
+h1, h2, h3 { color: #0f6cbd; } h1 { font-size: 1.6em; } h2 { margin-top: 2rem; }
+table { border-collapse: collapse; width: 100%; font-size: 0.93em; margin: 12px 0; }
+th, td { border: 1px solid #d1d1d1; padding: 6px 9px; text-align: left; vertical-align: top; }
+th { background: #eef4f6; }
+code { background: #f3f2f1; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.92em; }
+pre { background: #f3f2f1; padding: 10px 12px; border-radius: 6px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #0f6cbd; margin: 12px 0; padding: 4px 14px; color: #424242; background: #f8fafc; }
+a { color: #0f6cbd; } .crumb { font-size: 0.9em; }
+@media print { body { margin: 0.5in; } }
+</style></head><body><p class="crumb"><a href="index.html">← Documentation</a></p><h1 id="parser-rules">Parser rules</h1>
+<p>Deterministic, staged, line-aware. No AI.</p>
+<h2 id="pipeline">Pipeline</h2>
+<pre><code>
+Email HTML (or DOCX text)
+  → HTML normalization (line-semantic tags → \n, entities decoded, &lt;a href&gt; captured)
+  → line normalization (CRLF/LF, nbsp, trim)
+  → header removal (everything before the first boundary line)
+  → entry boundary detection
+  → field extraction
+  → division normalization
+  → confidence scoring → human review
+</code></pre>
+<h2 id="boundary-rule-the-important-one">Boundary rule (the important one)</h2>
+<p>A new legislative entry starts <b>only</b> at a line that consists entirely of<br>one identifier + number:</p>
+<pre><code>
+^(HF|SF|HSB|SSB|HJR|SJR|HCR|SCR|HR|SR)\s*-?\s*(\d+[A-Z]?)$
+</code></pre>
+<p>Because the whole line must match, references *inside* a brief — "Successor<br>to HSB171, as amended." — can never split an entry. They are instead<br>collected into <code>referencedBills</code>.</p>
+<p>Identifier prefixes are configurable (<code>opts.identifiers</code>); longest-first<br>matching prevents "SF" from shadowing "SSB".</p>
+<h2 id="field-extraction-per-entry">Field extraction per entry</h2>
+<ol start="1">
+<li>First non-blank line after the bill number: if it looks like a division designation → <code>distributedTo</code>.</li>
+<li>Second such line → <code>commentRequestedFrom</code>; if absent, mirrors <code>distributedTo</code> with a warning (−0.10 confidence).</li>
+<li>Everything after the division lines → <code>brief</code> (first line ≤120 chars also becomes <code>title</code>). Blank-line runs collapse.</li>
+<li>No division line at all → warning, −0.35 confidence.</li>
+<li>No brief → warning, −0.25 confidence.</li>
+</ol>
+<p>"Looks like a division designation": ≤60 chars, no sentence-ending<br>punctuation, and every token (split on <code>/ ; , and &amp;</code>) is either a known<br>division (from the routing rules — codes, names, aliases), a 2–6 letter<br>all-caps code, or "&lt;Word&gt; Office/Bureau/Division". This is what stops the<br>first line of a lowercase brief ("open records") from being eaten as a code.</p>
+<h2 id="division-normalization">Division normalization</h2>
+<p><code>MVD/TDD</code>, <code>MVD; SOD</code>, <code>ELT and MVD</code>, <code>MVD, TDD, and SOD</code> → <code>[MVD, TDD, …]</code>.<br>Multi-word divisions ("AG Office") survive because splitting only happens on<br>separators, never on spaces.</p>
+<h2 id="what-the-parser-never-does">What the parser never does</h2>
+<ul>
+<li>Never discards unrecognized text silently — it stays in the brief and the per-item <code>sourceBlock</code>, and warnings surface in the UI.</li>
+<li>Never auto-publishes: low-confidence items are flagged, and everything passes through the Review screen.</li>
+<li>Never splits on identifiers inside sentences.</li>
+</ul></body></html>

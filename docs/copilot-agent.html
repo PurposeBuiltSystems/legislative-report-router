@@ -1,0 +1,45 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Bill Summarizer — Copilot agent setup (requires M365 Copilot licenses) — Legislative Report Router</title><style>
+body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 3rem auto; max-width: 46rem;
+  padding: 0 1rem; color: #242424; line-height: 1.6; }
+h1, h2, h3 { color: #0f6cbd; } h1 { font-size: 1.6em; } h2 { margin-top: 2rem; }
+table { border-collapse: collapse; width: 100%; font-size: 0.93em; margin: 12px 0; }
+th, td { border: 1px solid #d1d1d1; padding: 6px 9px; text-align: left; vertical-align: top; }
+th { background: #eef4f6; }
+code { background: #f3f2f1; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.92em; }
+pre { background: #f3f2f1; padding: 10px 12px; border-radius: 6px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #0f6cbd; margin: 12px 0; padding: 4px 14px; color: #424242; background: #f8fafc; }
+a { color: #0f6cbd; } .crumb { font-size: 0.9em; }
+@media print { body { margin: 0.5in; } }
+</style></head><body><p class="crumb"><a href="index.html">← Documentation</a></p><h1 id="bill-summarizer-copilot-agent-setup-requires-m365-copilot-licenses">Bill Summarizer — Copilot agent setup (requires M365 Copilot licenses)</h1>
+<p>Renee's ask: "Copilot summarizes how the bill is written, posted in the<br>channel for all to see." With M365 Copilot licenses (Iowa DOT has them),<br>you can build this <b>without any additional purchase</b> using declarative<br>agents in Copilot's built-in Agent Builder. Internal documents only —<br>grounding is limited to sources you pick.</p>
+<h2 id="build-it-10-minutes-no-code">Build it (10 minutes, no code)</h2>
+<ol start="1">
+<li>Open <b>Microsoft 365 Copilot</b> (app or m365.cloud.microsoft) → **Create agent<b> (Agent Builder) → </b>Configure** tab.</li>
+<li>Name: <code>Bill Summarizer</code>.</li>
+<li>Instructions — paste:</li>
+</ol>
+<pre><code>
+   You summarize Iowa legislative bills and amendments for Iowa DOT staff.
+   When given a bill number or bill text, produce:
+   1) A 3–5 sentence plain-language summary of what the bill does.
+   2) A &quot;DOT relevance&quot; line: which DOT functions it touches
+      (motor vehicle, highways, transportation development, funding,
+      personnel, procurement) and why.
+   3) Key sections/Code chapters amended, as a short list.
+   4) Effective dates and any successor/predecessor bills mentioned.
+   Always state that this is an AI summary and staff must read the bill
+   text before commenting. Do not offer legal conclusions.
+</code></pre>
+<ol start="4">
+<li>Knowledge sources: add the <b>legislative SharePoint site</b> (the one with the routing/tracker lists and any saved bill PDFs/DOCX). Optionally add the Teams channel. Do NOT enable web grounding if the requirement is internal-documents-only.</li>
+<li>Create → <b>share the agent with the legislative Teams channel's team</b>.</li>
+</ol>
+<h2 id="use-it-in-the-channel">Use it in the channel</h2>
+<p>Staff type <code>@Bill Summarizer summarize HF935</code> in the channel (after adding<br>the agent to the team). The summary posts in-thread — visible to all, which<br>is exactly the requested behavior. For bills not yet saved internally,<br>paste the bill text into the prompt, or save the PDF to the SharePoint<br>site first (the file-renaming macro's output folder is a natural fit).</p>
+<h2 id="notes">Notes</h2>
+<ul>
+<li>Declarative agents are included with M365 Copilot licensing; Copilot Studio (paid) is only needed for autonomous/scheduled agents.</li>
+<li>The Router's Teams posts already include the LSA's official bill description, so every post carries a neutral baseline summary even without invoking the agent.</li>
+<li>Governance: DOT's Copilot admin may need to approve agent sharing; loop in the Co-Pilot Teams chat Renee mentioned.</li>
+</ul></body></html>

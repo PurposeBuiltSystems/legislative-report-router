@@ -1,0 +1,113 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Administrator guide — Legislative Report Router</title><style>
+body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 3rem auto; max-width: 46rem;
+  padding: 0 1rem; color: #242424; line-height: 1.6; }
+h1, h2, h3 { color: #0f6cbd; } h1 { font-size: 1.6em; } h2 { margin-top: 2rem; }
+table { border-collapse: collapse; width: 100%; font-size: 0.93em; margin: 12px 0; }
+th, td { border: 1px solid #d1d1d1; padding: 6px 9px; text-align: left; vertical-align: top; }
+th { background: #eef4f6; }
+code { background: #f3f2f1; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.92em; }
+pre { background: #f3f2f1; padding: 10px 12px; border-radius: 6px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #0f6cbd; margin: 12px 0; padding: 4px 14px; color: #424242; background: #f8fafc; }
+a { color: #0f6cbd; } .crumb { font-size: 0.9em; }
+@media print { body { margin: 0.5in; } }
+</style></head><body><p class="crumb"><a href="index.html">← Documentation</a></p><h1 id="administrator-guide">Administrator guide</h1>
+<p>The admin surface is <b>Microsoft Lists</b> — no separate admin app to deploy.</p>
+<p><b>Fastest setup — entirely inside the add-in, no IDs to find:</b></p>
+<ol start="1">
+<li>Settings → search for your SharePoint site by name and pick it (or paste a URL).</li>
+<li><b>Create missing lists</b> — all three lists are created with the correct columns.</li>
+<li><b>Add a division route</b> — team, channel, and tag are dropdowns populated from your own Teams memberships; the add-in writes the routing rule for you.</li>
+</ol>
+<p>Repeat step 3 per division. Requires edit rights on the site.</p>
+<ol start="4">
+<li><b>Test my setup</b> — Settings → "✅ Test my setup" → Run all checks. Verifies sign-in, the site and all three lists, every routing rule (live check that each channel and tag actually exists in its team), the bill feed, the parser, and tracker write access — without posting anything. Two opt-in live tests send a clearly-labeled test post to a channel of your choice and a test email to yourself. "Copy results" produces a report you can email if something fails.</li>
+<li><b>Import the contact list</b> — Settings → "Import contact list": paste Name/Email/Division rows straight from the coordinator's spreadsheet or contacts export (divisions like "MVD/TDD" assign both). Preview shows exactly what merges where; emails are added to each division's rule and never removed. Unknown divisions become new rules flagged to receive a Teams channel. The sections below</li>
+</ol>
+<p>document the schemas for admins who prefer to create or audit everything manually<br>in Microsoft Lists (both paths produce identical lists).</p>
+<h2 id="1-create-the-routing-list">1. Create the routing list</h2>
+<p>On your chosen SharePoint site, create a list named <code>LegislativeRoutingMatrix</code><br>with these columns (all "Single line of text" unless noted):</p>
+<table>
+<tr><th>Column</th><th>Notes</th></tr>
+<tr><td>Title</td><td>= DivisionCode (SharePoint's built-in Title column)</td></tr>
+<tr><td>DivisionCode</td><td>MVD, TDD, SOD, ELT, AG Office, …</td></tr>
+<tr><td>DivisionName</td><td>Motor Vehicle Division, …</td></tr>
+<tr><td>Aliases</td><td>semicolon-separated alternative names ("Motor Vehicle; Motor Vehicles")</td></tr>
+<tr><td>Emails</td><td>semicolon-separated targeted-email recipients</td></tr>
+<tr><td>TeamsTeamId</td><td>Teams team GUID (Teams → team → ⋯ → Get link to team → <code>groupId=</code>)</td></tr>
+<tr><td>TeamsChannelId</td><td>channel ID (⋯ on the channel → Get link to channel → <code>19:...@thread.tacv2</code>)</td></tr>
+<tr><td>TeamsChannelName</td><td>display name (for the review UI)</td></tr>
+<tr><td>TeamsTagId</td><td>tag GUID — use the add-in's Settings → "Teams tag ID lookup"</td></tr>
+<tr><td>TeamsTagName</td><td>tag display name as it appears in Teams</td></tr>
+<tr><td>CodeChapters</td><td>semicolon-separated Iowa Code chapters this division owns ("321; 321A; 322") — powers division SUGGESTIONS for unrouted bills (optional)</td></tr>
+<tr><td>MentionUserIds</td><td>semicolon-separated Entra object IDs (optional, for individual mentions)</td></tr>
+<tr><td>MentionUserEmails</td><td>matching display emails (optional)</td></tr>
+<tr><td>IsActive</td><td>Yes/No</td></tr>
+<tr><td>Priority</td><td>Number — highest wins when multiple rules match a division</td></tr>
+<tr><td>EffectiveStartDate</td><td>Date (optional)</td></tr>
+<tr><td>EffectiveEndDate</td><td>Date (optional)</td></tr>
+<tr><td>Notes</td><td>free text</td></tr>
+</table>
+<p><b>Rule semantics:</b> a division token from the report matches a rule when it<br>equals the DivisionCode, DivisionName, or any alias (case-insensitive). Among<br>matches that are active and within their effective dates, the highest<br>Priority wins. Session handoffs = add the new rule with a later<br>EffectiveStartDate and end-date the old one; history stays intact.</p>
+<h2 id="2-create-the-audit-list">2. Create the audit list</h2>
+<p>Same site, list named <code>LegislativeAudit</code>, columns (Single line of text):</p>
+<pre><code>
+Title (bill number)   ReportKey   IdempotencyKey   TeamId   ChannelId
+TeamsMessageId   Status   Error   Divisions   EmailRecipients
+PublishedBy   SourceSubject
+</code></pre>
+<p>The add-in appends one row per publish attempt. <b>Do not delete rows</b> for<br>reports that may be re-run — the IdempotencyKey rows are what prevent<br>duplicate posts.</p>
+<h2 id="2b-create-the-bill-tracker-list-recommended">2b. Create the bill tracker list (recommended)</h2>
+<p>Same site, list named <code>BillTracker</code> — this is the shared "who's waiting on<br>who" board and replaces individual completeness spreadsheets. Columns:</p>
+<table>
+<tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+<tr><td>Title</td><td>text</td><td>bill number (written by the add-in)</td></tr>
+<tr><td>Division</td><td>text</td><td>one row per bill × division</td></tr>
+<tr><td>Status</td><td><b>Choice</b></td><td><code>Pending review</code> / <code>In review</code> / <code>Commented</code> / <code>No comment needed</code></td></tr>
+<tr><td>DueDate</td><td>Date</td><td>auto-set to +2 business days at publish</td></tr>
+<tr><td>BillLink</td><td>text</td><td>BillBook URL</td></tr>
+<tr><td>Brief</td><td>text</td><td>first 250 chars</td></tr>
+<tr><td>ReportKey</td><td>text</td><td>which report published it</td></tr>
+</table>
+<p>The add-in writes one <code>Pending review</code> row per bill × division at publish<br>time; division staff update Status themselves.</p>
+<p><b>Pin it in Teams:</b> in the legislative channel, **+ Add a tab → Lists →<br>existing list → BillTracker**. Create these views:</p>
+<ul>
+<li>*My division* — filter Division = yours (the "filter tagged bills" ask)</li>
+<li>*Still waiting* — Status = Pending review, grouped by Division, sorted by DueDate (the cross-divisional "who's waiting on who" board)</li>
+<li>*Overdue* — Pending review AND DueDate &lt; today</li>
+</ul>
+<h2 id="3-import-the-existing-excel-routing-matrix">3. Import the existing Excel routing matrix</h2>
+<p>Microsoft Lists imports Excel directly: List → ⋯ → "Export/Import" or create<br>the list *from* the Excel file, then rename columns to match the table<br>above. For tag IDs, use the add-in's tag lookup (Settings → paste the Team<br>ID → Fetch tags) and copy each <code>TeamsTagId</code> into the matching row.</p>
+<h2 id="4-permissions-to-grant">4. Permissions to grant</h2>
+<ul>
+<li>Coordinators: <b>edit</b> on both lists (audit rows are written as them).</li>
+<li>Division reviewers: no list access needed — they just receive posts/emails.</li>
+<li>The Entra app needs one-time admin consent (<code>docs/permissions.md</code>).</li>
+</ul>
+<h2 id="5-validating-a-route">5. Validating a route</h2>
+<p>In the add-in: Settings → connect the site → parse a test report → the<br>Review screen shows exactly which rule each division resolved to and flags<br>rules missing tag IDs. Preview shows the rendered post before anything is<br>published.</p>
+<h2 id="6-using-a-different-state-or-congress">6. Using a different state (or Congress)</h2>
+<p>The add-in is state-configurable:</p>
+<ol start="1">
+<li>Settings → <b>State / legislature</b> — pick your state. This presets the bill identifier prefixes the parser recognizes (editable — e.g. add "LB" for Nebraska's unicameral if needed).</li>
+<li><b>New-filings feed:</b> Iowa uses the Legislature's own RSS. Every other state uses the Open States API via the deployment's feed mirror (verified live: Iowa 1,917 and Texas 1,185 bills in a 1-year window). Congress: the parser preset works for federal bill reports, but Open States carries state data only - a congress.gov API adapter is a planned addition for the federal new-filings feed. Mirror setup: add the state's name to <code>states.json</code> in the repository and set the <code>OPENSTATES_API_KEY</code> repository secret (free key from openstates.org). The scheduled mirror then publishes <code>feeds/openstates-&lt;state&gt;.json</code> automatically.</li>
+<li>Everything else (routing matrix, tracker, audit) is already org-specific — each organization points at its own SharePoint site.</li>
+<li><b>Org profile:</b> after configuring, use Settings → Org profile → Copy profile, and send the code to your team; they paste + Apply and are fully configured.</li>
+</ol>
+<h2 id="7-code-chapter-tracking">7. Code chapter tracking</h2>
+<p>Bill briefs reference the Iowa Code ("Amends Code Chapter 9", "Code<br>chapters 6A and 6B"). The add-in extracts these references and:</p>
+<ul>
+<li>shows them as chips on each bill in Review (checkmarked when they hit the agency's tracked list),</li>
+<li>flags newly filed bills in the Filings tab whose descriptions touch tracked chapters (even when no watch term matches),</li>
+<li>suggests divisions for unrouted bills when routing rules claim chapters via the optional <code>CodeChapters</code> column.</li>
+</ul>
+<p>The tracked list ships seeded from the DOT's 2015 tracking list<br>(Settings → "Tracked Code chapters") and is FULLY EDITABLE — the 2015<br>list predates several Code changes, so review it with your legislative<br>coordinator and paste the updated set. It travels with org profiles.</p>
+<h2 id="8-generating-the-daily-bill-report-feed-report-everywhere">8. Generating the Daily Bill Report (feed → report → everywhere)</h2>
+<p>The Router can compose the daily report itself:</p>
+<ol start="1">
+<li>Setup → <b>Daily Bill Report generation</b>: paste the report's To: line (addresses extract automatically) and set the session name.</li>
+<li>Each morning: <b>Filings</b> tab → Check new filings. Bills already included in past reports are hidden; new ones show with watch-term and tracked-chapter matches. Select → <b>Route selected bills</b>.</li>
+<li>Divisions are auto-suggested from each rule's CodeChapters column — verify on Review (auto-suggested items carry a warning until you look).</li>
+<li><b>Publish</b> with "Draft the Daily Bill Report email" ticked (pre-ticked for feed-originated bills): one Teams post per bill with mentions, consolidated division emails, tracker rows, audit — and the formatted Daily Bill Report lands in YOUR DRAFTS addressed to the distribution list. Review it, send it. Nothing ever sends by itself.</li>
+</ol>
+<p>The generated report's text round-trips through the Router's own parser,<br>so recipient agencies running their own Router can parse it directly.</p></body></html>
