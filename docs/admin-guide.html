@@ -76,6 +76,12 @@ PublishedBy   SourceSubject
 <li>*Still waiting* — Status = Pending review, grouped by Division, sorted by DueDate (the cross-divisional "who's waiting on who" board)</li>
 <li>*Overdue* — Pending review AND DueDate &lt; today</li>
 </ul>
+<h2 id="2c-templates">2c. Templates</h2>
+<p>Fill-in files showing exactly what each list expects:</p>
+<ul>
+<li><a href="../templates/contacts-template.csv">Contacts template</a> — Name / Email / Division rows for the add-in's paste-import (step 4 of setup).</li>
+<li><a href="../templates/routing-matrix-template.csv">Routing matrix template</a> — the full column set with sample rows, for bulk-building rules in Excel and importing via Microsoft Lists. Leave the Teams ID columns blank — the add-in's pickers fill those; everything else imports as-is.</li>
+</ul>
 <h2 id="3-import-the-existing-excel-routing-matrix">3. Import the existing Excel routing matrix</h2>
 <p>Microsoft Lists imports Excel directly: List → ⋯ → "Export/Import" or create<br>the list *from* the Excel file, then rename columns to match the table<br>above. For tag IDs, use the add-in's tag lookup (Settings → paste the Team<br>ID → Fetch tags) and copy each <code>TeamsTagId</code> into the matching row.</p>
 <h2 id="4-permissions-to-grant">4. Permissions to grant</h2>

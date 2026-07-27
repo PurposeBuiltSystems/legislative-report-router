@@ -1,0 +1,3 @@
+Title,DivisionCode,DivisionName,Aliases,Emails,TeamsTeamId,TeamsChannelId,TeamsChannelName,TeamsTagId,TeamsTagName,CodeChapters,RoutingKeywords,MentionUserIds,MentionUserEmails,IsActive,Priority,EffectiveStartDate,EffectiveEndDate,Notes
+MVD,MVD,Motor Vehicle Division,Motor Vehicle; Motor Vehicles,jane.doe@agency.gov; bob.roe@agency.gov,(leave blank - the add-in's pickers fill Teams IDs),(leave blank),MVD Bills,(leave blank),MVD Legislation,321; 321A; 322,motor vehicle; driver; license; CDL,,,TRUE,1,,,Sample row - edit or delete
+TDD,TDD,Transportation Development,Transp Development,sue.smith@agency.gov,(leave blank),(leave blank),TDD Bills,(leave blank),TDD Legislation,306; 313; 314,transit; railroad; aviation,,,TRUE,1,,,Sample row - edit or delete

@@ -240,6 +240,12 @@
     });
     byId("tagCreate").addEventListener("click", createDivisionTag);
     byId("useOneDrive").addEventListener("click", useOneDrive);
+    byId("copyTemplate").addEventListener("click", function () {
+      var tsv = "Name\tEmail\tDivision\nJane Doe\tjane.doe@agency.gov\tMVD\nBob Roe\tbob.roe@agency.gov\tMVD/TDD";
+      navigator.clipboard.writeText(tsv).then(function () {
+        setStatus("info", "Starter copied \u2014 paste into Excel, replace the sample people, then copy your rows back here.");
+      }).catch(function () { setStatus("error", "Copy failed \u2014 use the download link instead."); });
+    });
     byId("siteSearch").addEventListener("input", filterSiteList);
     wizShow(1);
     byId("runChecks").addEventListener("click", runChecks);

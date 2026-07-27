@@ -96,6 +96,17 @@ existing list → BillTracker**. Create these views:
   DueDate (the cross-divisional "who's waiting on who" board)
 - *Overdue* — Pending review AND DueDate < today
 
+## 2c. Templates
+
+Fill-in files showing exactly what each list expects:
+
+- [Contacts template](../templates/contacts-template.csv) — Name / Email /
+  Division rows for the add-in's paste-import (step 4 of setup).
+- [Routing matrix template](../templates/routing-matrix-template.csv) — the
+  full column set with sample rows, for bulk-building rules in Excel and
+  importing via Microsoft Lists. Leave the Teams ID columns blank — the
+  add-in's pickers fill those; everything else imports as-is.
+
 ## 3. Import the existing Excel routing matrix
 
 Microsoft Lists imports Excel directly: List → ⋯ → "Export/Import" or create
