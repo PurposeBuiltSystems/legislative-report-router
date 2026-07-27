@@ -147,6 +147,27 @@
     return (res.value || []).sort(function (a, b) { return a.displayName.localeCompare(b.displayName); });
   }
 
+  async function followedSites(token) {
+    try {
+      var res = await graphJson(token, "GET", "/me/followedSites?$select=id,displayName,webUrl");
+      return res.value || [];
+    } catch (e) { return []; }
+  }
+
+  async function allSites(token) {
+    var res = await graphJson(token, "GET", "/sites?search=*&$select=id,displayName,webUrl&$top=50");
+    return res.value || [];
+  }
+
+  /** The user's own OneDrive as a site (personal site can host the lists). */
+  async function myPersonalSite(token) {
+    var drive = await graphJson(token, "GET", "/me/drive?$select=webUrl");
+    var u = new URL(drive.webUrl); // .../personal/user_x/Documents
+    var path = u.pathname.replace(/\/Documents\/?$/i, "");
+    var site = await graphJson(token, "GET", "/sites/" + u.hostname + ":" + path + "?$select=id,displayName,webUrl");
+    return { siteId: site.id, name: site.displayName || "My OneDrive", webUrl: site.webUrl };
+  }
+
   async function searchSites(token, query) {
     var res = await graphJson(token, "GET", "/sites?search=" + encodeURIComponent(query) + "&$select=id,displayName,webUrl");
     return res.value || [];
@@ -228,6 +249,9 @@
     joinedTeams: joinedTeams,
     listChannels: listChannels,
     searchSites: searchSites,
+    followedSites: followedSites,
+    allSites: allSites,
+    myPersonalSite: myPersonalSite,
     postChannelMessage: postChannelMessage,
     listTeamTags: listTeamTags,
     createTeamTag: createTeamTag,

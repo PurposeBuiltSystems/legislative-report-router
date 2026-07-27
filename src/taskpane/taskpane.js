@@ -239,6 +239,8 @@
       } finally { byId("wizSignIn").disabled = false; }
     });
     byId("tagCreate").addEventListener("click", createDivisionTag);
+    byId("useOneDrive").addEventListener("click", useOneDrive);
+    byId("siteSearch").addEventListener("input", filterSiteList);
     wizShow(1);
     byId("runChecks").addEventListener("click", runChecks);
     byId("copyChecks").addEventListener("click", copyChecks);
@@ -657,6 +659,7 @@
     byId("wizPos").textContent = "Step " + wizStep + " of " + WIZ_MAX;
     byId("wizPrev").disabled = wizStep === 1;
     byId("wizNext").textContent = wizStep === WIZ_MAX ? "Done \u2713" : "Next \u2192";
+    if (wizStep === 2) { loadSitesPicker(); }
     if (wizStep === 3) { loadTeamsPicker(); renderRoutesSummary(); }
     if (wizStep === 4 || wizStep === 6) { /* dropdowns already refreshed on connect */ }
     if (wizStep === WIZ_MAX && byId("wizNext").textContent === "Done \u2713") {
@@ -854,32 +857,71 @@
 
   // ---------- rules ----------
 
-  async function siteSearch() {
-    var q = byId("siteSearch").value.trim();
-    if (!q) { setStatus("error", "Type part of the site's name first."); return; }
-    byId("siteSearchGo").disabled = true;
+  var siteCache = null;
+
+  async function loadSitesPicker(force) {
+    if (siteCache && !force) { return; }
+    var sel = byId("siteResults");
     try {
-      setStatus("work", "Searching your sites\u2026");
       var token = await GraphData.getToken();
-      var sites = await GraphData.searchSites(token, q);
-      var sel = byId("siteResults");
-      sel.innerHTML = "";
-      if (!sites.length) { setStatus("info", "No sites matched \u2014 paste the site URL instead."); sel.hidden = true; return; }
-      var opt0 = document.createElement("option");
-      opt0.value = ""; opt0.textContent = "Pick a site (" + sites.length + " found)\u2026";
-      sel.appendChild(opt0);
-      sites.forEach(function (st) {
-        var o = document.createElement("option");
-        o.value = st.webUrl;
-        o.textContent = st.displayName || st.webUrl;
-        sel.appendChild(o);
+      var followed = await GraphData.followedSites(token);
+      var all = [];
+      try { all = await GraphData.allSites(token); } catch (e) { /* search-* may be off in some tenants */ }
+      var seen = {};
+      siteCache = [];
+      followed.concat(all).forEach(function (st) {
+        if (!st.webUrl || seen[st.id]) { return; }
+        seen[st.id] = true;
+        siteCache.push({ url: st.webUrl, name: st.displayName || st.webUrl,
+          followed: followed.some(function (f) { return f.id === st.id; }) });
       });
-      sel.hidden = false;
-      setStatus("info", sites.length + " site(s) found \u2014 pick one.");
+      renderSiteList(siteCache);
+      var lbl = sel.previousElementSibling || sel.parentElement;
+      setStatus("info", siteCache.length ? siteCache.length + " site(s) found \u2014 pick one, or use your OneDrive." :
+        "No sites listed \u2014 use your OneDrive, paste a URL, or type a search below.");
     } catch (e) {
-      setStatus("error", "Site search failed: " + friendly(e));
+      setStatus("error", "Couldn't list your sites: " + friendly(e));
+    }
+  }
+
+  function renderSiteList(list) {
+    var sel = byId("siteResults");
+    sel.innerHTML = "";
+    var opt0 = document.createElement("option");
+    opt0.value = ""; opt0.textContent = "Pick a site (" + list.length + ")\u2026";
+    sel.appendChild(opt0);
+    list.forEach(function (st) {
+      var o = document.createElement("option");
+      o.value = st.url;
+      o.textContent = (st.followed ? "\u2b50 " : "") + st.name;
+      sel.appendChild(o);
+    });
+  }
+
+  function filterSiteList() {
+    if (!siteCache) { return; }
+    var q = byId("siteSearch").value.trim().toLowerCase();
+    renderSiteList(!q ? siteCache : siteCache.filter(function (st) {
+      return st.name.toLowerCase().indexOf(q) !== -1 || st.url.toLowerCase().indexOf(q) !== -1;
+    }));
+  }
+
+  async function siteSearch() { await loadSitesPicker(true); filterSiteList(); }
+
+  async function useOneDrive() {
+    byId("useOneDrive").disabled = true;
+    try {
+      setStatus("work", "Finding your OneDrive\u2026");
+      var token = await GraphData.getToken();
+      var site = await GraphData.myPersonalSite(token);
+      byId("siteUrl").value = site.webUrl;
+      saveSettings({ siteUrl: site.webUrl });
+      state.site = null;
+      setStatus("info", "Using your OneDrive (" + site.name + "). Heads-up: lists here are private to you \u2014 fine solo, but a shared review team should use a shared site. Now click \u201cCreate my lists.\u201d");
+    } catch (e) {
+      setStatus("error", "Couldn't use your OneDrive: " + friendly(e));
     } finally {
-      byId("siteSearchGo").disabled = false;
+      byId("useOneDrive").disabled = false;
     }
   }
 

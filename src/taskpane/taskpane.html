@@ -82,13 +82,19 @@
       <!-- Step 2: site + lists -->
       <div class="wiz-step" data-wiz="2" hidden>
         <h3 class="wiz-h">2 · Where should your lists live?</h3>
-        <label>Search your SharePoint sites by name
-          <input id="siteSearch" type="text" placeholder="e.g. Legislative" />
+        <p class="hint">The add-in keeps three lists: your <b>division routes</b> (channels, tags, and
+        each division's <b>contact emails</b>), the <b>audit trail</b>, and the <b>bill tracker</b>.
+        Pick a site your review team can access — or, if it's just you, use your OneDrive.</p>
+        <label>Your sites (loading\u2026)
+          <select id="siteResults" ></select>
         </label>
         <div class="row2">
-          <button id="siteSearchGo">Find my sites</button>
-          <select id="siteResults" hidden></select>
+          <button id="useOneDrive">Just me \u2014 use my OneDrive</button>
+          <button id="siteSearchGo">Refresh list</button>
         </div>
+        <label>Or search / filter
+          <input id="siteSearch" type="text" placeholder="e.g. Legislative" />
+        </label>
         <label>Site URL (fills in when you pick — or paste one)
           <input id="siteUrl" type="text" placeholder="https://yourtenant.sharepoint.com/sites/Legislative" />
         </label>
@@ -290,17 +296,17 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=16"></script>
-  <script src="../routing.js?v=16"></script>
-  <script src="../teams.js?v=16"></script>
-  <script src="../docx.js?v=16"></script>
-  <script src="../graph.js?v=16"></script>
-  <script src="../presets.js?v=16"></script>
-  <script src="../provision.js?v=16"></script>
-  <script src="../contacts.js?v=16"></script>
-  <script src="../reportgen.js?v=16"></script>
-  <script src="../chapters.js?v=16"></script>
-  <script src="../feed.js?v=16"></script>
-  <script src="taskpane.js?v=16"></script>
+  <script src="../parser.js?v=17"></script>
+  <script src="../routing.js?v=17"></script>
+  <script src="../teams.js?v=17"></script>
+  <script src="../docx.js?v=17"></script>
+  <script src="../graph.js?v=17"></script>
+  <script src="../presets.js?v=17"></script>
+  <script src="../provision.js?v=17"></script>
+  <script src="../contacts.js?v=17"></script>
+  <script src="../reportgen.js?v=17"></script>
+  <script src="../chapters.js?v=17"></script>
+  <script src="../feed.js?v=17"></script>
+  <script src="taskpane.js?v=17"></script>
 </body>
 </html>
