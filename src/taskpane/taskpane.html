@@ -97,6 +97,13 @@
           <textarea id="distList" rows="3" placeholder="Doe, Jane &lt;jane.doe@iowadot.us&gt;; Roe, Bob &lt;bob.roe@iowadot.us&gt;; \u2026"></textarea>
         </label>
         <p id="distInfo" class="hint"></p>
+        <div class="row2">
+          <label class="check" style="align-self:end"><input id="autoDaily" type="checkbox" /> Draft it for me each morning</label>
+          <label>at
+            <input id="autoDailyTime" type="time" value="07:30" />
+          </label>
+        </div>
+        <p class="hint">Runs while this pane is open (\ud83d\udccc pin the pane to keep it open all day). Creates the draft and assigns divisions automatically \u2014 you still review, publish to Teams, and press Send yourself. If Outlook was closed at that time, it catches up the next time the pane opens.</p>
       </details>
       <details id="contactImport" class="options">
         <summary>Add people to divisions (one at a time, or paste a list)</summary>
@@ -256,17 +263,17 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=14"></script>
-  <script src="../routing.js?v=14"></script>
-  <script src="../teams.js?v=14"></script>
-  <script src="../docx.js?v=14"></script>
-  <script src="../graph.js?v=14"></script>
-  <script src="../presets.js?v=14"></script>
-  <script src="../provision.js?v=14"></script>
-  <script src="../contacts.js?v=14"></script>
-  <script src="../reportgen.js?v=14"></script>
-  <script src="../chapters.js?v=14"></script>
-  <script src="../feed.js?v=14"></script>
-  <script src="taskpane.js?v=14"></script>
+  <script src="../parser.js?v=15"></script>
+  <script src="../routing.js?v=15"></script>
+  <script src="../teams.js?v=15"></script>
+  <script src="../docx.js?v=15"></script>
+  <script src="../graph.js?v=15"></script>
+  <script src="../presets.js?v=15"></script>
+  <script src="../provision.js?v=15"></script>
+  <script src="../contacts.js?v=15"></script>
+  <script src="../reportgen.js?v=15"></script>
+  <script src="../chapters.js?v=15"></script>
+  <script src="../feed.js?v=15"></script>
+  <script src="taskpane.js?v=15"></script>
 </body>
 </html>

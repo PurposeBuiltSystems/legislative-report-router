@@ -176,7 +176,7 @@
     if (screen === "publish") { renderPublishSummary(); }
   }
 
-  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distList"];
+  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distList", "autoDaily", "autoDailyTime"];
   var PROFILE_KEYS = SETTING_KEYS.concat([]);
 
   Office.onReady(function () {
@@ -233,6 +233,12 @@
     byId("copyChecks").addEventListener("click", copyChecks);
     byId("distList").addEventListener("input", updateDistInfo);
     updateDistInfo();
+    var st0 = settings();
+    if (st0.autoDaily === true || st0.autoDaily === "true") { byId("autoDaily").checked = true; }
+    byId("autoDaily").addEventListener("change", function () {
+      saveSettings({ autoDaily: byId("autoDaily").checked });
+    });
+    startAutoDraftTimer();
     byId("lookupTags").addEventListener("click", lookupTags);
     byId("bulkApply").addEventListener("click", bulkApply);
     byId("confirmBox").addEventListener("change", function () {
@@ -1103,6 +1109,117 @@
       setStatus("info", tags.length + " tag(s) found — copy the IDs into the routing list.");
     } catch (e) {
       setStatus("error", "Tag lookup failed: " + friendly(e));
+    }
+  }
+
+  // ---------- morning auto-draft ----------
+  // Runs only while the pane is open (pin the pane to keep it open).
+  // Automates ONLY the draft: Teams posts and Send remain explicit.
+
+  var autoDraftRan = false; // once per pane session
+
+  function todayKey() {
+    var d = new Date();
+    return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+  }
+
+  function startAutoDraftTimer() {
+    setInterval(maybeAutoDraft, 60 * 1000);
+    setTimeout(maybeAutoDraft, 5000); // catch-up shortly after open
+  }
+
+  async function maybeAutoDraft() {
+    try {
+      var st = settings();
+      if (!(st.autoDaily === true || st.autoDaily === "true") || autoDraftRan) { return; }
+      if (st.lastAutoDraftDay === todayKey()) { return; } // already drafted today
+      var t = String(st.autoDailyTime || byId("autoDailyTime").value || "07:30");
+      var parts = t.split(":");
+      var now = new Date();
+      var due = new Date(now.getFullYear(), now.getMonth(), now.getDate(), +parts[0] || 7, +parts[1] || 30);
+      if (now < due) { return; } // not time yet
+      if (!LrrReportGen.extractEmails(st.distList || "").length) { return; } // not configured
+      if (!state.rules.length) {
+        try { await connectRules(true); } catch (e) { return; } // sign-in needed — wait for a manual open
+      }
+
+      autoDraftRan = true;
+      setStatus("work", "Morning auto-draft: checking for new bills\u2026");
+
+      // pull the feed (same path as the Filings tab)
+      var preset = LrrPresets.presetFor(byId("stateName").value || "Iowa");
+      var entries;
+      if (preset.feed === "iowa-rss") {
+        var res = await fetch("../../feeds/IowaBills.xml?ts=" + Date.now());
+        if (!res.ok) { throw new Error("feed mirror unavailable"); }
+        entries = LrrFeed.parseFeed(await res.text());
+      } else {
+        var res2 = await fetch("../../feeds/openstates-" + preset.slug + ".json?ts=" + Date.now());
+        if (!res2.ok) { throw new Error("feed mirror unavailable"); }
+        entries = LrrFeed.parseOpenStates(await res2.text());
+      }
+      var terms = byId("watchTerms").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+      var days = Number(byId("watchDays").value) || 3;
+      var hits = LrrFeed.watchFilter(entries, terms, days);
+      var tracked = trackedList();
+      LrrFeed.watchFilter(entries, [], days).forEach(function (e) {
+        if (hits.indexOf(e) !== -1) { return; }
+        if (LrrChapters.matchTracked(LrrChapters.extractChapters(e.description || ""), tracked).length) { hits.push(e); }
+      });
+      hits = LrrReportGen.filterNew(hits, reportedBills());
+      if (!hits.length) {
+        saveSettings({ lastAutoDraftDay: todayKey() });
+        setStatus("info", "Morning check: no new bills since your last report. \u2615");
+        return;
+      }
+
+      // build items with auto-routing (chapters + keywords)
+      state.reportKey = "daily-" + todayKey();
+      state.subject = LrrReportGen.subjectFor(new Date());
+      var items = [];
+      hits.forEach(function (e, i) {
+        var item = LrrFeed.toLegislativeItem(e, state.reportKey, i);
+        item.codeChapters = LrrChapters.extractChapters(item.brief || "");
+        item.trackedChapters = LrrChapters.matchTracked(item.codeChapters, tracked);
+        var codes = [];
+        LrrChapters.suggestRules(item.codeChapters, state.rules).forEach(function (sg) {
+          if (codes.indexOf(sg.rule.divisionCode) === -1) { codes.push(sg.rule.divisionCode); }
+        });
+        LrrRouting.suggestByKeywords(item.brief || "", state.rules).forEach(function (sg) {
+          if (codes.indexOf(sg.rule.divisionCode) === -1) { codes.push(sg.rule.divisionCode); }
+        });
+        if (codes.length) {
+          item.distributedTo = codes;
+          item.commentRequestedFrom = codes.slice();
+          item.parserWarnings = ["Divisions auto-suggested \u2014 verify before publishing."];
+        }
+        LrrRouting.routeItem(item, state.rules);
+        items.push(item);
+      });
+      state.items = items;
+      state.results = {};
+      refreshStats(); renderItems();
+
+      // draft only — never posts, never sends
+      var token = await GraphData.getToken();
+      var recips = LrrReportGen.extractEmails(st.distList || "");
+      var rep = LrrReportGen.buildDailyReport(items, {
+        sessionName: st.sessionName || "",
+        commentWindow: byId("commentWindow").value,
+        preparedBy: ((Office.context.mailbox.userProfile || {}).displayName) || "",
+      });
+      await GraphData.createDraftMessage(token, recips, rep.subject, rep.html);
+      markReported(items);
+      saveSettings({ lastAutoDraftDay: todayKey() });
+      var unrouted = items.filter(function (it) { return it.routingStatus !== "matched"; }).length;
+      setStatus("info", "\u2600\ufe0f Today's Daily Bill Report is drafted \u2014 " + rep.count + " bill(s), " +
+        recips.length + " recipients, waiting in your Drafts. " +
+        (unrouted ? unrouted + " bill(s) still need a division (Review tab)." : "All bills routed.") +
+        " Review here, Publish to Teams, then send the draft.");
+      if (byId("optDailyReport")) { byId("optDailyReport").checked = false; } // already drafted
+      show("review");
+    } catch (e) {
+      autoDraftRan = false; // let the next tick retry
     }
   }
 
