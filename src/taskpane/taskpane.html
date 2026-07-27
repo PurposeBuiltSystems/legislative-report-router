@@ -20,11 +20,11 @@
 
   <nav class="tabs">
     <button data-screen="overview" class="tab active">Overview</button>
-    <button data-screen="filings" class="tab">Filings</button>
+    <button data-screen="filings" class="tab">New bills</button>
     <button data-screen="review" class="tab">Review</button>
     <button data-screen="preview" class="tab">Preview</button>
     <button data-screen="publish" class="tab">Publish</button>
-    <button data-screen="audit" class="tab">Audit</button>
+    <button data-screen="audit" class="tab">History</button>
   </nav>
 
   <!-- Screen 1: Overview -->
@@ -48,7 +48,7 @@
     </label>
 
     <div class="actions-row">
-      <button id="parse" class="primary">Parse Report</button>
+      <button id="parse" class="primary">Read this report</button>
       <button id="loadDraft">Load Saved Draft</button>
       <button id="saveDraft">Save Draft Distribution</button>
     </div>
@@ -56,6 +56,7 @@
     <details id="settings" class="options">
       <summary>⚙️ Setup (one-time)</summary>
       <p class="hint"><b>Everything here is saved to your account</b> — set it up once and the add-in reconnects automatically on every email, on every device. You never repeat these steps.</p>
+      <div id="setupChecklist"></div>
       <p class="hint"><strong>First-time setup, three steps:</strong> ① pick your SharePoint site &nbsp;② create the lists &nbsp;③ add a route per division — team, channel, and tag are pickers, no IDs to paste.</p>
       <div class="row2">
         <label>State / legislature
@@ -65,11 +66,11 @@
           <input id="identifiers" type="text" value="HF, SF, HSB, SSB, HJR, SJR, HCR, SCR, HR, SR" />
         </label>
       </div>
-      <label>① SharePoint site — search by name, or paste a URL below
+      <label>① Where should your lists live? Search your SharePoint sites by name
         <input id="siteSearch" type="text" placeholder="e.g. Legislative" />
       </label>
       <div class="row2">
-        <button id="siteSearchGo">Search my sites</button>
+        <button id="siteSearchGo">Find my sites</button>
         <select id="siteResults" hidden></select>
       </div>
       <label>Site URL
@@ -83,11 +84,11 @@
         <input id="trackerList" type="text" value="BillTracker" />
       </label>
       <div class="row2">
-        <button id="createLists">② Create missing lists</button>
-        <button id="connectRules">Connect &amp; load routing rules</button>
+        <button id="createLists">② Create my lists</button>
+        <button id="connectRules">Connect</button>
       </div>
       <details id="dailyReport" class="options">
-        <summary>Daily Bill Report generation</summary>
+        <summary>Let the add-in write the Daily Bill Report</summary>
         <p class="hint">Publish can draft the Daily Bill Report email itself \u2014 built from the routed bills \u2014 addressed to your distribution list. It lands in <b>your Drafts for review</b>; nothing sends by itself.</p>
         <label>Session name (report header)
           <input id="sessionName" type="text" placeholder="2027 Legislative Session \u2013 1st Session, 92nd Iowa General Assembly" />
@@ -98,7 +99,7 @@
         <p id="distInfo" class="hint"></p>
       </details>
       <details id="contactImport" class="options">
-        <summary>Import contact list (paste from Excel/Outlook)</summary>
+        <summary>Add people to divisions (one at a time, or paste a list)</summary>
         <p class="hint">Paste rows of <b>Name, Email, Division</b> (or just Email, Division) — straight from the coordinator's spreadsheet or contacts export. Divisions like "MVD/TDD" assign a person to both. Emails merge into each division's routing rule; nothing is removed.</p>
         <div class="row2">
           <label>Quick add one person
@@ -118,7 +119,7 @@
         <div id="contactPlan" class="hint"></div>
       </details>
       <details id="routeBuilder" class="options">
-        <summary>③ Add a division route (pickers — no IDs)</summary>
+        <summary>③ Add a division and pick its Teams channel</summary>
         <div class="row2">
           <label>Division code <input id="rbCode" type="text" placeholder="MVD" /></label>
           <label>Division name <input id="rbName" type="text" placeholder="Motor Vehicle Division" /></label>
@@ -200,7 +201,7 @@
       <label>Watch window (days)
         <input id="watchDays" type="number" min="1" max="14" value="3" />
       </label>
-      <label>&nbsp;<button id="loadFilings" class="primary" style="width:100%">Check new filings</button></label>
+      <label>&nbsp;<button id="loadFilings" class="primary" style="width:100%">Check for new bills</button></label>
     </div>
     <label class="modes" style="margin-top:6px"><input id="watchChapters" type="checkbox" checked /> Also match bills touching tracked Code chapters</label>
     <label>Watch terms (comma separated; blank = all bills)
@@ -209,18 +210,18 @@
     <label class="modes" style="margin-top:4px"><input id="hideReported" type="checkbox" checked /> Hide bills already included in a past daily report</label>
     <div id="filingsList"></div>
     <div class="actions-row">
-      <button id="routeFilings" hidden>Route selected bills →</button>
+      <button id="routeFilings" hidden>Add selected bills to today\u2019s report →</button>
     </div>
   </section>
 
   <!-- Screen 2: Review -->
   <section id="screen-review" class="screen" hidden>
-    <label class="modes" style="margin:4px 0"><input id="onlyUnassigned" type="checkbox" /> Show unassigned bills only (fine-tuning view)</label>
+    <label class="modes" style="margin:4px 0"><input id="onlyUnassigned" type="checkbox" /> Show only bills that still need a division</label>
     <div class="bulk-row">
-      <label>Bulk apply route to checked
+      <label>Send every checked bill to
         <select id="bulkRoute"></select>
       </label>
-      <button id="bulkApply">Apply</button>
+      <button id="bulkApply">Assign</button>
     </div>
     <div id="items"></div>
   </section>
@@ -255,17 +256,17 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=13"></script>
-  <script src="../routing.js?v=13"></script>
-  <script src="../teams.js?v=13"></script>
-  <script src="../docx.js?v=13"></script>
-  <script src="../graph.js?v=13"></script>
-  <script src="../presets.js?v=13"></script>
-  <script src="../provision.js?v=13"></script>
-  <script src="../contacts.js?v=13"></script>
-  <script src="../reportgen.js?v=13"></script>
-  <script src="../chapters.js?v=13"></script>
-  <script src="../feed.js?v=13"></script>
-  <script src="taskpane.js?v=13"></script>
+  <script src="../parser.js?v=14"></script>
+  <script src="../routing.js?v=14"></script>
+  <script src="../teams.js?v=14"></script>
+  <script src="../docx.js?v=14"></script>
+  <script src="../graph.js?v=14"></script>
+  <script src="../presets.js?v=14"></script>
+  <script src="../provision.js?v=14"></script>
+  <script src="../contacts.js?v=14"></script>
+  <script src="../reportgen.js?v=14"></script>
+  <script src="../chapters.js?v=14"></script>
+  <script src="../feed.js?v=14"></script>
+  <script src="taskpane.js?v=14"></script>
 </body>
 </html>

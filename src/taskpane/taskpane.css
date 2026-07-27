@@ -96,3 +96,8 @@ button:disabled { opacity: .55; cursor: default; }
 .teach select { flex: 1; min-width: 70px; width: auto; margin: 0; }
 .teach button { padding: 6px 12px; }
 .teach-words { width: 100%; }
+
+#setupChecklist { background: #f8f8f8; border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+#setupChecklist p { margin: 4px 0; font-size: 12.5px; }
+#setupChecklist .done { color: #0e5c2f; }
+#setupChecklist .todo { color: #616161; }

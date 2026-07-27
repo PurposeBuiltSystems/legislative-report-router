@@ -25,6 +25,46 @@
   };
 
   function byId(id) { return document.getElementById(id); }
+
+  /** Translate raw Graph/MSAL errors into words a coordinator can act on. */
+  function friendly(e) {
+    var m = (e && e.message) || String(e);
+    if (/403|Authorization_RequestDenied|accessDenied/i.test(m)) {
+      return "You don't have permission there yet \u2014 ask IT to give you edit access to the site, then try again.";
+    }
+    if (/interaction_required|AADSTS|consent|login_required/i.test(m)) {
+      return "Sign-in needed \u2014 click the button again and finish the Microsoft sign-in window.";
+    }
+    if (/Failed to fetch|NetworkError/i.test(m)) {
+      return "Can't reach Microsoft 365 right now \u2014 check your connection and try again.";
+    }
+    if (/404|itemNotFound|not found/i.test(m)) {
+      return "Not found \u2014 the site address may be wrong, or the list doesn't exist yet (use \u2461 Create my lists).";
+    }
+    return m.length > 180 ? m.slice(0, 180) + "\u2026" : m;
+  }
+
+  /** Live setup progress — tells a non-technical coordinator exactly where she is. */
+  function updateSetupChecklist() {
+    var el = byId("setupChecklist");
+    if (!el) { return; }
+    var st = settings();
+    var withChannel = state.rules.filter(function (r) { return r.teamsTeamId && r.teamsChannelId; }).length;
+    var withPeople = state.rules.filter(function (r) { return (r.emails || []).length; }).length;
+    var distN = (typeof LrrReportGen !== "undefined") ? LrrReportGen.extractEmails(st.distList || "").length : 0;
+    var steps = [
+      [!!st.siteUrl, "Pick where your lists live", "use \u2460 above"],
+      [!!(state.site && state.site.routingListId), "Create & connect your lists", "use \u2461 and Connect"],
+      [withChannel > 0, "Add your divisions", state.rules.length ? withChannel + " of " + state.rules.length + " have a Teams channel" : "use \u2462"],
+      [withPeople > 0, "Put people on divisions", "quick add or paste a list"],
+      [distN > 0, "Paste the report's To: line", distN ? distN + " recipients ready" : "in \u201cLet the add-in write\u2026\u201d"],
+      [!!st.lastCheckOk, "Run \u2705 Test my setup", st.lastCheckOk ? "last passed " + new Date(st.lastCheckOk).toLocaleDateString() : "one click, checks everything"],
+    ];
+    el.innerHTML = steps.map(function (x, i) {
+      return '<p class="' + (x[0] ? "done" : "todo") + '">' + (x[0] ? "\u2705" : "\u2b55") + " " +
+        (i + 1) + ". " + x[1] + (x[0] ? "" : " \u2014 " + x[2]) + "</p>";
+    }).join("");
+  }
   function esc(s) { return LrrTeams._internals.esc(s); }
 
   function setStatus(kind, text) {
@@ -229,6 +269,7 @@
     // (first run on a new device), we say so calmly instead of erroring.
     var hadCache = loadRulesCache();
     updateConnBanner();
+    updateSetupChecklist();
     if (hadCache) {
       byId("rulesInfo").textContent = state.rules.length + " routing rule(s) from saved setup.";
       maybeAutoParse();
@@ -332,7 +373,7 @@
       setStatus("info", state.items.length + " bill(s) parsed. Review the distribution next.");
       if (state.items.length) { show("review"); }
     } catch (e) {
-      setStatus("error", "Parse failed: " + ((e && e.message) || e));
+      setStatus("error", "Parse failed: " + friendly(e));
     } finally {
       byId("parse").disabled = false;
     }
@@ -568,7 +609,7 @@
       setStatus("info", '\u201c' + keyword + '\u201d saved to ' + rule.divisionCode +
         " \u2014 routed " + applied + " bill(s) now, and every future report remembers it.");
     } catch (e) {
-      setStatus("error", "Couldn't save the keyword: " + ((e && e.message) || e));
+      setStatus("error", "Couldn't save the keyword: " + friendly(e));
       btn.disabled = false;
     }
   }
@@ -686,7 +727,7 @@
         ? hits.length + " watched filing(s) in the last " + days + " day(s). Select and route."
         : "No watched filings in the window. (Feed mirror updates every 30 minutes on weekdays.)");
     } catch (e) {
-      setStatus("error", "Feed check failed: " + ((e && e.message) || e));
+      setStatus("error", "Feed check failed: " + friendly(e));
     } finally {
       byId("loadFilings").disabled = false;
     }
@@ -761,7 +802,7 @@
       sel.hidden = false;
       setStatus("info", sites.length + " site(s) found \u2014 pick one.");
     } catch (e) {
-      setStatus("error", "Site search failed: " + ((e && e.message) || e));
+      setStatus("error", "Site search failed: " + friendly(e));
     } finally {
       byId("siteSearchGo").disabled = false;
     }
@@ -785,7 +826,7 @@
         sel.appendChild(o);
       });
     } catch (e) {
-      byId("rbInfo").textContent = "Couldn't load your teams: " + ((e && e.message) || e);
+      byId("rbInfo").textContent = "Couldn't load your teams: " + friendly(e);
     }
   }
 
@@ -818,7 +859,7 @@
         byId("rbInfo").textContent = "Tags unavailable for this team (posting still works without a mention).";
       }
     } catch (e) {
-      byId("rbInfo").textContent = "Couldn't load channels: " + ((e && e.message) || e);
+      byId("rbInfo").textContent = "Couldn't load channels: " + friendly(e);
     }
   }
 
@@ -861,8 +902,8 @@
       byId("rbCode").value = ""; byId("rbName").value = ""; byId("rbEmails").value = ""; byId("rbChapters").value = "";
       await connectRules();
     } catch (e) {
-      byId("rbInfo").textContent = "Saving failed: " + ((e && e.message) || e);
-      setStatus("error", "Route not saved \u2014 " + ((e && e.message) || e));
+      byId("rbInfo").textContent = "Saving failed: " + friendly(e);
+      setStatus("error", "Route not saved \u2014 " + friendly(e));
     } finally {
       byId("rbAdd").disabled = false;
     }
@@ -887,9 +928,10 @@
       rule.emails = merged;
       saveRulesCache();
       byId("quickEmail").value = "";
+      updateSetupChecklist();
       setStatus("info", email + " added to " + rule.divisionCode + " (" + merged.length + " recipient(s) now).");
     } catch (e) {
-      setStatus("error", "Couldn't add the contact: " + ((e && e.message) || e));
+      setStatus("error", "Couldn't add the contact: " + friendly(e));
     } finally {
       byId("quickAdd").disabled = false;
     }
@@ -951,7 +993,7 @@
       setStatus("info", "Contact import done: " + applied + " rule(s) updated, " + created + " created. Reloading rules\u2026");
       await connectRules();
     } catch (e) {
-      setStatus("error", "Import failed: " + ((e && e.message) || e));
+      setStatus("error", "Import failed: " + friendly(e));
       byId("contactApply").disabled = false;
     }
   }
@@ -988,7 +1030,7 @@
       setStatus("info", report.join(" \u00b7 ") + " \u2014 connecting\u2026");
       await connectRules();
     } catch (e) {
-      setStatus("error", "List setup failed: " + ((e && e.message) || e) +
+      setStatus("error", "List setup failed: " + friendly(e) +
         " \u2014 you need edit rights on the site; see the admin guide to create lists manually.");
     } finally {
       byId("createLists").disabled = false;
@@ -1038,9 +1080,10 @@
       if (state.items.length) { LrrRouting.routeAll(state.items, state.rules); refreshStats(); renderItems(); }
       saveRulesCache();
       updateConnBanner();
+      updateSetupChecklist();
       if (!quiet) { setStatus("info", "Routing connected."); }
     } catch (e) {
-      if (!quiet) { setStatus("error", "Routing connection failed: " + ((e && e.message) || e)); }
+      if (!quiet) { setStatus("error", "Routing connection failed: " + friendly(e)); }
       throw e;
     } finally {
       byId("connectRules").disabled = false;
@@ -1059,7 +1102,7 @@
         : "No tags found on that team.";
       setStatus("info", tags.length + " tag(s) found — copy the IDs into the routing list.");
     } catch (e) {
-      setStatus("error", "Tag lookup failed: " + ((e && e.message) || e));
+      setStatus("error", "Tag lookup failed: " + friendly(e));
     }
   }
 
@@ -1159,7 +1202,7 @@
           });
         } catch (e) {
           logCheck(false, "Teams team", "can't reach team for " + teams[tid].map(function (r) { return r.divisionCode; }).join("/") +
-            " \u2014 are you a member? (" + ((e && e.message) || e).slice(0, 120) + ")");
+            " \u2014 are you a member? (" + friendly(e).slice(0, 120) + ")");
         }
       }
 
@@ -1223,6 +1266,7 @@
 
       var fails = checkLog.filter(function (c) { return c.ok === false; }).length;
       var warns = checkLog.filter(function (c) { return c.ok === "warn"; }).length;
+      if (!fails) { saveSettings({ lastCheckOk: new Date().toISOString() }); updateSetupChecklist(); }
       setStatus(fails ? "error" : "info",
         fails ? fails + " check(s) failed, " + warns + " warning(s) \u2014 fix the \u2717 items above."
               : (warns ? "Setup works \u2014 " + warns + " warning(s) worth a look." : "All checks passed \u2014 you're ready to publish. \ud83c\udf89"));
@@ -1511,7 +1555,7 @@
         failures ? failures + " operation(s) failed — successful posts are preserved; use \"Retry failed only\"."
                  : "Publication complete. Full record is in the audit list.");
     } catch (e) {
-      setStatus("error", "Publish failed: " + ((e && e.message) || e));
+      setStatus("error", "Publish failed: " + friendly(e));
     } finally {
       byId("publishGo").disabled = !byId("confirmBox").checked;
     }
@@ -1537,7 +1581,7 @@
       });
       setStatus("info", "Audit history loaded.");
     } catch (e) {
-      setStatus("error", "Audit load failed: " + ((e && e.message) || e));
+      setStatus("error", "Audit load failed: " + friendly(e));
     }
   }
 })();
