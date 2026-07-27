@@ -240,6 +240,7 @@
     });
     byId("tagCreate").addEventListener("click", createDivisionTag);
     byId("useOneDrive").addEventListener("click", useOneDrive);
+    byId("teamSitePick").addEventListener("change", useTeamSite);
     byId("copyTemplate").addEventListener("click", function () {
       var tsv = "Name\tEmail\tDivision\nJane Doe\tjane.doe@agency.gov\tMVD\nBob Roe\tbob.roe@agency.gov\tMVD/TDD";
       navigator.clipboard.writeText(tsv).then(function () {
@@ -665,7 +666,7 @@
     byId("wizPos").textContent = "Step " + wizStep + " of " + WIZ_MAX;
     byId("wizPrev").disabled = wizStep === 1;
     byId("wizNext").textContent = wizStep === WIZ_MAX ? "Done \u2713" : "Next \u2192";
-    if (wizStep === 2) { loadSitesPicker(); }
+    if (wizStep === 2) { loadSitesPicker(); loadTeamSitePicker(); }
     if (wizStep === 3) { loadTeamsPicker(); renderRoutesSummary(); }
     if (wizStep === 4 || wizStep === 6) { /* dropdowns already refreshed on connect */ }
     if (wizStep === WIZ_MAX && byId("wizNext").textContent === "Done \u2713") {
@@ -913,6 +914,35 @@
   }
 
   async function siteSearch() { await loadSitesPicker(true); filterSiteList(); }
+
+  async function loadTeamSitePicker() {
+    await loadTeamsPicker(); // fills teamsCache
+    var sel = byId("teamSitePick");
+    if (!teamsCache || sel.dataset.filled) { return; }
+    sel.dataset.filled = "1";
+    teamsCache.forEach(function (t) {
+      var o = document.createElement("option");
+      o.value = t.id; o.textContent = t.displayName;
+      sel.appendChild(o);
+    });
+  }
+
+  async function useTeamSite() {
+    var groupId = byId("teamSitePick").value;
+    if (!groupId) { return; }
+    try {
+      setStatus("work", "Finding that Team's site\u2026");
+      var token = await GraphData.getToken();
+      var site = await GraphData.teamSite(token, groupId);
+      byId("siteUrl").value = site.webUrl;
+      saveSettings({ siteUrl: site.webUrl });
+      state.site = null;
+      setStatus("info", 'Using the \u201c' + site.name + '\u201d team site \u2014 every member of that team automatically has access to the lists. Now click \u201cCreate my lists.\u201d');
+      updateSetupChecklist();
+    } catch (e) {
+      setStatus("error", "Couldn't reach that Team's site: " + friendly(e));
+    }
+  }
 
   async function useOneDrive() {
     byId("useOneDrive").disabled = true;

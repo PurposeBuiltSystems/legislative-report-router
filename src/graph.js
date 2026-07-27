@@ -159,6 +159,12 @@
     return res.value || [];
   }
 
+  /** A Team's built-in SharePoint site — every team member has access. */
+  async function teamSite(token, groupId) {
+    var site = await graphJson(token, "GET", "/groups/" + groupId + "/sites/root?$select=id,displayName,webUrl");
+    return { siteId: site.id, name: site.displayName, webUrl: site.webUrl };
+  }
+
   /** The user's own OneDrive as a site (personal site can host the lists). */
   async function myPersonalSite(token) {
     var drive = await graphJson(token, "GET", "/me/drive?$select=webUrl");
@@ -252,6 +258,7 @@
     followedSites: followedSites,
     allSites: allSites,
     myPersonalSite: myPersonalSite,
+    teamSite: teamSite,
     postChannelMessage: postChannelMessage,
     listTeamTags: listTeamTags,
     createTeamTag: createTeamTag,
