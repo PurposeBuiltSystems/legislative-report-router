@@ -106,3 +106,22 @@ button:disabled { opacity: .55; cursor: default; }
   margin: 10px 0; padding: 6px 0; border-top: 1px solid #e1e1e1; border-bottom: 1px solid #e1e1e1; }
 .wiz-h { font-size: 13.5px; color: #0f6cbd; margin: 10px 0 6px; }
 .wiz-step { padding-bottom: 6px; }
+
+/* ---- narrow-pane fluidity: Outlook's default pane is ~320px wide.
+   Flex children default to min-width:auto (won't shrink below content),
+   which is what caused horizontal overflow. ---- */
+html, body { max-width: 100%; overflow-x: hidden; }
+input, select, textarea, button { max-width: 100%; box-sizing: border-box; }
+.tabs { flex-wrap: wrap; }
+.tab { padding: 6px 8px; font-size: 12.5px; }
+.row2 { flex-wrap: wrap; }
+.row2 label, .row2 > button, .row2 > select { flex: 1 1 130px; min-width: 0; }
+.bulk-row { flex-wrap: wrap; }
+.bulk-row label { min-width: 0; }
+.item-head { flex-wrap: wrap; }
+.item-head .bill { width: 96px; min-width: 0; }
+.teach input[type="text"] { min-width: 90px; }
+.preview-body { overflow-x: auto; }
+.stat-grid { grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); }
+.wiz-nav { flex-wrap: wrap; }
+select { min-width: 0; }
