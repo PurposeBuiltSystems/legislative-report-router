@@ -20,6 +20,7 @@ a { color: #0f6cbd; } .crumb { font-size: 0.9em; }
 <tr><td><code>Mail.Send</code></td><td>Send consolidated division emails; send the original report on publish</td><td>Sending is the product's job; drafts-only would break the workflow</td></tr>
 <tr><td><code>ChannelMessage.Send</code></td><td>Post one message per bill to Teams channels</td><td>The narrowest channel-posting scope</td></tr>
 <tr><td><code>Sites.ReadWrite.All</code></td><td>Read <code>LegislativeRoutingMatrix</code>; write <code>LegislativeAudit</code></td><td>Graph has no list-scoped delegated permission; see hardening below</td></tr>
+<tr><td><code>TeamworkTag.ReadWrite</code></td><td>Setup can create a division's tag (coordinator as first member) so posts always have a mention target</td><td>Tag creation is a setup-time convenience; without it, tags must be created manually in Teams</td></tr>
 </table>
 <h2 id="optional">Optional</h2>
 <table>

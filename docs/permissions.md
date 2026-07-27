@@ -12,6 +12,7 @@ no application permissions and no backend.
 | `Mail.Send` | Send consolidated division emails; send the original report on publish | Sending is the product's job; drafts-only would break the workflow |
 | `ChannelMessage.Send` | Post one message per bill to Teams channels | The narrowest channel-posting scope |
 | `Sites.ReadWrite.All` | Read `LegislativeRoutingMatrix`; write `LegislativeAudit` | Graph has no list-scoped delegated permission; see hardening below |
+| `TeamworkTag.ReadWrite` | Setup can create a division's tag (coordinator as first member) so posts always have a mention target | Tag creation is a setup-time convenience; without it, tags must be created manually in Teams |
 
 ## Optional
 
