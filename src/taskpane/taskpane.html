@@ -100,6 +100,16 @@
       <details id="contactImport" class="options">
         <summary>Import contact list (paste from Excel/Outlook)</summary>
         <p class="hint">Paste rows of <b>Name, Email, Division</b> (or just Email, Division) — straight from the coordinator's spreadsheet or contacts export. Divisions like "MVD/TDD" assign a person to both. Emails merge into each division's routing rule; nothing is removed.</p>
+        <div class="row2">
+          <label>Quick add one person
+            <input id="quickEmail" type="text" placeholder="jane.doe@iowadot.us" />
+          </label>
+          <label>to division
+            <select id="quickDivision"><option value="">(connect rules first)</option></select>
+          </label>
+        </div>
+        <button id="quickAdd">Add contact</button>
+        <p class="hint" style="margin-top:10px">Or paste many at once:</p>
         <textarea id="contactRows" rows="5" placeholder="Jane Doe&#9;jane.doe@iowadot.us&#9;MVD&#10;Bob Roe&#9;bob.roe@iowadot.us&#9;MVD/TDD"></textarea>
         <div class="row2">
           <button id="contactPreview">Preview</button>
@@ -245,17 +255,17 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=12"></script>
-  <script src="../routing.js?v=12"></script>
-  <script src="../teams.js?v=12"></script>
-  <script src="../docx.js?v=12"></script>
-  <script src="../graph.js?v=12"></script>
-  <script src="../presets.js?v=12"></script>
-  <script src="../provision.js?v=12"></script>
-  <script src="../contacts.js?v=12"></script>
-  <script src="../reportgen.js?v=12"></script>
-  <script src="../chapters.js?v=12"></script>
-  <script src="../feed.js?v=12"></script>
-  <script src="taskpane.js?v=12"></script>
+  <script src="../parser.js?v=13"></script>
+  <script src="../routing.js?v=13"></script>
+  <script src="../teams.js?v=13"></script>
+  <script src="../docx.js?v=13"></script>
+  <script src="../graph.js?v=13"></script>
+  <script src="../presets.js?v=13"></script>
+  <script src="../provision.js?v=13"></script>
+  <script src="../contacts.js?v=13"></script>
+  <script src="../reportgen.js?v=13"></script>
+  <script src="../chapters.js?v=13"></script>
+  <script src="../feed.js?v=13"></script>
+  <script src="taskpane.js?v=13"></script>
 </body>
 </html>

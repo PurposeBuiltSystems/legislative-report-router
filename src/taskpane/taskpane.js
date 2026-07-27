@@ -188,6 +188,7 @@
     byId("onlyUnassigned").addEventListener("change", function () { renderItems(); });
     byId("contactPreview").addEventListener("click", contactPreview);
     byId("contactApply").addEventListener("click", contactApply);
+    byId("quickAdd").addEventListener("click", quickAddContact);
     byId("runChecks").addEventListener("click", runChecks);
     byId("copyChecks").addEventListener("click", copyChecks);
     byId("distList").addEventListener("input", updateDistInfo);
@@ -867,6 +868,33 @@
     }
   }
 
+  async function quickAddContact() {
+    var email = byId("quickEmail").value.trim().toLowerCase();
+    var ruleId = byId("quickDivision").value;
+    if (!/^[^\s@;,]+@[^\s@;,]+\.[^\s@;,]+$/.test(email)) { setStatus("error", "That doesn't look like an email address."); return; }
+    var rule = state.rules.filter(function (r) { return r.id === ruleId; })[0];
+    if (!rule) { setStatus("error", "Connect the routing list first, then pick a division."); return; }
+    if ((rule.emails || []).map(function (e) { return e.toLowerCase(); }).indexOf(email) !== -1) {
+      setStatus("info", email + " is already on " + rule.divisionCode + "."); return;
+    }
+    byId("quickAdd").disabled = true;
+    try {
+      setStatus("work", "Adding " + email + " to " + rule.divisionCode + "\u2026");
+      var token = await GraphData.getToken();
+      if (!state.site || !state.site.routingListId) { throw new Error("routing list not connected"); }
+      var merged = (rule.emails || []).concat([email]);
+      await GraphData.updateListItemFields(token, state.site.siteId, state.site.routingListId, rule.id, { Emails: merged.join("; ") });
+      rule.emails = merged;
+      saveRulesCache();
+      byId("quickEmail").value = "";
+      setStatus("info", email + " added to " + rule.divisionCode + " (" + merged.length + " recipient(s) now).");
+    } catch (e) {
+      setStatus("error", "Couldn't add the contact: " + ((e && e.message) || e));
+    } finally {
+      byId("quickAdd").disabled = false;
+    }
+  }
+
   var contactPlanCache = null;
 
   function contactPreview() {
@@ -987,6 +1015,13 @@
       state.site = { siteId: site.siteId, routingListId: routingListId, auditListId: auditListId, trackerListId: trackerListId };
       byId("rulesInfo").textContent = state.rules.length + " routing rule(s) loaded from " + site.name +
         " (" + state.rules.filter(function (r) { return r.teamsTagId; }).length + " with Teams tags).";
+      var qSel = byId("quickDivision");
+      qSel.innerHTML = "";
+      state.rules.forEach(function (r) {
+        var o = document.createElement("option");
+        o.value = r.id; o.textContent = r.divisionCode;
+        qSel.appendChild(o);
+      });
       var tpSel = byId("testPostRoute");
       tpSel.innerHTML = "";
       state.rules.filter(function (r) { return r.teamsTeamId && r.teamsChannelId; }).forEach(function (r) {

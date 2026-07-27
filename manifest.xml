@@ -20,7 +20,7 @@
 
   <Id>c02ab6d7-a54e-49d4-b440-6a6da79ea34b</Id>
   <Version>1.0.0.0</Version>
-  <ProviderName>PurposeBuiltSystems</ProviderName>
+  <ProviderName>PurposeBuilt Systems LLC</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Legislative Report Router" />
   <Description DefaultValue="Parse a bill report, review the distribution, and publish each bill to the right Teams channel with real tag mentions - plus targeted division emails and a full audit trail." />
