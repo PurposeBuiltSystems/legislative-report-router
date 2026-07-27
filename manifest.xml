@@ -96,7 +96,6 @@
                   </Icon>
                   <Action xsi:type="ShowTaskpane">
                     <SourceLocation resid="Taskpane.Url" />
-                    <SupportsPinning>true</SupportsPinning>
                   </Action>
                 </Control>
               </Group>
@@ -145,5 +144,84 @@
         <bt:String id="ButtonTip" DefaultValue="Parse this bill report, review the distribution, and publish each bill to the right Teams channel with real tag mentions." />
       </bt:LongStrings>
     </Resources>
+
+    <!-- V1_1: identical surfaces, plus a pinnable read pane (SupportsPinning
+         is only valid in the 1.1 schema). Clients that understand 1.1 use
+         this; older clients fall back to the block above. -->
+    <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
+      <Requirements>
+        <bt:Sets DefaultMinVersion="1.8">
+          <bt:Set Name="Mailbox" />
+        </bt:Sets>
+      </Requirements>
+      <Hosts>
+        <Host xsi:type="MailHost">
+          <DesktopFormFactor>
+            <ExtensionPoint xsi:type="MessageReadCommandSurface">
+              <OfficeTab id="TabDefault">
+                <Group id="lrrReadGroup">
+                  <Label resid="GroupLabel" />
+                  <Control xsi:type="Button" id="openLrrRead">
+                    <Label resid="ButtonLabel" />
+                    <Supertip>
+                      <Title resid="ButtonLabel" />
+                      <Description resid="ButtonTip" />
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16" />
+                      <bt:Image size="32" resid="Icon.32" />
+                      <bt:Image size="80" resid="Icon.80" />
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="Taskpane.Url" />
+                      <SupportsPinning>true</SupportsPinning>
+                    </Action>
+                  </Control>
+                </Group>
+              </OfficeTab>
+            </ExtensionPoint>
+            <ExtensionPoint xsi:type="MessageComposeCommandSurface">
+              <OfficeTab id="TabDefault">
+                <Group id="lrrComposeGroup">
+                  <Label resid="GroupLabel" />
+                  <Control xsi:type="Button" id="openLrrCompose">
+                    <Label resid="ButtonLabel" />
+                    <Supertip>
+                      <Title resid="ButtonLabel" />
+                      <Description resid="ButtonTip" />
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16" />
+                      <bt:Image size="32" resid="Icon.32" />
+                      <bt:Image size="80" resid="Icon.80" />
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="Taskpane.Url" />
+                    </Action>
+                  </Control>
+                </Group>
+              </OfficeTab>
+            </ExtensionPoint>
+          </DesktopFormFactor>
+        </Host>
+      </Hosts>
+      <Resources>
+        <bt:Images>
+          <bt:Image id="Icon.16" DefaultValue="https://purposebuiltsystems.github.io/legislative-report-router/assets/icon-16.png" />
+          <bt:Image id="Icon.32" DefaultValue="https://purposebuiltsystems.github.io/legislative-report-router/assets/icon-32.png" />
+          <bt:Image id="Icon.80" DefaultValue="https://purposebuiltsystems.github.io/legislative-report-router/assets/icon-80.png" />
+        </bt:Images>
+        <bt:Urls>
+          <bt:Url id="Taskpane.Url" DefaultValue="https://purposebuiltsystems.github.io/legislative-report-router/src/taskpane/taskpane.html" />
+        </bt:Urls>
+        <bt:ShortStrings>
+          <bt:String id="GroupLabel" DefaultValue="Legislative" />
+          <bt:String id="ButtonLabel" DefaultValue="Report Router" />
+        </bt:ShortStrings>
+        <bt:LongStrings>
+          <bt:String id="ButtonTip" DefaultValue="Parse this bill report, review the distribution, and publish each bill to the right Teams channel with real tag mentions." />
+        </bt:LongStrings>
+      </Resources>
+    </VersionOverrides>
   </VersionOverrides>
 </OfficeApp>
