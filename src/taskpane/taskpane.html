@@ -243,8 +243,8 @@
   <section id="screen-filings" class="screen" hidden>
     <p class="hint">Newly filed bills from the Iowa GA feed (mirrored every 30 minutes) — no waiting for the end-of-day report.</p>
     <div class="row2">
-      <label>Watch window (days)
-        <input id="watchDays" type="number" min="1" max="14" value="3" />
+      <label>Watch window (days) — out of session, raise this to replay old filings
+        <input id="watchDays" type="number" min="1" max="730" value="3" />
       </label>
       <label>&nbsp;<button id="loadFilings" class="primary" style="width:100%">Check for new bills</button></label>
     </div>

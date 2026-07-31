@@ -810,7 +810,8 @@
       byId("routeFilings").hidden = !hits.length;
       setStatus("info", hits.length
         ? hits.length + " watched filing(s) in the last " + days + " day(s). Select and route."
-        : "No watched filings in the window. (Feed mirror updates every 30 minutes on weekdays.)");
+        : "No watched filings in the window. (Feed mirror updates every 30 minutes on weekdays. " +
+          "Out of session? Raise the watch window — e.g. 400 days replays the whole past session.)");
     } catch (e) {
       setStatus("error", "Feed check failed: " + friendly(e));
     } finally {
