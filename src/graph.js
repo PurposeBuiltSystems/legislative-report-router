@@ -22,7 +22,7 @@
     dod:        { graph: "https://dod-graph.microsoft.us", authority: "https://login.microsoftonline.us/common" },
   };
 
-  var SCOPES = ["Mail.ReadWrite", "Mail.Send", "ChannelMessage.Send", "Sites.ReadWrite.All", "TeamworkTag.Read", "TeamworkTag.ReadWrite"];
+  var SCOPES = ["Mail.ReadWrite", "Mail.Send", "ChannelMessage.Send", "ChannelMessage.Read.All", "Sites.ReadWrite.All", "TeamworkTag.Read", "TeamworkTag.ReadWrite"];
 
   var cloudKey = "commercial";
   var pcaPromise = null;
@@ -247,6 +247,41 @@
     return res.value || [];
   }
 
+  /** All replies to a channel message (fiscal harvest), capped paging. */
+  async function listReplies(token, teamId, channelId, messageId) {
+    var out = [];
+    var url = "/teams/" + teamId + "/channels/" + channelId +
+      "/messages/" + messageId + "/replies?$top=50";
+    var guard = 0;
+    while (url && guard++ < 4) {
+      var page = await graphJson(token, "GET", url);
+      out = out.concat(page.value || []);
+      url = page["@odata.nextLink"] ? page["@odata.nextLink"].replace(graphBase(), "") : null;
+    }
+    return out;
+  }
+
+  /** Resolve a Teams attachment contentUrl (SharePoint webUrl) to a driveItem. */
+  async function driveItemFromUrl(token, webUrl) {
+    var b64 = btoa(unescape(encodeURIComponent(webUrl)))
+      .replace(/=+$/, "").replace(/\//g, "_").replace(/\+/g, "-");
+    return graphJson(token, "GET", "/shares/u!" + b64 + "/driveItem?$select=id,name,size,parentReference");
+  }
+
+  /** driveItem content as base64 (feeds the DOCX/XLSX extractors). */
+  async function driveItemContentB64(token, driveId, itemId) {
+    var res = await fetch(graphBase() + "/drives/" + driveId + "/items/" + itemId + "/content",
+      { headers: { Authorization: "Bearer " + token } });
+    if (!res.ok) { throw new Error("Graph GET content -> " + res.status); }
+    var buf = new Uint8Array(await res.arrayBuffer());
+    var bin = "";
+    var CHUNK = 0x8000;
+    for (var i = 0; i < buf.length; i += CHUNK) {
+      bin += String.fromCharCode.apply(null, buf.subarray(i, i + CHUNK));
+    }
+    return btoa(bin);
+  }
+
   async function getAttachmentBytes(token, messageId, attachmentId) {
     var full = await graphJson(token, "GET", "/me/messages/" + encodeURIComponent(messageId) +
       "/attachments/" + encodeURIComponent(attachmentId));
@@ -279,6 +314,9 @@
     sendDraft: sendDraft,
     getAttachments: getAttachments,
     getAttachmentBytes: getAttachmentBytes,
+    listReplies: listReplies,
+    driveItemFromUrl: driveItemFromUrl,
+    driveItemContentB64: driveItemContentB64,
     _config: { clientId: CLIENT_ID, clouds: CLOUDS },
   };
 })(typeof self !== "undefined" ? self : this);

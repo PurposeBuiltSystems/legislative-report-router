@@ -269,6 +269,8 @@
     byId("refreshAudit").addEventListener("click", refreshAudit);
     byId("fiscalLoad").addEventListener("click", loadFiscal);
     byId("fiscalCsv").addEventListener("click", exportFiscalCsv);
+    byId("fiscalHarvest").addEventListener("click", harvestFiscal);
+    byId("harvestApply").addEventListener("click", applyHarvest);
     byId("loadFilings").addEventListener("click", loadFilings);
     byId("routeFilings").addEventListener("click", routeFilings);
     SETTING_KEYS.forEach(function (k) {
@@ -1692,6 +1694,196 @@
   }
 
   var fiscalRows = []; // last-loaded tracker rows, for the CSV export
+  var harvestCandidates = []; // reviewed-before-apply fiscal candidates
+
+  /**
+   * Divisions answer in the thread or attach DOCX/Excel — not in list
+   * columns. Sweep the replies of every published bill post (the audit
+   * list knows each thread), extract candidate costs/severity, and show
+   * them for review. NOTHING is written until the coordinator applies.
+   */
+  async function harvestFiscal() {
+    if (!state.site) { setStatus("error", "Connect the SharePoint lists in Settings first."); return; }
+    byId("fiscalHarvest").disabled = true;
+    harvestCandidates = [];
+    try {
+      var token = await GraphData.getToken();
+      setStatus("work", "Reading the publish history…");
+      var audit = await GraphData.listItems(token, state.site.siteId, state.site.auditListId, 2000);
+      var threads = {};
+      audit.forEach(function (it) {
+        var f = it.fields || {};
+        if (f.Status !== "published" || !f.TeamsMessageId || !f.TeamId) { return; }
+        threads[f.TeamsMessageId] = {
+          bill: f.Title, teamId: f.TeamId, channelId: f.ChannelId,
+          messageId: f.TeamsMessageId,
+          division: String(f.Divisions || "").split(";")[0].trim(),
+        };
+      });
+      var list = Object.keys(threads).map(function (k) { return threads[k]; });
+      var CAP = 120;
+      if (list.length > CAP) {
+        logLine("Harvest capped at " + CAP + " of " + list.length + " threads (newest audit rows win).", "warn");
+        list = list.slice(-CAP);
+      }
+      var raw = [];
+      var errors = 0;
+      for (var i = 0; i < list.length; i++) {
+        var t = list[i];
+        setStatus("work", "Replies " + (i + 1) + "/" + list.length + ": " + t.bill);
+        var replies;
+        try { replies = await GraphData.listReplies(token, t.teamId, t.channelId, t.messageId); }
+        catch (e) { errors++; continue; }
+        for (var r = 0; r < replies.length; r++) {
+          var rep = replies[r];
+          var author = ((rep.from || {}).user || {}).displayName || "";
+          var text = LrrHarvest.htmlToText((rep.body || {}).content || "");
+          raw.push(LrrHarvest.analyzeSource({
+            bill: t.bill, division: t.division, source: "Teams reply",
+            text: text, author: author, date: rep.createdDateTime || "",
+          }));
+          var atts = (rep.attachments || []).filter(function (a) {
+            return a.contentUrl && /\.(docx|xlsx)$/i.test(a.name || "");
+          }).slice(0, 3);
+          for (var a = 0; a < atts.length; a++) {
+            try {
+              var item = await GraphData.driveItemFromUrl(token, atts[a].contentUrl);
+              var b64 = await GraphData.driveItemContentB64(token, item.parentReference.driveId, item.id);
+              var docText = /\.docx$/i.test(atts[a].name)
+                ? (await LrrDocx.extractText(b64, atts[a].name, "", item.size)).text
+                : await LrrXlsx.extractText(b64, atts[a].name, item.size);
+              raw.push(LrrHarvest.analyzeSource({
+                bill: t.bill, division: t.division, source: atts[a].name,
+                kind: "attachment",
+                text: docText, author: author, date: rep.createdDateTime || "",
+              }));
+            } catch (e2) { errors++; }
+          }
+        }
+      }
+      harvestCandidates = LrrHarvest.mergeCandidates(raw).map(function (c) {
+        c.checked = c.cost !== null;
+        if (!c.fy) { c.fy = LrrFiscal.defaultFy(new Date()); }
+        if (!c.severity) { c.severity = "Unknown"; }
+        return c;
+      });
+      renderHarvest();
+      setStatus(harvestCandidates.length ? "info" : "info",
+        harvestCandidates.length + " fiscal candidate(s) from " + list.length + " threads" +
+        (errors ? " (" + errors + " skipped on errors)" : "") +
+        ". Review, edit, then apply to the tracker.");
+    } catch (e) {
+      setStatus("error", "Harvest failed: " + friendly(e));
+    } finally {
+      byId("fiscalHarvest").disabled = false;
+    }
+  }
+
+  function renderHarvest() {
+    var host = byId("harvestView");
+    host.innerHTML = "";
+    byId("harvestApply").hidden = !harvestCandidates.length;
+    harvestCandidates.forEach(function (c) {
+      var box = document.createElement("div");
+      box.className = "preview-post";
+      var head = document.createElement("p");
+      var cb = document.createElement("input");
+      cb.type = "checkbox"; cb.checked = c.checked;
+      cb.addEventListener("change", function () { c.checked = cb.checked; });
+      head.appendChild(cb);
+      var strong = document.createElement("strong");
+      strong.textContent = " " + c.bill + " ";
+      head.appendChild(strong);
+      head.appendChild(document.createTextNode((c.author ? "— " + c.author + " " : "") +
+        (c.source ? "(" + c.source + ")" : "")));
+      box.appendChild(head);
+      var row = document.createElement("p");
+      function inp(label, val, onch, width) {
+        var l = document.createElement("label");
+        l.style.marginRight = "8px";
+        l.appendChild(document.createTextNode(label + " "));
+        var i = document.createElement("input");
+        i.type = "text"; i.value = val; i.style.width = width || "90px";
+        i.addEventListener("change", function () { onch(i.value); });
+        l.appendChild(i);
+        return l;
+      }
+      row.appendChild(inp("Division", c.division, function (v) { c.division = v; }, "70px"));
+      row.appendChild(inp("Cost", c.costRaw || (c.cost === null ? "" : String(c.cost)), function (v) { c.costRaw = v; c.cost = LrrFiscal.parseCost(v); }));
+      var sevL = document.createElement("label");
+      sevL.style.marginRight = "8px";
+      sevL.appendChild(document.createTextNode("Severity "));
+      var sel = document.createElement("select");
+      ["Unknown", "None", "Low", "Moderate", "High", "Critical"].forEach(function (o) {
+        var op = document.createElement("option");
+        op.value = o; op.textContent = o; op.selected = c.severity === o;
+        sel.appendChild(op);
+      });
+      sel.addEventListener("change", function () { c.severity = sel.value; });
+      sevL.appendChild(sel);
+      row.appendChild(sevL);
+      row.appendChild(inp("FY", c.fy, function (v) { c.fy = v; }, "80px"));
+      box.appendChild(row);
+      if (c.evidence) {
+        var ev = document.createElement("p");
+        ev.className = "hint";
+        ev.textContent = c.evidence;
+        box.appendChild(ev);
+      }
+      host.appendChild(box);
+    });
+    if (!harvestCandidates.length) {
+      host.innerHTML = '<p class="hint">No fiscal language found in the reply threads yet.</p>';
+    }
+  }
+
+  async function applyHarvest() {
+    var picked = harvestCandidates.filter(function (c) { return c.checked; });
+    if (!picked.length) { setStatus("error", "Nothing checked."); return; }
+    byId("harvestApply").disabled = true;
+    try {
+      var token = await GraphData.getToken();
+      setStatus("work", "Reading the tracker…");
+      var items = await GraphData.listItems(token, state.site.siteId, state.site.trackerListId, 2000);
+      var index = {};
+      items.forEach(function (it) {
+        var f = it.fields || {};
+        index[(f.Title || "") + "|" + (f.Division || "")] = it.id;
+      });
+      var updated = 0, created = 0;
+      for (var i = 0; i < picked.length; i++) {
+        var c = picked[i];
+        setStatus("work", "Applying " + (i + 1) + "/" + picked.length + ": " + c.bill);
+        var fields = {
+          EstimatedCost: c.costRaw || (c.cost === null ? "" : String(c.cost)),
+          ImpactSeverity: c.severity,
+          FiscalYear: c.fy,
+          ImpactNotes: (c.evidence ? c.evidence + " " : "") +
+            ("[harvested from " + (c.source || "Teams") + (c.author ? ", " + c.author : "") + "]"),
+        };
+        var id = index[c.bill + "|" + c.division];
+        if (id) {
+          await GraphData.updateListItemFields(token, state.site.siteId, state.site.trackerListId, id, fields);
+          updated++;
+        } else {
+          fields.Title = c.bill;
+          fields.Division = c.division;
+          fields.Status = "Commented";
+          await GraphData.addListItem(token, state.site.siteId, state.site.trackerListId, fields);
+          created++;
+        }
+      }
+      setStatus("info", "Applied: " + updated + " tracker row(s) updated, " + created + " created. Reloading rollup…");
+      harvestCandidates = [];
+      renderHarvest();
+      await loadFiscal();
+    } catch (e) {
+      setStatus("error", "Apply failed: " + friendly(e));
+    } finally {
+      byId("harvestApply").disabled = false;
+    }
+  }
+
 
   /** Read the BillTracker, ensure the fiscal columns exist (upgrade path
    *  for lists created before this feature), and render running totals
