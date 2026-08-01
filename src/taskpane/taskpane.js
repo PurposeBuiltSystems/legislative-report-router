@@ -1858,6 +1858,7 @@
           EstimatedCost: c.costRaw || (c.cost === null ? "" : String(c.cost)),
           ImpactSeverity: c.severity,
           FiscalYear: c.fy,
+          CostValue: c.cost === null ? null : c.cost,
           ImpactNotes: (c.evidence ? c.evidence + " " : "") +
             ("[harvested from " + (c.source || "Teams") + (c.author ? ", " + c.author : "") + "]"),
         };
@@ -1905,10 +1906,25 @@
       var raw = await GraphData.listItems(token, state.site.siteId, state.site.trackerListId, 2000);
       fiscalRows = raw.map(function (it) {
         var f = it.fields || {};
-        return { fy: f.FiscalYear || "(no FY)", division: f.Division || "", bill: f.Title || "",
+        return { id: it.id, fy: f.FiscalYear || "(no FY)", division: f.Division || "", bill: f.Title || "",
           severity: f.ImpactSeverity || "Unknown", cost: f.EstimatedCost, notes: f.ImpactNotes || "",
-          status: f.Status || "" };
+          status: f.Status || "", costValue: f.CostValue };
       });
+      // Backfill the numeric twin so Power BI can sum what humans typed as
+      // text. Best effort, capped — rows without list-edit rights just skip.
+      var backfilled = 0;
+      for (var b = 0; b < fiscalRows.length && backfilled < 200; b++) {
+        var row = fiscalRows[b];
+        var parsed = LrrFiscal.parseCost(row.cost);
+        if (parsed === null || row.costValue === parsed) { continue; }
+        try {
+          await GraphData.updateListItemFields(token, state.site.siteId, state.site.trackerListId,
+            row.id, { CostValue: parsed });
+          row.costValue = parsed;
+          backfilled++;
+        } catch (e) { break; }
+      }
+      if (backfilled) { logLine("CostValue backfilled on " + backfilled + " tracker row(s) (Power BI numeric column)."); }
       renderFiscal(LrrFiscal.aggregate(fiscalRows));
       byId("fiscalCsv").hidden = !fiscalRows.length;
       setStatus("info", fiscalRows.length + " tracker rows · " +

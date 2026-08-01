@@ -19,6 +19,7 @@
       { name: "ImpactSeverity", choice: { displayAs: "dropDownMenu",
         choices: ["Unknown", "None", "Low", "Moderate", "High", "Critical"] } },
       text("ImpactNotes"),
+      { name: "CostValue", number: {} }, // numeric twin of EstimatedCost — Power BI sums this; humans keep the text field
     ];
   }
 

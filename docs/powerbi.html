@@ -1,0 +1,91 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Power BI dashboard recipe — Legislative Report Router</title><style>
+body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 3rem auto; max-width: 46rem;
+  padding: 0 1rem; color: #242424; line-height: 1.6; }
+h1, h2, h3 { color: #0f6cbd; } h1 { font-size: 1.6em; } h2 { margin-top: 2rem; }
+table { border-collapse: collapse; width: 100%; font-size: 0.93em; margin: 12px 0; }
+th, td { border: 1px solid #d1d1d1; padding: 6px 9px; text-align: left; vertical-align: top; }
+th { background: #eef4f6; }
+code { background: #f3f2f1; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.92em; }
+pre { background: #f3f2f1; padding: 10px 12px; border-radius: 6px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #0f6cbd; margin: 12px 0; padding: 4px 14px; color: #424242; background: #f8fafc; }
+a { color: #0f6cbd; } .crumb { font-size: 0.9em; }
+@media print { body { margin: 0.5in; } }
+</style></head><body><p class="crumb"><a href="index.html">← Documentation</a></p><h1 id="power-bi-dashboard-recipe">Power BI dashboard recipe</h1>
+<p>The Router keeps everything in SharePoint lists, so Power BI connects<br>natively — no exports, no gateway, no backend. This page is the build<br>recipe for whoever owns Power BI at your agency; the first dashboard is<br>about an hour of work.</p>
+<h2 id="what-you-get">What you get</h2>
+<ul>
+<li><b>Outstanding-response scorecard</b> — which divisions still owe comments per bill, overdue flagged against the due date.</li>
+<li><b>Fiscal totals</b> — estimated cost by fiscal year, stacked by division, sliced by impact severity (the running total behind budget requests).</li>
+<li><b>Responsiveness</b> — average hours from post to "Commented," per division, against your response window.</li>
+<li><b>Session burn-down</b> — bills published vs. fully commented over time.</li>
+</ul>
+<h2 id="prerequisites">Prerequisites</h2>
+<ul>
+<li>Power BI Desktop (free) to build; a Pro license (typically included in government M365 G-SKUs) to publish and share. Available in GCC.</li>
+<li>Read access to the Router's SharePoint site and lists.</li>
+<li>The add-in maintains a <b><code>CostValue</code></b> number column on the BillTracker — the numeric twin of the human-typed <code>EstimatedCost</code> text ("$1.2M", "(50,000) savings"). Harvest writes it automatically; **Load fiscal rollup** backfills it for hand-typed rows. Run one rollup load before your first refresh so the column is populated.</li>
+</ul>
+<h2 id="connect-10-minutes">Connect (10 minutes)</h2>
+<ol start="1">
+<li>Power BI Desktop → <b>Get Data → SharePoint Online List</b> → your site URL (e.g. <code>https://tenant.sharepoint.com/sites/Legislative</code>) → <b>2.0</b> implementation.</li>
+<li>Select three lists: your <b>bill tracker</b> (default <code>BillTracker</code>), <b>audit</b> (<code>LegislativeAudit</code>), and <b>routing</b> (<code>LegislativeRoutingMatrix</code>).</li>
+<li>In Power Query, keep these columns and remove the rest:</li>
+</ol>
+<ul>
+<li>BillTracker: <code>Title</code> (bill), <code>Division</code>, <code>Status</code>, <code>DueDate</code>, <code>FiscalYear</code>, <code>EstimatedCost</code>, <code>CostValue</code>, <code>ImpactSeverity</code>, <code>Created</code>, <code>Modified</code></li>
+<li>LegislativeAudit: <code>Title</code> (bill), <code>Status</code>, <code>Divisions</code>, <code>Created</code>, <code>PublishedBy</code>, <code>SourceSubject</code></li>
+<li>LegislativeRoutingMatrix: <code>Title</code> (code), <code>DivisionName</code>, <code>Emails</code></li>
+</ul>
+<ol start="4">
+<li>Set types: <code>DueDate</code>/<code>Created</code>/<code>Modified</code> → Date/Time, <code>CostValue</code> → Decimal.</li>
+</ol>
+<h3 id="fallback-cost-parser-only-for-rows-costvalue-hasn-t-reached">Fallback cost parser (only for rows CostValue hasn't reached)</h3>
+<p>Add a custom column to BillTracker if you see blank <code>CostValue</code> on rows<br>with text costs:</p>
+<pre><code>
+= let t = Text.Lower(Text.Trim([EstimatedCost] ?? &quot;&quot;)),
+      neg = Text.StartsWith(t, &quot;(&quot;) or Text.StartsWith(t, &quot;-&quot;),
+      clean = Text.Select(t, {&quot;0&quot;..&quot;9&quot;, &quot;.&quot;, &quot;k&quot;, &quot;m&quot;, &quot;b&quot;}),
+      num = try Number.From(Text.Select(clean, {&quot;0&quot;..&quot;9&quot;, &quot;.&quot;})) otherwise null,
+      mult = if Text.Contains(clean, &quot;b&quot;) then 1000000000
+             else if Text.Contains(clean, &quot;m&quot;) then 1000000
+             else if Text.Contains(clean, &quot;k&quot;) then 1000 else 1
+  in if num = null then null else (if neg then -1 else 1) * num * mult
+</code></pre>
+<h2 id="model-5-minutes">Model (5 minutes)</h2>
+<ul>
+<li>Relate <code>BillTracker[Division]</code> → <code>LegislativeRoutingMatrix[Title]</code> (many-to-one) so visuals can show full division names.</li>
+<li>Relate <code>BillTracker[Title]</code> → <code>LegislativeAudit[Title]</code> (many-to-many is fine here; the audit adds publish timestamps and who published).</li>
+</ul>
+<h2 id="measures-copy-paste-dax">Measures (copy-paste DAX)</h2>
+<pre><code>
+Total Estimated Cost = SUM ( BillTracker[CostValue] )
+
+Outstanding = CALCULATE ( COUNTROWS ( BillTracker ),
+    BillTracker[Status] IN { &quot;Pending review&quot;, &quot;In review&quot; } )
+
+Overdue = CALCULATE ( COUNTROWS ( BillTracker ),
+    BillTracker[Status] IN { &quot;Pending review&quot;, &quot;In review&quot; },
+    BillTracker[DueDate] &lt; NOW () )
+
+Avg Response Hours = AVERAGEX (
+    FILTER ( BillTracker, BillTracker[Status] = &quot;Commented&quot; ),
+    DATEDIFF ( BillTracker[Created], BillTracker[Modified], HOUR ) )
+
+Awaiting Estimates = CALCULATE ( COUNTROWS ( BillTracker ),
+    ISBLANK ( BillTracker[CostValue] ),
+    NOT BillTracker[Status] IN { &quot;No comment needed&quot; } )
+</code></pre>
+<p><code>Avg Response Hours</code> uses row Created→Modified as a proxy for<br>post-to-comment time; it reads slightly high if rows are edited after<br>commenting, which is acceptable for a trend line.</p>
+<h2 id="suggested-pages">Suggested pages</h2>
+<ol start="1">
+<li><b>Today</b> — cards: Outstanding, Overdue (red), Total Estimated Cost for the current SFY; table of overdue rows (bill, division, due date).</li>
+<li><b>Fiscal</b> — stacked column: Total Estimated Cost by <code>FiscalYear</code> and <code>Division</code>; matrix: FiscalYear × ImpactSeverity with Awaiting Estimates alongside so "TBD" rows stay visible, never silently zero.</li>
+<li><b>Divisions</b> — bar: Avg Response Hours by division vs. a constant line at your response window (48h); Outstanding by division.</li>
+<li><b>Session</b> — line: cumulative bills published (audit Created) vs. cumulative fully-commented over time.</li>
+</ol>
+<h2 id="publish">Publish</h2>
+<p>Publish to your workspace → schedule refresh (SharePoint credentials =<br>your org account; daily is plenty, hourly during session) → in the<br>legislative Teams channel, <b>+ Add a tab → Power BI</b> and pick the<br>report. Divisions then see the scorecard right next to the BillTracker<br>tab where they mark their status.</p>
+<blockquote>Privacy note: the dashboard reads the same lists your team already</blockquote>
+<blockquote>has access to, under the viewer's own permissions. Nothing new is</blockquote>
+<blockquote>collected and nothing leaves your tenant.</blockquote></body></html>
