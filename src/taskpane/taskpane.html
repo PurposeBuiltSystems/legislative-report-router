@@ -306,6 +306,14 @@
 
   <!-- Screen 5: Audit -->
   <section id="screen-audit" class="screen" hidden>
+    <h3 class="wiz-h">💰 Fiscal impact — running totals for budget requests</h3>
+    <p class="hint">Divisions report estimated costs and impact severity on the BillTracker rows (the Teams Lists tab is the entry form). This rolls them up per fiscal year.</p>
+    <div class="actions-row">
+      <button id="fiscalLoad" class="primary">Load fiscal rollup</button>
+      <button id="fiscalCsv" hidden>Export CSV</button>
+    </div>
+    <div id="fiscalView"></div>
+    <h3 class="wiz-h">📜 Publish history</h3>
     <button id="refreshAudit">Refresh audit history</button>
     <div id="auditListView"></div>
   </section>
@@ -316,14 +324,15 @@
   <script src="../routing.js?v=21"></script>
   <script src="../teams.js?v=21"></script>
   <script src="../docx.js?v=21"></script>
-  <script src="../graph.js?v=21"></script>
+  <script src="../graph.js?v=23"></script>
   <script src="../presets.js?v=21"></script>
-  <script src="../provision.js?v=21"></script>
+  <script src="../provision.js?v=23"></script>
   <script src="../contacts.js?v=21"></script>
   <script src="../reportgen.js?v=21"></script>
   <script src="../chapters.js?v=21"></script>
   <script src="../feed.js?v=21"></script>
   <script src="../deadline.js?v=22"></script>
-  <script src="taskpane.js?v=22"></script>
+  <script src="../fiscal.js?v=23"></script>
+  <script src="taskpane.js?v=23"></script>
 </body>
 </html>

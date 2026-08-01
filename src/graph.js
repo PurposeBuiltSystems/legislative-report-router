@@ -114,6 +114,17 @@
     return out;
   }
 
+  /** Add one column to an existing list; 409/"already exists" = fine. */
+  async function addListColumn(token, siteId, listId, columnDef) {
+    try {
+      await graphJson(token, "POST", "/sites/" + siteId + "/lists/" + listId + "/columns", columnDef);
+      return true;
+    } catch (e) {
+      if (/already ?exists|409|nameAlreadyExists/i.test(String(e && e.message))) { return false; }
+      throw e;
+    }
+  }
+
   async function createList(token, siteId, displayName, definition) {
     return graphJson(token, "POST", "/sites/" + siteId + "/lists", {
       displayName: displayName,
@@ -249,6 +260,7 @@
     findList: findList,
     listItems: listItems,
     createList: createList,
+    addListColumn: addListColumn,
     addListItem: addListItem,
     updateListItemFields: updateListItemFields,
     deleteListItem: deleteListItem,

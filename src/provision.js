@@ -10,6 +10,18 @@
 
   function text(name) { return { name: name, text: {} }; }
 
+  /** Fiscal-impact columns divisions fill in on tracker rows. Shipped with
+   *  new lists AND addable to existing ones (ensure-columns upgrade path). */
+  function fiscalColumns() {
+    return [
+      text("FiscalYear"),
+      { name: "EstimatedCost", text: {} }, // text, not number: "1.2M", "(50,000) savings", "TBD" all valid
+      { name: "ImpactSeverity", choice: { displayAs: "dropDownMenu",
+        choices: ["Unknown", "None", "Low", "Moderate", "High", "Critical"] } },
+      text("ImpactNotes"),
+    ];
+  }
+
   /** Graph list definitions keyed by role. displayName comes from Settings. */
   function listDefinitions() {
     return {
@@ -44,7 +56,7 @@
             choices: ["Pending review", "In review", "Commented", "No comment needed"] } },
           { name: "DueDate", dateTime: {} },
           text("BillLink"), text("Brief"), text("ReportKey"),
-        ],
+        ].concat(fiscalColumns()),
       },
     };
   }
@@ -64,7 +76,8 @@
     };
   }
 
-  var api = { listDefinitions: listDefinitions, sampleRoutingRule: sampleRoutingRule };
+  var api = { listDefinitions: listDefinitions,
+    fiscalColumns: fiscalColumns, sampleRoutingRule: sampleRoutingRule };
   if (typeof module !== "undefined" && module.exports) { module.exports = api; }
   else { root.LrrProvision = api; }
 })(typeof self !== "undefined" ? self : this);

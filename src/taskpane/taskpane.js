@@ -267,6 +267,8 @@
     byId("publishGo").addEventListener("click", function () { publish(false); });
     byId("retryFailed").addEventListener("click", function () { publish(true); });
     byId("refreshAudit").addEventListener("click", refreshAudit);
+    byId("fiscalLoad").addEventListener("click", loadFiscal);
+    byId("fiscalCsv").addEventListener("click", exportFiscalCsv);
     byId("loadFilings").addEventListener("click", loadFilings);
     byId("routeFilings").addEventListener("click", routeFilings);
     SETTING_KEYS.forEach(function (k) {
@@ -1689,6 +1691,96 @@
     return !!state._auditCache[key];
   }
 
+  var fiscalRows = []; // last-loaded tracker rows, for the CSV export
+
+  /** Read the BillTracker, ensure the fiscal columns exist (upgrade path
+   *  for lists created before this feature), and render running totals
+   *  per FY for budget requests. */
+  async function loadFiscal() {
+    if (!state.site || !state.site.trackerListId) {
+      setStatus("error", "Connect a Bill tracker list in Settings first."); return;
+    }
+    byId("fiscalLoad").disabled = true;
+    try {
+      var token = await GraphData.getToken();
+      // upgrade path: add fiscal columns to pre-existing tracker lists
+      var cols = LrrProvision.fiscalColumns();
+      for (var c = 0; c < cols.length; c++) {
+        try { await GraphData.addListColumn(token, state.site.siteId, state.site.trackerListId, cols[c]); }
+        catch (e) { /* no permission to alter list = still able to read/rollup */ }
+      }
+      setStatus("work", "Reading the bill tracker…");
+      var raw = await GraphData.listItems(token, state.site.siteId, state.site.trackerListId, 2000);
+      fiscalRows = raw.map(function (it) {
+        var f = it.fields || {};
+        return { fy: f.FiscalYear || "(no FY)", division: f.Division || "", bill: f.Title || "",
+          severity: f.ImpactSeverity || "Unknown", cost: f.EstimatedCost, notes: f.ImpactNotes || "",
+          status: f.Status || "" };
+      });
+      renderFiscal(LrrFiscal.aggregate(fiscalRows));
+      byId("fiscalCsv").hidden = !fiscalRows.length;
+      setStatus("info", fiscalRows.length + " tracker rows · " +
+        fiscalRows.filter(function (r) { return LrrFiscal.parseCost(r.cost) !== null; }).length +
+        " with cost estimates. Divisions enter costs on the tracker list itself (Teams Lists tab).");
+    } catch (e) {
+      setStatus("error", "Fiscal rollup failed: " + friendly(e));
+    } finally {
+      byId("fiscalLoad").disabled = false;
+    }
+  }
+
+  function renderFiscal(fys) {
+    var host = byId("fiscalView");
+    host.innerHTML = "";
+    if (!fys.length) {
+      host.innerHTML = '<p class="hint">No tracker rows yet — publish some bills first, then divisions add costs on the tracker list.</p>';
+      return;
+    }
+    fys.forEach(function (f) {
+      var box = document.createElement("div");
+      box.className = "preview-post";
+      var head = document.createElement("p");
+      head.innerHTML = "<strong>" + esc(f.fy) + "</strong> — running total <strong>" +
+        esc(LrrFiscal.fmtMoney(f.total)) + "</strong> · " + f.billCount + " bill(s), " +
+        f.estimated + " estimated, " + f.unestimated + " awaiting estimates";
+      box.appendChild(head);
+      var divs = Object.keys(f.byDivision).sort(function (a, b) { return f.byDivision[b] - f.byDivision[a]; });
+      if (divs.length) {
+        var dl = document.createElement("p");
+        dl.className = "hint";
+        dl.textContent = "By division: " + divs.map(function (d) {
+          return d + " " + LrrFiscal.fmtMoney(f.byDivision[d]);
+        }).join(" · ");
+        box.appendChild(dl);
+      }
+      var sevs = Object.keys(f.bySeverity).sort();
+      if (sevs.length) {
+        var sl = document.createElement("p");
+        sl.className = "hint";
+        sl.textContent = "Severity: " + sevs.map(function (sv) {
+          return sv + " ×" + f.bySeverity[sv];
+        }).join(" · ");
+        box.appendChild(sl);
+      }
+      host.appendChild(box);
+    });
+  }
+
+  function exportFiscalCsv() {
+    if (!fiscalRows.length) { return; }
+    var csv = LrrFiscal.rollupCsv(fiscalRows);
+    try {
+      var blob = new Blob([csv], { type: "text/csv" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "fiscal-rollup-" + new Date().toISOString().slice(0, 10) + ".csv";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setStatus("info", "Fiscal rollup CSV downloaded — detail rows plus a TOTAL line per FY (pivots cleanly).");
+    } catch (e) {
+      setStatus("error", "Download blocked in this client — open the tracker list in SharePoint and export from there.");
+    }
+  }
+
   async function writeAudit(token, fields) {
     if (!state.site) { return; }
     try { await GraphData.addListItem(token, state.site.siteId, state.site.auditListId, fields); }
@@ -1749,6 +1841,8 @@
                       BillLink: ((it.sourceLinks || [])[0] || {}).href || "",
                       Brief: String(it.title || it.brief || "").slice(0, 250),
                       ReportKey: state.reportKey,
+                      FiscalYear: LrrFiscal.defaultFy(new Date()),
+                      ImpactSeverity: "Unknown",
                     });
                   } catch (e2) { logLine("Tracker row for " + g.rules[tI].divisionCode + " failed: " + e2.message, "warn"); }
                 }
