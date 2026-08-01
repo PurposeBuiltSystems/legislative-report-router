@@ -49,6 +49,19 @@
     return d;
   }
 
+  /**
+   * DOT convention (confirmed 2026-07-31): comments are due END OF BUSINESS
+   * — the business-hours math picks WHICH day, then the clock snaps to the
+   * due time (default 5:00 PM). Friday 3 PM + 48 = Tuesday 5:00 PM.
+   * Pass a falsy dueTime to keep same-clock-time semantics.
+   */
+  function deadlineFor(start, hours, holidays, dueTime) {
+    var d = addBusinessHours(start, hours, holidays);
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(dueTime || "").trim());
+    if (m) { d.setHours(Number(m[1]), Number(m[2]), 0, 0); }
+    return d;
+  }
+
   var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -63,6 +76,7 @@
   }
 
   var api = {
+    deadlineFor: deadlineFor,
     parseHolidays: parseHolidays,
     isBusinessDay: isBusinessDay,
     addBusinessHours: addBusinessHours,

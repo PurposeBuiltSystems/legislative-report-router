@@ -31,6 +31,17 @@ check("remainder hours: Fri 10pm + 4 rolls past weekend",
 check("remainder within a business day: Wed 10am + 4 = Wed 2pm",
   iso(DL.addBusinessHours(new Date(2026, 6, 29, 10, 0, 0), 4)), "2026-7-29 14:00");
 
+/* ------------------------------------------- end-of-business (DOT default) */
+
+check("EOB: Fri 3pm + 48 = Tue 5:00 PM", iso(DL.deadlineFor(fri3pm, 48, {}, "17:00")), "2026-8-4 17:00");
+check("EOB: Wed 10am + 48 = Fri 5:00 PM",
+  iso(DL.deadlineFor(new Date(2026, 6, 29, 10, 0, 0), 48, {}, "17:00")), "2026-7-31 17:00");
+check("EOB + holiday: Fri + 48 w/ Monday holiday = Wed 5:00 PM",
+  iso(DL.deadlineFor(fri3pm, 48, { "2026-08-03": true }, "17:00")), "2026-8-5 17:00");
+check("EOB label", DL.formatDeadline(DL.deadlineFor(fri3pm, 48, {}, "17:00")), "Tue, Aug 4, 5:00 PM");
+check("blank dueTime keeps same-clock-time", iso(DL.deadlineFor(fri3pm, 48, {}, "")), "2026-8-4 15:00");
+check("custom due time honored", iso(DL.deadlineFor(fri3pm, 48, {}, "16:30")).slice(0, 9), "2026-8-4 ");
+
 check("parseHolidays mixed separators",
   DL.parseHolidays("2026-09-07, 2026-11-26  2026-11-27; junk 2026-1-1"),
   { "2026-09-07": true, "2026-11-26": true, "2026-11-27": true });

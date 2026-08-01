@@ -176,7 +176,7 @@
     if (screen === "publish") { renderPublishSummary(); }
   }
 
-  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "responseHours", "holidays", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distList", "autoDaily", "autoDailyTime"];
+  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "responseHours", "dueTime", "holidays", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distList", "autoDaily", "autoDailyTime"];
   var PROFILE_KEYS = SETTING_KEYS.concat([]);
 
   Office.onReady(function () {
@@ -1605,7 +1605,7 @@
   function currentDeadline() {
     var hours = Math.max(1, Math.min(240, Number(byId("responseHours").value) || 48));
     var holidays = LrrDeadline.parseHolidays(byId("holidays").value);
-    var d = LrrDeadline.addBusinessHours(new Date(), hours, holidays);
+    var d = LrrDeadline.deadlineFor(new Date(), hours, holidays, byId("dueTime").value || "17:00");
     return { date: d, label: LrrDeadline.formatDeadline(d) };
   }
 
