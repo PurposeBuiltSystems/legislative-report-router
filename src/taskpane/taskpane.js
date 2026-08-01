@@ -176,7 +176,7 @@
     if (screen === "publish") { renderPublishSummary(); }
   }
 
-  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distList", "autoDaily", "autoDailyTime"];
+  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "responseHours", "holidays", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distList", "autoDaily", "autoDailyTime"];
   var PROFILE_KEYS = SETTING_KEYS.concat([]);
 
   Office.onReady(function () {
@@ -1356,6 +1356,7 @@
       var rep = LrrReportGen.buildDailyReport(items, {
         sessionName: st.sessionName || "",
         commentWindow: byId("commentWindow").value,
+        deadlineLabel: currentDeadline().label,
         preparedBy: ((Office.context.mailbox.userProfile || {}).displayName) || "",
       });
       await GraphData.createDraftMessage(token, recips, rep.subject, rep.html);
@@ -1599,10 +1600,19 @@
     return state.items.filter(function (i) { return i.routingStatus !== "excluded"; });
   }
 
+  /** The comment deadline for anything published right now: settings-driven
+   *  business-hours math (48 by default), weekend- and holiday-aware. */
+  function currentDeadline() {
+    var hours = Math.max(1, Math.min(240, Number(byId("responseHours").value) || 48));
+    var holidays = LrrDeadline.parseHolidays(byId("holidays").value);
+    var d = LrrDeadline.addBusinessHours(new Date(), hours, holidays);
+    return { date: d, label: LrrDeadline.formatDeadline(d) };
+  }
+
   function renderPreview() {
     var host = byId("previewList");
     host.innerHTML = "";
-    var opts = { template: { commentWindow: byId("commentWindow").value } };
+    var opts = { template: { commentWindow: byId("commentWindow").value }, deadlineLabel: currentDeadline().label };
     included().forEach(function (it) {
       channelGroups(it).forEach(function (g) {
         var payload = LrrTeams.buildChannelMessage(it, g.rules, opts);
@@ -1620,7 +1630,7 @@
     });
     LrrRouting.groupByRule(included()).forEach(function (g) {
       if (!(g.rule.emails || []).length) { return; }
-      var mail = LrrTeams.buildDivisionEmail(g.rule, g.items, { template: { commentWindow: byId("commentWindow").value } });
+      var mail = LrrTeams.buildDivisionEmail(g.rule, g.items, { template: { commentWindow: byId("commentWindow").value }, deadlineLabel: currentDeadline().label });
       var box = document.createElement("div");
       box.className = "preview-post email";
       box.innerHTML = '<p class="hint">✉ ' + esc(mail.subject) + " → " + esc(mail.to.join(", ")) + "</p>" +
@@ -1697,7 +1707,7 @@
     try {
       var token = await GraphData.getToken();
       var me = Office.context.mailbox.userProfile;
-      var opts = { template: { commentWindow: byId("commentWindow").value } };
+      var opts = { template: { commentWindow: byId("commentWindow").value }, deadlineLabel: currentDeadline().label };
 
       if (doTeams) {
         for (var i = 0; i < included().length; i++) {
@@ -1728,7 +1738,7 @@
               // Bill tracker: one row per bill × division so the Teams Lists
               // tab shows per-division status and "who's still waiting".
               if (state.site.trackerListId) {
-                var due = LrrFeed.addBusinessDays(new Date(), 2);
+                var due = currentDeadline().date;
                 for (var tI = 0; tI < g.rules.length; tI++) {
                   try {
                     await GraphData.addListItem(token, state.site.siteId, state.site.trackerListId, {
@@ -1793,6 +1803,7 @@
             var rep = LrrReportGen.buildDailyReport(included(), {
               sessionName: st2.sessionName || "",
               commentWindow: byId("commentWindow").value,
+        deadlineLabel: currentDeadline().label,
               preparedBy: (me && me.displayName) || "",
             });
             await GraphData.createDraftMessage(token, recips, rep.subject, rep.html);

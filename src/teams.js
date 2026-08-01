@@ -80,16 +80,24 @@
       (m.atHtml ? m.atHtml + "<br><br>" : "") +
       "<strong>" + esc(item.billNumber) + "</strong>" +
       (item.title && item.title !== item.brief.split("\n")[0] ? " — " + esc(item.title) : "") +
+      (opts.deadlineLabel ? "<br>⏰ <strong>Comments due by " + esc(opts.deadlineLabel) + "</strong>" : "") +
       "<br><br>Distributed To: " + esc((item.distributedTo || []).join(", ") || "—") +
       "<br>Comment Requested From: " + esc((item.commentRequestedFrom || []).join(", ") || "—") +
       "<br><br><strong>Brief:</strong><br>" + nl2br(item.brief || "(none)") +
       (t.commentWindow ? "<br><br>" + esc(t.commentWindow) : "") +
       linkHtml;
 
-    return {
+    var payload = {
       body: { contentType: "html", content: content },
       mentions: m.mentions,
     };
+    if (opts.deadlineLabel) {
+      // The subject shows in the channel list view — the deadline is visible
+      // before the post is even opened; importance = the red ! marker.
+      payload.subject = item.billNumber + " — comments due " + opts.deadlineLabel;
+      payload.importance = "high";
+    }
+    return payload;
   }
 
   /** Consolidated targeted-email HTML for one division rule and its items. */
@@ -104,10 +112,16 @@
     }).join("");
     return {
       subject: (opts.subjectPrefix || "Legislative bills for review") + " — " +
-        (rule.divisionName || rule.divisionCode) + " (" + (items || []).length + ")",
+        (rule.divisionName || rule.divisionCode) + " (" + (items || []).length + ")" +
+        (opts.deadlineLabel ? " — comments due " + opts.deadlineLabel : ""),
       html: '<div style="font-family:Segoe UI,Arial,sans-serif;max-width:640px">' +
         "<p>The following bills from today's report are assigned to <strong>" +
-        esc(rule.divisionName || rule.divisionCode) + "</strong>:</p>" + rows +
+        esc(rule.divisionName || rule.divisionCode) + "</strong>:</p>" +
+        (opts.deadlineLabel
+          ? '<p style="background:#fde7e9;border-radius:6px;padding:8px 12px">⏰ <strong>Comments due by ' +
+            esc(opts.deadlineLabel) + "</strong></p>"
+          : "") +
+        rows +
         (t.commentWindow ? "<p><strong>" + esc(t.commentWindow) + "</strong></p>" : "") +
         "</div>",
       to: rule.emails || [],

@@ -64,7 +64,9 @@
     textLines.push("Daily Bill Report");
     if (opts.sessionName) { textLines.push(opts.sessionName); }
     textLines.push("");
-    if (opts.commentWindow) { textLines.push(opts.commentWindow); textLines.push(""); }
+    if (opts.deadlineLabel) { textLines.push("Comments due by " + opts.deadlineLabel); }
+    if (opts.commentWindow) { textLines.push(opts.commentWindow); }
+    if (opts.deadlineLabel || opts.commentWindow) { textLines.push(""); }
     textLines.push("Bill Number:");
     textLines.push("Bill Distributed To:");
     textLines.push("Bill Comment Requested From:");
@@ -78,6 +80,10 @@
     h.push('<p style="margin:0 0 4px;color:#616161">' + esc(
       date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate())) +
       " · " + included.length + " bill(s)/amendment(s)</p>");
+    if (opts.deadlineLabel) {
+      h.push('<p style="background:#fde7e9;border-radius:6px;padding:8px 12px">⏰ <strong>Comments due by ' +
+        esc(opts.deadlineLabel) + "</strong></p>");
+    }
     if (opts.commentWindow) {
       h.push('<p style="background:#eff6fc;border-radius:6px;padding:8px 12px">' + esc(opts.commentWindow) + "</p>");
     }
