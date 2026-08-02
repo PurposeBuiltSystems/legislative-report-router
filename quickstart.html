@@ -58,18 +58,63 @@
 
   <h2>Every morning (about 3 clicks)</h2>
   <div class="step"><b>1.</b> Open the pane → <b>New bills</b> tab → <b>Check for new bills</b>.
-     Bills you've already reported are hidden automatically.</div>
+     Bills you've already reported are hidden automatically. <i>Out of session, or want to
+     practise?</i> Raise the <b>Watch window</b> to 400 days — the feed still holds the whole
+     previous session, so you can replay real bills.</div>
   <div class="step"><b>2.</b> Click <b>Add selected bills to today's report</b>. Most bills
      arrive with divisions already suggested — the Review screen highlights, in red, only the
      ones that need your judgment.</div>
   <div class="step"><b>3.</b> Fix anything red (one-click suggestions, or type the division),
      then <b>Publish</b>. That posts each bill to the right Teams channel with the right people
      tagged, emails each division its bills, updates the shared tracker, and puts the finished
-     Daily Bill Report in <b>your Drafts</b> — addressed and ready. Read it, press Send.</div>
+     Daily Bill Report in <b>your Drafts</b> — addressed and ready. Read it, press Send.
+     Every post, email, and report carries the <b>comment deadline</b> (see below), so nobody
+     has to ask how long they have.</div>
 
   <div class="note"><b>Teach it as you go:</b> when a bill lands with no division, type a keyword
      (like "CDL"), pick the division, and click <b>Teach</b>. The add-in remembers forever —
      next week that kind of bill routes itself.</div>
+
+  <h2>Comment deadlines</h2>
+  <p>Divisions get a response window — 48 business hours by default, ending at 5:00 PM.
+     The Router does the calendar math for you: a Friday afternoon publish is due
+     <b>Tuesday at 5:00 PM</b>, never over the weekend.</p>
+  <div class="step">Set it in <b>Setup</b>: <b>Response window (business hours)</b> and
+     <b>Due time</b>. Paste your state holidays into <b>Skip holidays</b>
+     (as <code>2026-09-07, 2026-11-26</code>) and those are skipped too — leave it blank and
+     only weekends are.</div>
+  <div class="step">The deadline appears in the Teams post's <b>subject line</b> (visible in
+     the channel list before anyone opens it), in the post body, marked
+     <b>high importance</b> (the red <b>!</b>), in the division emails, in the daily report,
+     and as the <b>Due date</b> on every tracker row.</div>
+
+  <h2>Costs and severity: the fiscal rollup</h2>
+  <p>Divisions report what a bill would cost them. The Router collects those numbers and keeps
+     a <b>running total per fiscal year</b> — the number you need at budget time.</p>
+  <div class="step"><b>How divisions report:</b> whichever way they already do. They can fill
+     in <b>Estimated cost</b> and <b>Impact severity</b> on their BillTracker row, or just
+     reply in the Teams thread ("minimal impact, about $40,000 in FY27") or attach a
+     spreadsheet.</div>
+  <div class="step"><b>You collect it:</b> <b>History</b> tab → <b>Harvest from Teams
+     replies</b>. The add-in reads the reply threads and any attached Word/Excel files, pulls
+     out the dollar figures with the sentence they came from, and shows you a reviewable list.
+     Edit anything that looks off, tick what's right, then <b>Apply checked to tracker</b>.
+     Nothing is written until you apply it.</div>
+  <div class="step"><b>You report it:</b> <b>Load fiscal rollup</b> shows totals per fiscal
+     year — by division, by severity, and how many bills are still awaiting an estimate (a
+     "TBD" is never counted as zero). <b>Export CSV</b> gives you detail rows plus a TOTAL
+     line per year, ready to paste into a budget request.</div>
+  <div class="note"><b>Want charts instead?</b> All of this lives in ordinary SharePoint lists,
+     so Power BI can read it directly — outstanding-response scorecard, spend by fiscal year,
+     average response time per division. The build recipe is in
+     <a href="docs/powerbi.html">docs/powerbi</a>; hand it to whoever runs Power BI at your
+     agency.</div>
+
+  <h2>Tell your divisions what's expected</h2>
+  <div class="step">Send your reviewers the one-page
+     <a href="reviewers.html">guide for division reviewers</a> — what the Teams post means,
+     how to answer, and how to mark themselves done. Paste the link into your legislative
+     channel description so it's always there.</div>
 
   <h2>Things to know</h2>
   <ul>

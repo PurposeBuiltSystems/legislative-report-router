@@ -10,7 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
-  <link rel="stylesheet" href="taskpane.css?v=25" />
+  <link rel="stylesheet" href="taskpane.css?v=26" />
 </head>
 <body>
   <header class="app-head">
@@ -47,6 +47,10 @@
       </select>
     </label>
 
+    <p class="hint" style="margin:4px 0 8px">New here?
+      <a href="https://purposebuiltsystems.github.io/legislative-report-router/quickstart.html" target="_blank" rel="noopener">Coordinator quick start</a> ·
+      <a href="https://purposebuiltsystems.github.io/legislative-report-router/reviewers.html" target="_blank" rel="noopener">Guide for your division reviewers</a>
+    </p>
     <div class="actions-row">
       <button id="parse" class="primary">Read this report</button>
       <button id="loadDraft">Load Saved Draft</button>
@@ -85,14 +89,14 @@
         <p class="hint">The add-in keeps three lists: your <b>division routes</b> (channels, tags, and
         each division's <b>contact emails</b>), the <b>audit trail</b>, and the <b>bill tracker</b>.
         Pick a site your review team can access — or, if it's just you, use your OneDrive.</p>
-        <label><b>Recommended:</b> use your legislative Team's own site \u2014 everyone on the team automatically has access
-          <select id="teamSitePick"><option value="">Pick your Team\u2026</option></select>
+        <label><b>Recommended:</b> use your legislative Team's own site — everyone on the team automatically has access
+          <select id="teamSitePick"><option value="">Pick your Team…</option></select>
         </label>
         <label>Or another SharePoint site
           <select id="siteResults"></select>
         </label>
         <div class="row2">
-          <button id="useOneDrive">Just me \u2014 use my OneDrive</button>
+          <button id="useOneDrive">Just me — use my OneDrive</button>
           <button id="siteSearchGo">Refresh list</button>
         </div>
         <label>Or search / filter
@@ -266,7 +270,7 @@
     <label class="modes" style="margin-top:4px"><input id="hideReported" type="checkbox" checked /> Hide bills already included in a past daily report</label>
     <div id="filingsList"></div>
     <div class="actions-row">
-      <button id="routeFilings" hidden>Add selected bills to today\u2019s report →</button>
+      <button id="routeFilings" hidden>Add selected bills to today’s report →</button>
     </div>
   </section>
 
@@ -339,6 +343,6 @@
   <script src="../fiscal.js?v=23"></script>
   <script src="../harvest.js?v=24"></script>
   <script src="../xlsx.js?v=24"></script>
-  <script src="taskpane.js?v=25"></script>
+  <script src="taskpane.js?v=26"></script>
 </body>
 </html>
