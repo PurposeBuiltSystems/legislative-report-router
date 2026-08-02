@@ -14,12 +14,27 @@
 
   /* --------------------------------------------------------------- money */
 
-  var MONEY_RE = /(\$\s?[\d][\d,]*(?:\.\d+)?\s*(?:k|m|b|thousand|million|billion)?|\b[\d][\d,]*(?:\.\d+)?\s*(?:thousand|million|billion)\b|\(\s?\$?[\d][\d,]*(?:\.\d+)?\s*(?:k|m|b|thousand|million|billion)?\s?\))/gi;
+  // Every magnitude suffix ends on a word boundary — otherwise the bare
+  // letters k/m/b swallow the next word's first letter ("$250,000 minimum"
+  // parsed as $250 billion).
+  var SUF = "(?:(?:k|m|b|thousand|million|billion)\\b)?";
+  var MONEY_RE = new RegExp(
+    "(\\$\\s?[\\d][\\d,]*(?:\\.\\d+)?\\s*" + SUF +
+    "|\\b[\\d][\\d,]*(?:\\.\\d+)?\\s*(?:thousand|million|billion)\\b" +
+    "|\\(\\s?\\$?[\\d][\\d,]*(?:\\.\\d+)?\\s*" + SUF + "\\s?\\))", "gi");
+
+  /** Spreadsheet cells carry currency in the number FORMAT, not the text —
+   *  a "$450,000" cell extracts as "450000". So for attachment-sourced text
+   *  we also accept a bare number, but only on a line whose label reads like
+   *  a cost line, which keeps years and row counts out. */
+  var COST_LABEL_RE = /(cost|estimate|impact|total|fiscal|amount|budget|expense|price|fee)/i;
+  var BARE_NUM_RE = /\b([\d][\d,]{2,}(?:\.\d+)?)\b/g;
 
   function normAmount(raw) {
     var s = String(raw).trim();
     var negative = /^\(.*\)$/.test(s);
-    var m = /([\d][\d,]*(?:\.\d+)?)\s*(k|m|b|thousand|million|billion)?/i.exec(s.replace(/[$(),]/g, function (c) { return c === "," ? "," : " "; }));
+    var m = /([\d][\d,]*(?:\.\d+)?)\s*(?:(k|m|b|thousand|million|billion)\b)?/i
+      .exec(s.replace(/[$(),]/g, function (c) { return c === "," ? "," : " "; }));
     if (!m) { return null; }
     var n = Number(m[1].replace(/,/g, ""));
     if (isNaN(n)) { return null; }
@@ -27,10 +42,17 @@
     return (negative ? -1 : 1) * n * mult;
   }
 
-  /** All dollar figures in a text, each with ~60 chars of context. */
-  function findMoney(text) {
+  /**
+   * All dollar figures in a text, each with ~60 chars of context.
+   * opts.allowBare (attachment-sourced text only): also accept unadorned
+   * numbers, but ONLY on a line whose label reads like a cost line —
+   * spreadsheet cells keep their currency in the number FORMAT, so a
+   * "$450,000" cell extracts as the bare text "450000".
+   */
+  function findMoney(text, opts) {
     var s = String(text || "");
     var out = [];
+    var claimed = {};
     var m;
     MONEY_RE.lastIndex = 0;
     while ((m = MONEY_RE.exec(s)) !== null) {
@@ -39,8 +61,31 @@
       var start = Math.max(0, m.index - 60);
       var context = s.slice(start, Math.min(s.length, m.index + m[0].length + 60))
         .replace(/\s+/g, " ").trim();
+      for (var c = m.index; c < m.index + m[0].length; c++) { claimed[c] = true; }
       out.push({ amount: amount, raw: m[0].trim(), context: context, index: m.index });
     }
+    if (!(opts && opts.allowBare)) { return out; }
+
+    var offset = 0;
+    s.split("\n").forEach(function (line) {
+      var lineStart = offset;
+      offset += line.length + 1;
+      if (!COST_LABEL_RE.test(line)) { return; }
+      var b;
+      BARE_NUM_RE.lastIndex = 0;
+      while ((b = BARE_NUM_RE.exec(line)) !== null) {
+        var idx = lineStart + b.index;
+        if (claimed[idx]) { continue; }              // already captured with its $ sign
+        if (/^(19|20)\d\d$/.test(b[1])) { continue; } // a year, not an amount
+        var n = Number(b[1].replace(/,/g, ""));
+        if (isNaN(n) || n < 100) { continue; }
+        out.push({
+          amount: n, raw: b[1],
+          context: line.replace(/\s+/g, " ").trim().slice(0, 140),
+          index: idx,
+        });
+      }
+    });
     return out;
   }
 
@@ -101,7 +146,7 @@
    * src: { bill, division, source (label for evidence), text, author, date }
    */
   function analyzeSource(src) {
-    var money = bestMoney(findMoney(src.text));
+    var money = bestMoney(findMoney(src.text, { allowBare: src.kind === "attachment" }));
     var severity = findSeverity(src.text);
     var fy = findFy(src.text);
     if (!money && !severity) { return null; }
@@ -138,17 +183,27 @@
                (x.cost !== null && x.kind === "attachment" ? 2 : 0) +
                (x.severity && x.severity !== "Unknown" ? 1 : 0);
       };
+      // Carry forward what the weaker source knew — EXCEPT a "None"
+      // severity onto a candidate that carries a real cost. A division that
+      // says "no fiscal impact" and later attaches a $250K estimate has
+      // changed its answer; inheriting "None" would file the cost under a
+      // severity that contradicts it.
+      var keep = function (winner, loser) {
+        if (winner.cost === null && loser.cost !== null) {
+          winner.cost = loser.cost; winner.costRaw = loser.costRaw;
+        }
+        var stale = loser.severity === "None" && winner.cost !== null;
+        if ((!winner.severity || winner.severity === "Unknown") && loser.severity && !stale) {
+          winner.severity = loser.severity;
+        }
+        if (!winner.fy && loser.fy) { winner.fy = loser.fy; }
+      };
       if (strength(c) > strength(prev) ||
           (strength(c) === strength(prev) && String(c.date) > String(prev.date))) {
-        // carry forward anything the weaker one knew that the winner doesn't
-        if (c.cost === null && prev.cost !== null) { c.cost = prev.cost; c.costRaw = prev.costRaw; }
-        if ((!c.severity || c.severity === "Unknown") && prev.severity) { c.severity = prev.severity; }
-        if (!c.fy && prev.fy) { c.fy = prev.fy; }
+        keep(c, prev);
         byKey[k] = c;
       } else {
-        if (prev.cost === null && c.cost !== null) { prev.cost = c.cost; prev.costRaw = c.costRaw; }
-        if ((!prev.severity || prev.severity === "Unknown") && c.severity) { prev.severity = c.severity; }
-        if (!prev.fy && c.fy) { prev.fy = c.fy; }
+        keep(prev, c);
       }
     });
     return Object.keys(byKey).sort().map(function (k) { return byKey[k]; });

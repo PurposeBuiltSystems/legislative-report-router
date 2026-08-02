@@ -81,6 +81,42 @@ check("teams html reply flattens",
   H.htmlToText("<p>Roughly <b>$1.2M</b> annually.</p><p>&mdash; Bob</p>").indexOf("$1.2M annually.") !== -1,
   true);
 
+/* --- regression: suffix word boundary in the harvest scanner --- */
+check("'$250,000 minimum' not billions",
+  H.findMoney("Estimated cost is $250,000 minimum").map(function (h) { return h.amount; }), [250000]);
+check("'$75,000 more in overtime'",
+  H.findMoney("about $75,000 more in overtime").map(function (h) { return h.amount; }), [75000]);
+check("genuine $1.2M still parses",
+  H.findMoney("roughly $1.2M annually").map(function (h) { return h.amount; }), [1200000]);
+
+/* --- regression: spreadsheet cells lose their currency formatting, so bare
+   numbers on cost-labelled lines must be found for attachments only --- */
+var SHEET = "Line item\tAmount\nStaff time\t120000\nTotal estimated cost\t450000\nRows\t12";
+check("bare numbers ignored in prose (no allowBare)", H.findMoney(SHEET).length, 0);
+var bare = H.findMoney(SHEET, { allowBare: true }).map(function (h) { return h.amount; });
+check("cost-labelled bare numbers found", bare.indexOf(450000) !== -1, true);
+check("non-cost line ignored", bare.indexOf(12) !== -1, false);
+check("a year is not an amount",
+  H.findMoney("Total cost impact 2027", { allowBare: true }).length, 0);
+check("attachment source enables bare parsing",
+  H.analyzeSource({ bill: "HF 1", kind: "attachment", text: SHEET }).cost, 450000);
+check("reply source does not", H.analyzeSource({ bill: "HF 1", text: SHEET }), null);
+check("no double-count when the cell keeps its $",
+  H.findMoney("Total estimated cost\t$450,000", { allowBare: true }).length, 1);
+
+/* --- regression: a stale "no fiscal impact" must not label a real cost --- */
+var noImpact = H.analyzeSource({ bill: "HF 9", division: "MVD", date: "1",
+  text: "No fiscal impact expected." });
+var laterEstimate = H.analyzeSource({ bill: "HF 9", division: "MVD", date: "2",
+  kind: "attachment", text: "Total estimated cost\t$250,000" });
+var revised = H.mergeCandidates([noImpact, laterEstimate])[0];
+check("cost wins", revised.cost, 250000);
+check("severity None NOT inherited onto a costed candidate", revised.severity, "Unknown");
+var stillNone = H.mergeCandidates([
+  H.analyzeSource({ bill: "HF 8", division: "X", date: "1", text: "No fiscal impact." }),
+]);
+check("plain 'no impact' reply keeps None", stillNone[0].severity, "None");
+
 if (failures) {
   console.error("\n" + failures + " harvest test(s) FAILED");
   process.exit(1);

@@ -64,6 +64,18 @@ check("csv TOTAL lines per FY",
   lines.filter(function (l) { return l.indexOf(",TOTAL,") !== -1; }).length, 2);
 check("csv SFY2027 total value", lines.some(function (l) { return l === "SFY2027,TOTAL,,,1250000,"; }), true);
 
+/* --- regression: magnitude suffix must end on a word boundary ---
+   "50000 max" once parsed as 50000 x 1e6 because the bare "m" matched the
+   first letter of "max". These feed CostValue and the Power BI totals. */
+check("bare k/m/b must not swallow the next word", F.parseCost("50000 max"), 50000);
+check("'$250,000 minimum'", F.parseCost("$250,000 minimum"), 250000);
+check("'300000 base'", F.parseCost("300000 base"), 300000);
+check("'75,000 more'", F.parseCost("75,000 more"), 75000);
+check("real suffix still works: 1.2M", F.parseCost("1.2M"), 1200000);
+check("real suffix mid-sentence: $1.2M impact", F.parseCost("$1.2M impact"), 1200000);
+check("300k still works", F.parseCost("300k"), 300000);
+check("spelled-out unaffected", F.parseCost("1.5 million total"), 1500000);
+
 if (failures) {
   console.error("\n" + failures + " fiscal test(s) FAILED");
   process.exit(1);

@@ -182,7 +182,10 @@
   Office.onReady(function () {
     var s = settings();
     SETTING_KEYS.forEach(function (k) {
-      if (s[k] != null && s[k] !== "") { byId(k).value = s[k]; }
+      var el = byId(k);
+      if (el && el.type === "checkbox") {
+        el.checked = (s[k] === true || s[k] === "true");
+      } else if (s[k] != null && s[k] !== "") { el.value = s[k]; }
     });
     if (s.cloud) { GraphData.setCloud(s.cloud); }
     if (!s.siteUrl) { byId("settings").setAttribute("open", "open"); }
@@ -275,7 +278,8 @@
     byId("routeFilings").addEventListener("click", routeFilings);
     SETTING_KEYS.forEach(function (k) {
       byId(k).addEventListener("change", function () {
-        var p = {}; p[k] = byId(k).value; saveSettings(p);
+        var el = byId(k);
+        var p = {}; p[k] = el.type === "checkbox" ? el.checked : el.value; saveSettings(p);
         if (k === "cloud") { GraphData.setCloud(byId(k).value); state.site = null; }
         if (k === "siteUrl" || k === "routingList" || k === "auditList" || k === "trackerList") { state.site = null; }
       });
@@ -698,7 +702,7 @@
     byId("tagCreate").disabled = true;
     try {
       setStatus("work", 'Creating tag \u201c' + name + '\u201d\u2026');
-      var token = await GraphData.getToken();
+      var token = await GraphData.getTagWriteToken();
       var tag = await GraphData.createTeamTag(token, teamId, name);
       var sel = byId("rbTag");
       var o = document.createElement("option");
@@ -737,7 +741,12 @@
       var patch = {};
       PROFILE_KEYS.forEach(function (k) { if (p[k] != null) { patch[k] = p[k]; } });
       saveSettings(patch);
-      SETTING_KEYS.forEach(function (k) { if (patch[k] != null) { byId(k).value = patch[k]; } });
+      SETTING_KEYS.forEach(function (k) {
+        if (patch[k] == null) { return; }
+        var el = byId(k);
+        if (el.type === "checkbox") { el.checked = (patch[k] === true || patch[k] === "true"); }
+        else { el.value = patch[k]; }
+      });
       if (patch.cloud) { GraphData.setCloud(patch.cloud); }
       state.site = null;
       setStatus("info", "Profile applied — click \"Connect & load routing rules\" to finish.");
@@ -1702,6 +1711,24 @@
    * list knows each thread), extract candidate costs/severity, and show
    * them for review. NOTHING is written until the coordinator applies.
    */
+  /** Audit "Divisions" text -> tracker division CODES, via the routing
+   *  rules (alias- and suffix-tolerant). Returns [] when nothing resolves. */
+  function resolveDivisionCodes(divisionsText) {
+    var out = [];
+    String(divisionsText || "").split(";").forEach(function (name) {
+      name = name.trim();
+      if (!name) { return; }
+      var matched = [];
+      try { matched = LrrRouting.rulesForDivision(name, state.rules || []) || []; }
+      catch (e) { matched = []; }
+      matched.forEach(function (r) {
+        if (r.divisionCode && out.indexOf(r.divisionCode) === -1) { out.push(r.divisionCode); }
+      });
+      if (!matched.length && out.indexOf(name) === -1) { out.push(name); }
+    });
+    return out;
+  }
+
   async function harvestFiscal() {
     if (!state.site) { setStatus("error", "Connect the SharePoint lists in Settings first."); return; }
     byId("fiscalHarvest").disabled = true;
@@ -1714,16 +1741,22 @@
       audit.forEach(function (it) {
         var f = it.fields || {};
         if (f.Status !== "published" || !f.TeamsMessageId || !f.TeamId) { return; }
+        var codes = resolveDivisionCodes(f.Divisions);
         threads[f.TeamsMessageId] = {
           bill: f.Title, teamId: f.TeamId, channelId: f.ChannelId,
           messageId: f.TeamsMessageId,
-          division: String(f.Divisions || "").split(";")[0].trim(),
+          // One division on the post -> attribute it. Several (a shared
+          // channel) -> leave blank; the coordinator picks in review rather
+          // than the add-in guessing and mis-filing the cost.
+          division: codes.length === 1 ? codes[0] : "",
+          divisionChoices: codes,
         };
       });
       var list = Object.keys(threads).map(function (k) { return threads[k]; });
       var CAP = 120;
+      var capNote = "";
       if (list.length > CAP) {
-        logLine("Harvest capped at " + CAP + " of " + list.length + " threads (newest audit rows win).", "warn");
+        capNote = " Capped at " + CAP + " of " + list.length + " threads (newest first).";
         list = list.slice(-CAP);
       }
       var raw = [];
@@ -1738,10 +1771,12 @@
           var rep = replies[r];
           var author = ((rep.from || {}).user || {}).displayName || "";
           var text = LrrHarvest.htmlToText((rep.body || {}).content || "");
-          raw.push(LrrHarvest.analyzeSource({
+          var cand = LrrHarvest.analyzeSource({
             bill: t.bill, division: t.division, source: "Teams reply",
             text: text, author: author, date: rep.createdDateTime || "",
-          }));
+          });
+          if (cand) { cand.divisionChoices = t.divisionChoices; }
+          raw.push(cand);
           var atts = (rep.attachments || []).filter(function (a) {
             return a.contentUrl && /\.(docx|xlsx)$/i.test(a.name || "");
           }).slice(0, 3);
@@ -1752,17 +1787,19 @@
               var docText = /\.docx$/i.test(atts[a].name)
                 ? (await LrrDocx.extractText(b64, atts[a].name, "", item.size)).text
                 : await LrrXlsx.extractText(b64, atts[a].name, item.size);
-              raw.push(LrrHarvest.analyzeSource({
+              var acand = LrrHarvest.analyzeSource({
                 bill: t.bill, division: t.division, source: atts[a].name,
                 kind: "attachment",
                 text: docText, author: author, date: rep.createdDateTime || "",
-              }));
+              });
+              if (acand) { acand.divisionChoices = t.divisionChoices; }
+              raw.push(acand);
             } catch (e2) { errors++; }
           }
         }
       }
       harvestCandidates = LrrHarvest.mergeCandidates(raw).map(function (c) {
-        c.checked = c.cost !== null;
+        c.checked = c.cost !== null && !!c.division;
         if (!c.fy) { c.fy = LrrFiscal.defaultFy(new Date()); }
         if (!c.severity) { c.severity = "Unknown"; }
         return c;
@@ -1770,7 +1807,7 @@
       renderHarvest();
       setStatus(harvestCandidates.length ? "info" : "info",
         harvestCandidates.length + " fiscal candidate(s) from " + list.length + " threads" +
-        (errors ? " (" + errors + " skipped on errors)" : "") +
+        (errors ? " (" + errors + " skipped on errors)" : "") + capNote +
         ". Review, edit, then apply to the tracker.");
     } catch (e) {
       setStatus("error", "Harvest failed: " + friendly(e));
@@ -1824,6 +1861,13 @@
       row.appendChild(sevL);
       row.appendChild(inp("FY", c.fy, function (v) { c.fy = v; }, "80px"));
       box.appendChild(row);
+      if (!c.division && (c.divisionChoices || []).length > 1) {
+        var amb = document.createElement("p");
+        amb.className = "hint warn";
+        amb.textContent = "This post covered " + c.divisionChoices.join(", ") +
+          " — type which one this reply is from before applying.";
+        box.appendChild(amb);
+      }
       if (c.evidence) {
         var ev = document.createElement("p");
         ev.className = "hint";
@@ -1845,11 +1889,21 @@
       var token = await GraphData.getToken();
       setStatus("work", "Reading the tracker…");
       var items = await GraphData.listItems(token, state.site.siteId, state.site.trackerListId, 2000);
+      var key = function (bill, div) {
+        return String(bill || "").trim().toUpperCase() + "|" + String(div || "").trim().toUpperCase();
+      };
       var index = {};
       items.forEach(function (it) {
         var f = it.fields || {};
-        index[(f.Title || "") + "|" + (f.Division || "")] = it.id;
+        index[key(f.Title, f.Division)] = it.id;
       });
+      var unassigned = picked.filter(function (c) { return !String(c.division || "").trim(); });
+      if (unassigned.length) {
+        setStatus("error", unassigned.length + " selected row(s) have no division — the Teams post " +
+          "covered several, so pick one in the Division box before applying.");
+        byId("harvestApply").disabled = false;
+        return;
+      }
       var updated = 0, created = 0;
       for (var i = 0; i < picked.length; i++) {
         var c = picked[i];
@@ -1862,7 +1916,7 @@
           ImpactNotes: (c.evidence ? c.evidence + " " : "") +
             ("[harvested from " + (c.source || "Teams") + (c.author ? ", " + c.author : "") + "]"),
         };
-        var id = index[c.bill + "|" + c.division];
+        var id = index[key(c.bill, c.division)];
         if (id) {
           await GraphData.updateListItemFields(token, state.site.siteId, state.site.trackerListId, id, fields);
           updated++;
@@ -1924,12 +1978,13 @@
           backfilled++;
         } catch (e) { break; }
       }
-      if (backfilled) { logLine("CostValue backfilled on " + backfilled + " tracker row(s) (Power BI numeric column)."); }
+      var backfillNote = backfilled ? " Filled the numeric cost column on " + backfilled + " row(s) for Power BI." : "";
       renderFiscal(LrrFiscal.aggregate(fiscalRows));
       byId("fiscalCsv").hidden = !fiscalRows.length;
       setStatus("info", fiscalRows.length + " tracker rows · " +
         fiscalRows.filter(function (r) { return LrrFiscal.parseCost(r.cost) !== null; }).length +
-        " with cost estimates. Divisions enter costs on the tracker list itself (Teams Lists tab).");
+        " with cost estimates." + backfillNote +
+        " Divisions enter costs on the tracker list itself (Teams Lists tab).");
     } catch (e) {
       setStatus("error", "Fiscal rollup failed: " + friendly(e));
     } finally {
@@ -2045,7 +2100,7 @@
                       Title: it.billNumber,
                       Division: g.rules[tI].divisionCode,
                       Status: "Pending review",
-                      DueDate: due.toISOString().slice(0, 10),
+                      DueDate: LrrDeadline.ymd(due),
                       BillLink: ((it.sourceLinks || [])[0] || {}).href || "",
                       Brief: String(it.title || it.brief || "").slice(0, 250),
                       ReportKey: state.reportKey,

@@ -58,8 +58,18 @@
   function deadlineFor(start, hours, holidays, dueTime) {
     var d = addBusinessHours(start, hours, holidays);
     var m = /^(\d{1,2}):(\d{2})$/.exec(String(dueTime || "").trim());
-    if (m) { d.setHours(Number(m[1]), Number(m[2]), 0, 0); }
-    return d;
+    if (!m) { return d; }
+    var snapped = new Date(d);
+    snapped.setHours(Number(m[1]), Number(m[2]), 0, 0);
+    // Snapping to end-of-business must never SHORTEN the window: a 6 PM
+    // publish with a short response window would otherwise come out "due"
+    // at 5 PM the same day — a deadline already in the past.
+    var guard = 0;
+    while ((snapped.getTime() < d.getTime() || !isBusinessDay(snapped, holidays)) && guard++ < 400) {
+      snapped.setDate(snapped.getDate() + 1);
+      snapped.setHours(Number(m[1]), Number(m[2]), 0, 0);
+    }
+    return snapped;
   }
 
   var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -77,6 +87,7 @@
 
   var api = {
     deadlineFor: deadlineFor,
+    ymd: ymd, // LOCAL calendar date — toISOString() would shift the day west of UTC
     parseHolidays: parseHolidays,
     isBusinessDay: isBusinessDay,
     addBusinessHours: addBusinessHours,

@@ -85,6 +85,20 @@ check("report html shows deadline", rep.html.indexOf("Comments due by Tue, Aug 4
 check("report text shows deadline", rep.text.indexOf("Comments due by Tue, Aug 4, 3:00 PM") !== -1, true);
 check("report keeps comment-window text", rep.html.indexOf("48 business hours.") !== -1, true);
 
+/* --- regression: end-of-business snap must never shorten the window --- */
+check("short window after 5pm rolls forward, never into the past",
+  iso(DL.deadlineFor(new Date(2026, 6, 31, 18, 0, 0), 1, {}, "17:00")), "2026-8-3 17:00");
+check("8h from Fri 3pm lands the next business day, not the same 5pm",
+  iso(DL.deadlineFor(fri3pm, 8, {}, "17:00")), "2026-8-3 17:00");
+check("default 48h behaviour unchanged",
+  iso(DL.deadlineFor(fri3pm, 48, {}, "17:00")), "2026-8-4 17:00");
+check("snap forward within the same day still fine",
+  iso(DL.deadlineFor(new Date(2026, 6, 29, 9, 0, 0), 24, {}, "17:00")), "2026-7-30 17:00");
+
+/* --- regression: tracker DueDate uses the LOCAL date, not toISOString() --- */
+check("ymd is local", DL.ymd(new Date(2026, 7, 4, 17, 0, 0)), "2026-08-04");
+check("ymd pads", DL.ymd(new Date(2026, 0, 5, 9, 0, 0)), "2026-01-05");
+
 if (failures) {
   console.error("\n" + failures + " deadline test(s) FAILED");
   process.exit(1);

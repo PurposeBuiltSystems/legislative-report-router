@@ -31,7 +31,12 @@
     var s = String(text == null ? "" : text).trim().toLowerCase();
     if (!s || /^(unknown|tbd|n\/?a|none|\?+)$/.test(s)) { return null; }
     var negative = /^\(.*\)$/.test(s) || /^-/.test(s) || /saving/.test(s);
-    var m = /([0-9][0-9,]*\.?[0-9]*)\s*(k|m|b|thousand|million|billion)?/.exec(s.replace(/[$()]/g, ""));
+    // The magnitude suffix MUST end on a word boundary: without it the bare
+    // letters k/m/b swallow the first letter of the next word, so
+    // "50000 max" parsed as 50000 × 1e6. Costs are typed by humans into a
+    // free-text column and feed the Power BI totals — silent 1000× errors
+    // are the worst possible failure here.
+    var m = /([0-9][0-9,]*\.?[0-9]*)\s*(?:(k|m|b|thousand|million|billion)\b)?/.exec(s.replace(/[$()]/g, ""));
     if (!m) { return null; }
     var n = Number(m[1].replace(/,/g, ""));
     if (isNaN(n)) { return null; }

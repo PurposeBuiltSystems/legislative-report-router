@@ -22,7 +22,15 @@
     dod:        { graph: "https://dod-graph.microsoft.us", authority: "https://login.microsoftonline.us/common" },
   };
 
-  var SCOPES = ["Mail.ReadWrite", "Mail.Send", "ChannelMessage.Send", "ChannelMessage.Read.All", "Sites.ReadWrite.All", "TeamworkTag.Read", "TeamworkTag.ReadWrite"];
+  // Must stay in lockstep with the Entra app registration: a scope requested
+  // here but not registered makes MSAL prompt for consent that a non-admin
+  // cannot grant, which blocks sign-in entirely. Team/Channel.ReadBasic.All
+  // back the setup wizard's Team and Channel pickers (/me/joinedTeams,
+  // /teams/{id}/channels).
+  var SCOPES = ["Mail.ReadWrite", "Mail.Send", "ChannelMessage.Send", "ChannelMessage.Read.All",
+    "Sites.ReadWrite.All", "TeamworkTag.Read", "Team.ReadBasic.All", "Channel.ReadBasic.All"];
+  // Requested only when the user actually creates a tag (see getTagWriteToken).
+  var TAG_WRITE_SCOPE = "TeamworkTag.ReadWrite";
 
   var cloudKey = "commercial";
   var pcaPromise = null;
@@ -49,6 +57,23 @@
       return silent.accessToken;
     } catch (e) {
       var interactive = await pca.acquireTokenPopup({ scopes: SCOPES });
+      return interactive.accessToken;
+    }
+  }
+
+  /**
+   * Token that additionally carries TeamworkTag.ReadWrite, requested only
+   * when the user clicks "Create the tag" — so a tenant that hasn't granted
+   * it still gets a fully working add-in everywhere else.
+   */
+  async function getTagWriteToken() {
+    var pca = await getPca();
+    var scopes = SCOPES.concat([TAG_WRITE_SCOPE]);
+    try {
+      var silent = await pca.acquireTokenSilent({ scopes: scopes });
+      return silent.accessToken;
+    } catch (e) {
+      var interactive = await pca.acquireTokenPopup({ scopes: scopes });
       return interactive.accessToken;
     }
   }
@@ -270,9 +295,15 @@
 
   /** driveItem content as base64 (feeds the DOCX/XLSX extractors). */
   async function driveItemContentB64(token, driveId, itemId) {
-    var res = await fetch(graphBase() + "/drives/" + driveId + "/items/" + itemId + "/content",
-      { headers: { Authorization: "Bearer " + token } });
-    if (!res.ok) { throw new Error("Graph GET content -> " + res.status); }
+    // NOT /content: that answers 302 to a pre-authenticated *.sharepoint.com
+    // URL and browsers drop the Authorization header across a cross-origin
+    // redirect. The download URL is already authenticated — fetch it plain.
+    var meta = await graphJson(token, "GET", "/drives/" + driveId + "/items/" + itemId +
+      "?$select=id,@microsoft.graph.downloadUrl");
+    var url = meta && meta["@microsoft.graph.downloadUrl"];
+    if (!url) { throw new Error("no download URL for that attachment"); }
+    var res = await fetch(url);
+    if (!res.ok) { throw new Error("attachment download -> " + res.status); }
     var buf = new Uint8Array(await res.arrayBuffer());
     var bin = "";
     var CHUNK = 0x8000;
@@ -291,6 +322,7 @@
   root.GraphData = {
     setCloud: setCloud,
     getToken: getToken,
+    getTagWriteToken: getTagWriteToken,
     resolveSite: resolveSite,
     findList: findList,
     listItems: listItems,
