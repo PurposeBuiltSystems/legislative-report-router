@@ -26,6 +26,18 @@
 
   function byId(id) { return document.getElementById(id); }
 
+  /**
+   * Outlook caches the pane HTML but ?v= makes it fetch JavaScript fresh,
+   * so a returning user can run today's JS against yesterday's page.
+   * Binding through this helper means a missing element costs one feature
+   * instead of throwing and leaving every later button unbound.
+   */
+  function on(id, ev, fn) {
+    var el = byId(id);
+    if (el) { el.addEventListener(ev, fn); }
+    return el;
+  }
+
   /** Translate raw Graph/MSAL errors into words a coordinator can act on. */
   function friendly(e) {
     var m = (e && e.message) || String(e);
@@ -183,7 +195,8 @@
     var s = settings();
     SETTING_KEYS.forEach(function (k) {
       var el = byId(k);
-      if (el && el.type === "checkbox") {
+      if (!el) { return; }                       // stale cached page
+      if (el.type === "checkbox") {
         el.checked = (s[k] === true || s[k] === "true");
       } else if (s[k] != null && s[k] !== "") { el.value = s[k]; }
     });
@@ -204,19 +217,19 @@
       byId("identifiers").value = preset.identifiers.join(", ");
       saveSettings({ stateName: sel.value, identifiers: byId("identifiers").value });
     });
-    byId("profileCopy").addEventListener("click", profileCopy);
-    byId("profileApply").addEventListener("click", profileApply);
+    on("profileCopy", "click", profileCopy);
+    on("profileApply", "click", profileApply);
 
     document.querySelectorAll(".tab").forEach(function (t) {
       t.addEventListener("click", function () { show(t.getAttribute("data-screen")); });
     });
-    byId("parse").addEventListener("click", parseReport);
-    byId("saveDraft").addEventListener("click", saveDraft);
-    byId("loadDraft").addEventListener("click", loadDraft);
-    byId("connectRules").addEventListener("click", function () { connectRules(false).catch(function () {}); });
-    byId("createLists").addEventListener("click", createLists);
-    byId("siteSearchGo").addEventListener("click", siteSearch);
-    byId("siteResults").addEventListener("change", function () {
+    on("parse", "click", parseReport);
+    on("saveDraft", "click", saveDraft);
+    on("loadDraft", "click", loadDraft);
+    on("connectRules", "click", function () { connectRules(false).catch(function () {}); });
+    on("createLists", "click", createLists);
+    on("siteSearchGo", "click", siteSearch);
+    on("siteResults", "change", function () {
       if (byId("siteResults").value) {
         byId("siteUrl").value = byId("siteResults").value;
         saveSettings({ siteUrl: byId("siteResults").value });
@@ -224,15 +237,15 @@
       }
     });
 
-    byId("rbTeam").addEventListener("change", loadChannelsAndTags);
-    byId("rbAdd").addEventListener("click", addRoute);
-    byId("onlyUnassigned").addEventListener("change", function () { renderItems(); });
-    byId("contactPreview").addEventListener("click", contactPreview);
-    byId("contactApply").addEventListener("click", contactApply);
-    byId("quickAdd").addEventListener("click", quickAddContact);
-    byId("wizPrev").addEventListener("click", function () { wizShow(wizStep - 1); });
-    byId("wizNext").addEventListener("click", function () { wizShow(wizStep + 1); });
-    byId("wizSignIn").addEventListener("click", async function () {
+    on("rbTeam", "change", loadChannelsAndTags);
+    on("rbAdd", "click", addRoute);
+    on("onlyUnassigned", "change", function () { renderItems(); });
+    on("contactPreview", "click", contactPreview);
+    on("contactApply", "click", contactApply);
+    on("quickAdd", "click", quickAddContact);
+    on("wizPrev", "click", function () { wizShow(wizStep - 1); });
+    on("wizNext", "click", function () { wizShow(wizStep + 1); });
+    on("wizSignIn", "click", async function () {
       byId("wizSignIn").disabled = true;
       try {
         await GraphData.getToken();
@@ -241,43 +254,43 @@
         byId("wizSignInInfo").textContent = friendly(e);
       } finally { byId("wizSignIn").disabled = false; }
     });
-    byId("tagCreate").addEventListener("click", createDivisionTag);
-    byId("useOneDrive").addEventListener("click", useOneDrive);
-    byId("teamSitePick").addEventListener("change", useTeamSite);
-    byId("copyTemplate").addEventListener("click", function () {
+    on("tagCreate", "click", createDivisionTag);
+    on("useOneDrive", "click", useOneDrive);
+    on("teamSitePick", "change", useTeamSite);
+    on("copyTemplate", "click", function () {
       var tsv = "Name\tEmail\tDivision\nJane Doe\tjane.doe@agency.gov\tMVD\nBob Roe\tbob.roe@agency.gov\tMVD/TDD";
       navigator.clipboard.writeText(tsv).then(function () {
         setStatus("info", "Starter copied \u2014 paste into Excel, replace the sample people, then copy your rows back here.");
       }).catch(function () { setStatus("error", "Copy failed \u2014 use the download link instead."); });
     });
-    byId("siteSearch").addEventListener("input", filterSiteList);
+    on("siteSearch", "input", filterSiteList);
     wizShow(1);
-    byId("runChecks").addEventListener("click", runChecks);
-    byId("copyChecks").addEventListener("click", copyChecks);
-    byId("distList").addEventListener("input", updateDistInfo);
+    on("runChecks", "click", runChecks);
+    on("copyChecks", "click", copyChecks);
+    on("distList", "input", updateDistInfo);
     updateDistInfo();
     var st0 = settings();
     if (st0.autoDaily === true || st0.autoDaily === "true") { byId("autoDaily").checked = true; }
-    byId("autoDaily").addEventListener("change", function () {
+    on("autoDaily", "change", function () {
       saveSettings({ autoDaily: byId("autoDaily").checked });
     });
     startAutoDraftTimer();
-    byId("lookupTags").addEventListener("click", lookupTags);
-    byId("bulkApply").addEventListener("click", bulkApply);
-    byId("confirmBox").addEventListener("change", function () {
+    on("lookupTags", "click", lookupTags);
+    on("bulkApply", "click", bulkApply);
+    on("confirmBox", "change", function () {
       byId("publishGo").disabled = !byId("confirmBox").checked;
     });
-    byId("publishGo").addEventListener("click", function () { publish(false); });
-    byId("retryFailed").addEventListener("click", function () { publish(true); });
-    byId("refreshAudit").addEventListener("click", refreshAudit);
-    byId("fiscalLoad").addEventListener("click", loadFiscal);
-    byId("fiscalCsv").addEventListener("click", exportFiscalCsv);
-    byId("fiscalHarvest").addEventListener("click", harvestFiscal);
-    byId("harvestApply").addEventListener("click", applyHarvest);
-    byId("loadFilings").addEventListener("click", loadFilings);
-    byId("routeFilings").addEventListener("click", routeFilings);
+    on("publishGo", "click", function () { publish(false); });
+    on("retryFailed", "click", function () { publish(true); });
+    on("refreshAudit", "click", refreshAudit);
+    on("fiscalLoad", "click", loadFiscal);
+    on("fiscalCsv", "click", exportFiscalCsv);
+    on("fiscalHarvest", "click", harvestFiscal);
+    on("harvestApply", "click", applyHarvest);
+    on("loadFilings", "click", loadFilings);
+    on("routeFilings", "click", routeFilings);
     SETTING_KEYS.forEach(function (k) {
-      byId(k).addEventListener("change", function () {
+      on(k, "change", function () {
         var el = byId(k);
         var p = {}; p[k] = el.type === "checkbox" ? el.checked : el.value; saveSettings(p);
         if (k === "cloud") { GraphData.setCloud(byId(k).value); state.site = null; }
@@ -744,6 +757,7 @@
       SETTING_KEYS.forEach(function (k) {
         if (patch[k] == null) { return; }
         var el = byId(k);
+        if (!el) { return; }
         if (el.type === "checkbox") { el.checked = (patch[k] === true || patch[k] === "true"); }
         else { el.value = patch[k]; }
       });
