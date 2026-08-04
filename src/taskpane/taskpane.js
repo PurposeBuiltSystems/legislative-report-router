@@ -38,6 +38,36 @@
     return el;
   }
 
+  /**
+   * Show exactly what Microsoft said, under the friendly message. A
+   * translated error that turns out to be wrong (as "ask IT for access"
+   * did) otherwise leaves nobody anything to debug with.
+   */
+  function showRawError(what, e) {
+    var host = byId("rawError");
+    if (!host) { return; }
+    var raw = (e && e.message) || String(e);
+    host.hidden = false;
+    host.innerHTML = "";
+    var h = document.createElement("p");
+    h.className = "hint";
+    h.style.margin = "0 0 4px";
+    h.textContent = "Technical detail — copy this if you need help:";
+    var pre = document.createElement("div");
+    pre.className = "code";
+    pre.textContent = what + "\n" + raw;
+    var btn = document.createElement("button");
+    btn.textContent = "Copy detail";
+    btn.style.marginTop = "6px";
+    btn.addEventListener("click", function () {
+      try {
+        navigator.clipboard.writeText(what + "\n" + raw);
+        setStatus("info", "Copied \u2014 paste it wherever you're getting help.");
+      } catch (err) { /* the text is selectable above */ }
+    });
+    host.appendChild(h); host.appendChild(pre); host.appendChild(btn);
+  }
+
   /** OneDrive personal sites host document libraries, not SharePoint lists —
    *  Graph refuses to create lists there no matter who you are. */
   function isPersonalSite(url) {
@@ -1226,7 +1256,8 @@
       await connectRules();
     } catch (e) {
       setStatus("error", "List setup failed: " + friendly(e, { personalSite: isPersonalSite(byId("siteUrl").value) }) +
-        " \u2014 you need edit rights on the site; see the admin guide to create lists manually.");
+        " \u2014 see the admin guide to create the lists by hand.");
+      showRawError("Creating lists on " + byId("siteUrl").value, e);
     } finally {
       byId("createLists").disabled = false;
     }
