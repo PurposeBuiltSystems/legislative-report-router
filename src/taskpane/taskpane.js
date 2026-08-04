@@ -6,7 +6,9 @@
  * State lives in memory + roamingSettings drafts; publication state is
  * durable in the LegislativeAudit SharePoint list (also the dedupe store).
  */
-/* global Office, GraphData, LrrParser, LrrRouting, LrrTeams, LrrDocx, document */
+/* global Office, GraphData, document,
+   LrrParser, LrrRouting, LrrTeams, LrrDocx, LrrXlsx, LrrPresets, LrrProvision,
+   LrrChapters, LrrContacts, LrrFeed, LrrReportGen, LrrDeadline, LrrFiscal, LrrHarvest */
 (function () {
   "use strict";
 

@@ -1,0 +1,17 @@
+{
+  "name": "legislative-report-router",
+  "version": "1.0.0",
+  "description": "Outlook add-in that parses a daily bill report and routes each bill to the right Teams channel, people, and lists.",
+  "private": true,
+  "scripts": {
+    "check": "node tools/check-undeclared.js",
+    "test": "node tools/check-undeclared.js && node test/chapters.test.js && node test/contacts.test.js && node test/deadline.test.js && node test/feed.test.js && node test/fiscal.test.js && node test/harvest.test.js && node test/reportgen.test.js && node test/router.test.js",
+    "validate": "office-addin-manifest validate manifest.xml"
+  },
+  "author": "Matthew Miller",
+  "license": "MIT",
+  "devDependencies": {
+    "acorn": "^8.16.0",
+    "office-addin-manifest": "^2.0.4"
+  }
+}
