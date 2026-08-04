@@ -147,7 +147,15 @@
    * org-only / private sites work exactly like public ones.
    */
   async function resolveSite(token, siteUrl) {
-    var u = new URL(String(siteUrl).trim());
+    // Guard here rather than at each call site: blank or malformed input
+    // otherwise dies inside the URL constructor with a message that says
+    // nothing about SharePoint.
+    var raw = String(siteUrl || "").trim();
+    if (!raw) { throw new Error("No SharePoint site yet — pick or paste one in Setup first."); }
+    if (!/^https?:\/\//i.test(raw)) { raw = "https://" + raw; }
+    var u;
+    try { u = new URL(raw); }
+    catch (e) { throw new Error('"' + raw + '" isn\'t a site address — paste the site URL from your browser, e.g. https://contoso.sharepoint.com/sites/Legislative'); }
     var path = u.pathname
       .replace(/\/(SitePages|Lists|Shared%20Documents|Shared Documents|_layouts|Forms)\/.*$/i, "")
       .replace(/\/+$/, "");

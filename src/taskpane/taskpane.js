@@ -1329,11 +1329,33 @@
     }
   }
 
+  /**
+   * Accept a bare GUID, or the whole "Get link to team" URL — that link is
+   * what the Teams button actually puts on your clipboard, and it carries
+   * groupId=<guid>. Sending the raw text through produced
+   * "GET /teams//tags -> teamId needs to be a valid GUID".
+   */
+  function teamIdFrom(text) {
+    var v = String(text || "").trim();
+    var m = /[?&]groupId=([0-9a-fA-F-]{36})/.exec(v);
+    if (m) { return m[1]; }
+    return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(v) ? v : "";
+  }
+
   async function lookupTags() {
+    var teamId = teamIdFrom(byId("lookupTeamId").value);
+    if (!teamId) {
+      setStatus("error", byId("lookupTeamId").value.trim()
+        ? "That doesn't look like a team ID. Paste the whole \u201cGet link to team\u201d link and " +
+          "I'll pull the ID out of it \u2014 or use step 3, where picking your Team loads its tags for you."
+        : "Paste a team ID, or the whole \u201cGet link to team\u201d link. You usually don't need " +
+          "this box at all: in step 3, pick your Team and its tags load automatically.");
+      return;
+    }
     try {
       setStatus("work", "Fetching tags…");
       var token = await GraphData.getToken();
-      var tags = await GraphData.listTeamTags(token, byId("lookupTeamId").value.trim());
+      var tags = await GraphData.listTeamTags(token, teamId);
       var pre = byId("tagResults");
       pre.hidden = false;
       pre.textContent = tags.length
