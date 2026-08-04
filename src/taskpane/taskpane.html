@@ -10,7 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
-  <link rel="stylesheet" href="taskpane.css?v=36" />
+  <link rel="stylesheet" href="taskpane.css?v=37" />
 </head>
 <body>
   <header class="app-head">
@@ -234,9 +234,28 @@
         <label>Due time (end of business)
           <input id="dueTime" type="time" value="17:00" />
         </label>
-        <label>Skip holidays (YYYY-MM-DD, comma separated; blank = weekends only)
-          <input id="holidays" type="text" placeholder="2026-09-07, 2026-11-26, 2026-11-27" />
+      </div>
+      <p class="hint" style="margin-top:6px"><b>Weekends and the six holidays every US public
+         employer closes for</b> — New Year's, Memorial, Independence, Labor, Thanksgiving and
+         Christmas — are skipped automatically, with the federal Saturday&rarr;Friday /
+         Sunday&rarr;Monday rule applied. No dates to maintain.</p>
+      <details class="options">
+        <summary>Which other holidays does your agency close for?</summary>
+        <p class="hint">These genuinely differ between agencies, so they're asked rather than
+           assumed. Defaults are the federal list — a state agency's is usually shorter.</p>
+        <div class="modes">
+          <label><input id="obsMlk" type="checkbox" checked /> Martin Luther King Jr. Day</label>
+          <label><input id="obsPresidents" type="checkbox" checked /> Presidents Day</label>
+          <label><input id="obsJuneteenth" type="checkbox" checked /> Juneteenth</label>
+          <label><input id="obsColumbus" type="checkbox" checked /> Columbus / Indigenous Peoples' Day</label>
+          <label><input id="obsVeterans" type="checkbox" checked /> Veterans Day</label>
+          <label><input id="obsDayAfterThanksgiving" type="checkbox" /> Day after Thanksgiving</label>
+        </div>
+        <label>Any other closures (YYYY-MM-DD, comma separated) — furlough days, local holidays
+          <input id="holidays" type="text" placeholder="2026-12-24, 2027-01-02" />
         </label>
+      </details>
+      <div class="row2" hidden>
       </div>
       <label>Cloud environment
         <select id="cloud">
@@ -331,21 +350,21 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=36"></script>
-  <script src="../routing.js?v=36"></script>
-  <script src="../teams.js?v=36"></script>
-  <script src="../docx.js?v=36"></script>
-  <script src="../graph.js?v=36"></script>
-  <script src="../presets.js?v=36"></script>
-  <script src="../provision.js?v=36"></script>
-  <script src="../contacts.js?v=36"></script>
-  <script src="../reportgen.js?v=36"></script>
-  <script src="../chapters.js?v=36"></script>
-  <script src="../feed.js?v=36"></script>
-  <script src="../deadline.js?v=36"></script>
-  <script src="../fiscal.js?v=36"></script>
-  <script src="../harvest.js?v=36"></script>
-  <script src="../xlsx.js?v=36"></script>
-  <script src="taskpane.js?v=36"></script>
+  <script src="../parser.js?v=37"></script>
+  <script src="../routing.js?v=37"></script>
+  <script src="../teams.js?v=37"></script>
+  <script src="../docx.js?v=37"></script>
+  <script src="../graph.js?v=37"></script>
+  <script src="../presets.js?v=37"></script>
+  <script src="../provision.js?v=37"></script>
+  <script src="../contacts.js?v=37"></script>
+  <script src="../reportgen.js?v=37"></script>
+  <script src="../chapters.js?v=37"></script>
+  <script src="../feed.js?v=37"></script>
+  <script src="../deadline.js?v=37"></script>
+  <script src="../fiscal.js?v=37"></script>
+  <script src="../harvest.js?v=37"></script>
+  <script src="../xlsx.js?v=37"></script>
+  <script src="taskpane.js?v=37"></script>
 </body>
 </html>

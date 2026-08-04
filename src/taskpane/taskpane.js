@@ -40,6 +40,9 @@
     return el;
   }
 
+  /** Read a field that a stale cached page might not have. */
+  function val(id) { var el = byId(id); return el ? el.value : ""; }
+
   /**
    * Show exactly what Microsoft said, under the friendly message. A
    * translated error that turns out to be wrong (as "ask IT for access"
@@ -237,7 +240,8 @@
     if (screen === "publish") { renderPublishSummary(); }
   }
 
-  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "responseHours", "dueTime", "holidays", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distList", "autoDaily", "autoDailyTime"];
+  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "responseHours", "dueTime", "holidays",
+    "obsMlk", "obsPresidents", "obsJuneteenth", "obsColumbus", "obsVeterans", "obsDayAfterThanksgiving", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distList", "autoDaily", "autoDailyTime"];
   var PROFILE_KEYS = SETTING_KEYS.concat([]);
 
   Office.onReady(function () {
@@ -1722,7 +1726,19 @@
    *  business-hours math (48 by default), weekend- and holiday-aware. */
   function currentDeadline() {
     var hours = Math.max(1, Math.min(240, Number(byId("responseHours").value) || 48));
-    var holidays = LrrDeadline.parseHolidays(byId("holidays").value);
+    // Weekends and the six near-universal holidays are automatic; the rest
+    // are whatever this agency said it closes for.
+    var observe = {};
+    LrrDeadline.OPTIONAL_HOLIDAYS.forEach(function (h) {
+      var el = byId("obs" + h.key.charAt(0).toUpperCase() + h.key.slice(1));
+      observe[h.key] = !!(el && el.checked);
+    });
+    var now = new Date().getFullYear();
+    var holidays = LrrDeadline.holidaySet({
+      observe: observe,
+      extra: val("holidays"),
+      years: [now, now + 1],
+    });
     var d = LrrDeadline.deadlineFor(new Date(), hours, holidays, byId("dueTime").value || "17:00");
     return { date: d, label: LrrDeadline.formatDeadline(d) };
   }

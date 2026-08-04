@@ -99,6 +99,44 @@ check("snap forward within the same day still fine",
 check("ymd is local", DL.ymd(new Date(2026, 7, 4, 17, 0, 0)), "2026-08-04");
 check("ymd pads", DL.ymd(new Date(2026, 0, 5, 9, 0, 0)), "2026-01-05");
 
+/* ------------- computed US holidays (no dates to maintain) ------------- */
+
+check("3rd Monday of Jan 2026 (MLK)", DL.ymd(DL.nthWeekday(2026, 0, 1, 3)), "2026-01-19");
+check("last Monday of May 2026 (Memorial)", DL.ymd(DL.nthWeekday(2026, 4, 1, -1)), "2026-05-25");
+check("4th Thursday of Nov 2026 (Thanksgiving)", DL.ymd(DL.nthWeekday(2026, 10, 4, 4)), "2026-11-26");
+check("1st Monday of Sep 2026 (Labor)", DL.ymd(DL.nthWeekday(2026, 8, 1, 1)), "2026-09-07");
+
+// federal observance: Saturday shifts back to Friday, Sunday forward to Monday
+check("Jul 4 2026 is a Saturday -> observed Friday", DL.ymd(DL.observed(new Date(2026, 6, 4))), "2026-07-03");
+check("Jul 4 2027 is a Sunday -> observed Monday", DL.ymd(DL.observed(new Date(2027, 6, 4))), "2027-07-05");
+check("a weekday holiday is unmoved", DL.ymd(DL.observed(new Date(2026, 11, 25))), "2026-12-25");
+
+var core = Object.keys(DL.holidayDates(2026)).sort();
+check("six core holidays, automatic", core.length, 6);
+check("core set for 2026", core.join(","),
+  "2026-01-01,2026-05-25,2026-07-03,2026-09-07,2026-11-26,2026-12-25");
+check("MLK is not core (it's asked)", core.indexOf("2026-01-19"), -1);
+check("opting in adds it", DL.holidayDates(2026, { mlk: true })["2026-01-19"], "mlk");
+check("opting out of a core day is honoured",
+  DL.holidayDates(2026, { christmas: false })["2026-12-25"], undefined);
+check("all optional on -> twelve dates",
+  Object.keys(DL.holidayDates(2026, { mlk: true, presidents: true, juneteenth: true,
+    columbus: true, veterans: true, dayAfterThanksgiving: true })).length, 12);
+
+var set = DL.holidaySet({ observe: { mlk: true, veterans: true, dayAfterThanksgiving: true },
+  extra: "2026-12-24", years: [2026] });
+check("agency extras merge in", set["2026-12-24"], true);
+check("computed and extras coexist", set["2026-11-27"] && set["2026-01-19"], true);
+check("unchosen optional stays out", set["2026-10-12"], undefined);
+
+// the case this exists for: a deadline must not land inside Thanksgiving week
+check("Wed before Thanksgiving + 48h clears the holiday",
+  DL.formatDeadline(DL.deadlineFor(new Date(2026, 10, 25, 15, 0, 0), 48, set, "17:00")),
+  "Tue, Dec 1, 5:00 PM");
+check("without the holidays it would have landed Friday",
+  DL.formatDeadline(DL.deadlineFor(new Date(2026, 10, 25, 15, 0, 0), 48, {}, "17:00")),
+  "Fri, Nov 27, 5:00 PM");
+
 if (failures) {
   console.error("\n" + failures + " deadline test(s) FAILED");
   process.exit(1);
