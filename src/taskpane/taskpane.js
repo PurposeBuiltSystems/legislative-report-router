@@ -38,10 +38,21 @@
     return el;
   }
 
+  /** OneDrive personal sites host document libraries, not SharePoint lists —
+   *  Graph refuses to create lists there no matter who you are. */
+  function isPersonalSite(url) {
+    return /-my\.sharepoint\.com\/personal\//i.test(String(url || ""));
+  }
+
   /** Translate raw Graph/MSAL errors into words a coordinator can act on. */
-  function friendly(e) {
+  function friendly(e, context) {
     var m = (e && e.message) || String(e);
     if (/403|Authorization_RequestDenied|accessDenied/i.test(m)) {
+      if (context && context.personalSite) {
+        return "OneDrive can't hold SharePoint lists \u2014 that's a limit of personal sites, " +
+          "not a permission you're missing. Pick a SharePoint site above instead (even solo, " +
+          "a team site of your own works: sharepoint.com \u2192 Create site \u2192 Team site).";
+      }
       return "You don't have permission there yet \u2014 ask IT to give you edit access to the site, then try again.";
     }
     if (/interaction_required|AADSTS|consent|login_required/i.test(m)) {
@@ -255,7 +266,7 @@
       } finally { byId("wizSignIn").disabled = false; }
     });
     on("tagCreate", "click", createDivisionTag);
-    on("useOneDrive", "click", useOneDrive);
+    on("useOneDrive", "click", soloGuidance);
     on("teamSitePick", "change", useTeamSite);
     on("copyTemplate", "click", function () {
       var tsv = "Name\tEmail\tDivision\nJane Doe\tjane.doe@agency.gov\tMVD\nBob Roe\tbob.roe@agency.gov\tMVD/TDD";
@@ -972,21 +983,17 @@
     }
   }
 
-  async function useOneDrive() {
-    byId("useOneDrive").disabled = true;
-    try {
-      setStatus("work", "Finding your OneDrive\u2026");
-      var token = await GraphData.getToken();
-      var site = await GraphData.myPersonalSite(token);
-      byId("siteUrl").value = site.webUrl;
-      saveSettings({ siteUrl: site.webUrl });
-      state.site = null;
-      setStatus("info", "Using your OneDrive (" + site.name + "). Heads-up: lists here are private to you \u2014 fine solo, but a shared review team should use a shared site. Now click \u201cCreate my lists.\u201d");
-    } catch (e) {
-      setStatus("error", "Couldn't use your OneDrive: " + friendly(e));
-    } finally {
-      byId("useOneDrive").disabled = false;
-    }
+  /**
+   * Solo users used to be pointed at their OneDrive, which cannot hold
+   * SharePoint lists — Graph refuses regardless of permissions, and the
+   * failure read as "ask IT for access" to someone who IS the admin. So
+   * this now explains what to do instead of attempting it.
+   */
+  function soloGuidance() {
+    setStatus("info", "Working solo is fine \u2014 you still need a SharePoint site, because the " +
+      "routing and audit lists are SharePoint lists (OneDrive only stores files). Pick one from " +
+      "\u201cPick a site\u201d above, or make your own in a minute: open sharepoint.com \u2192 " +
+      "Create site \u2192 Team site \u2192 name it (e.g. Legislative) \u2192 then click Refresh list here.");
   }
 
   var teamsCache = null;
@@ -1183,6 +1190,12 @@
   async function createLists() {
     var siteUrl = byId("siteUrl").value.trim();
     if (!siteUrl) { setStatus("error", "Enter the SharePoint site URL first."); return; }
+    if (isPersonalSite(siteUrl)) {
+      setStatus("error", "That's your OneDrive, which can't hold SharePoint lists \u2014 a limit of " +
+        "personal sites, not a permission problem. Pick a SharePoint site above, or create one " +
+        "(sharepoint.com \u2192 Create site \u2192 Team site) \u2014 solo is fine.");
+      return;
+    }
     byId("createLists").disabled = true;
     try {
       setStatus("work", "Checking the site\u2026");
@@ -1212,7 +1225,7 @@
       setStatus("info", report.join(" \u00b7 ") + " \u2014 connecting\u2026");
       await connectRules();
     } catch (e) {
-      setStatus("error", "List setup failed: " + friendly(e) +
+      setStatus("error", "List setup failed: " + friendly(e, { personalSite: isPersonalSite(byId("siteUrl").value) }) +
         " \u2014 you need edit rights on the site; see the admin guide to create lists manually.");
     } finally {
       byId("createLists").disabled = false;
