@@ -31,6 +31,11 @@
     "Sites.ReadWrite.All", "TeamworkTag.Read", "Team.ReadBasic.All", "Channel.ReadBasic.All"];
   // Requested only when the user actually creates a tag (see getTagWriteToken).
   var TAG_WRITE_SCOPE = "TeamworkTag.ReadWrite";
+  // Sites.ReadWrite.All covers list ITEMS ("edit or delete documents and list
+  // items"); creating a LIST needs Sites.Manage.All ("create or delete
+  // document libraries and lists"). Requested only for provisioning, so a
+  // tenant that never grants it still gets a fully working add-in.
+  var LIST_CREATE_SCOPE = "Sites.Manage.All";
 
   var cloudKey = "commercial";
   var pcaPromise = null;
@@ -95,6 +100,19 @@
       return silent.accessToken;
     } catch (e) {
       var interactive = await pca.acquireTokenPopup({ scopes: scopes });
+      return interactive.accessToken;
+    }
+  }
+
+  /** Token that additionally carries Sites.Manage.All, for creating lists. */
+  async function getListCreateToken() {
+    var pca = await getPca();
+    var scopes = SCOPES.concat([LIST_CREATE_SCOPE]);
+    try {
+      return (await withTimeout(pca.acquireTokenSilent({ scopes: scopes }), 20000, "silent timeout")).accessToken;
+    } catch (e) {
+      var interactive = await withTimeout(pca.acquireTokenPopup({ scopes: scopes }), 120000,
+        "Sign-in for list creation didn't finish \u2014 look for a Microsoft window behind Outlook.");
       return interactive.accessToken;
     }
   }
@@ -344,6 +362,7 @@
     setCloud: setCloud,
     getToken: getToken,
     getTagWriteToken: getTagWriteToken,
+    getListCreateToken: getListCreateToken,
     resolveSite: resolveSite,
     findList: findList,
     listItems: listItems,

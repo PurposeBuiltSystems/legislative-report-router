@@ -78,6 +78,12 @@
   function friendly(e, context) {
     var m = (e && e.message) || String(e);
     if (/403|Authorization_RequestDenied|accessDenied/i.test(m)) {
+      if (context && context.listCreate) {
+        return "Creating lists needs the Sites.Manage.All permission, which grants " +
+          "\u201ccreate or delete lists\u201d \u2014 Sites.ReadWrite.All only covers editing " +
+          "rows. Ask your Microsoft 365 admin to grant it to this add-in (see the admin " +
+          "guide), or create the three lists by hand in Microsoft Lists.";
+      }
       if (context && context.personalSite) {
         return "OneDrive can't hold SharePoint lists \u2014 that's a limit of personal sites, " +
           "not a permission you're missing. Pick a SharePoint site above instead (even solo, " +
@@ -1229,7 +1235,7 @@
     byId("createLists").disabled = true;
     try {
       setStatus("work", "Checking the site\u2026");
-      var token = await GraphData.getToken();
+      var token = await GraphData.getListCreateToken();
       var site = await GraphData.resolveSite(token, siteUrl);
       var defs = LrrProvision.listDefinitions();
       var wanted = [
@@ -1255,7 +1261,7 @@
       setStatus("info", report.join(" \u00b7 ") + " \u2014 connecting\u2026");
       await connectRules();
     } catch (e) {
-      setStatus("error", "List setup failed: " + friendly(e, { personalSite: isPersonalSite(byId("siteUrl").value) }) +
+      setStatus("error", "List setup failed: " + friendly(e, { personalSite: isPersonalSite(byId("siteUrl").value), listCreate: true }) +
         " \u2014 see the admin guide to create the lists by hand.");
       showRawError("Creating lists on " + byId("siteUrl").value, e);
     } finally {
