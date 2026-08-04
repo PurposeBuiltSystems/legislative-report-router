@@ -301,6 +301,22 @@
     });
   }
 
+  /** Setup invitations sitting in this user's own mailbox. */
+  async function setupInvites(token, subjectPrefix) {
+    var res = await graphJson(token, "GET",
+      "/me/messages?$select=id,subject,from,receivedDateTime&$filter=" +
+      encodeURIComponent("startswith(subject,'" +
+        String(subjectPrefix || "Legislative Report Router setup").replace(/'/g, "''") + "')") +
+      "&$orderby=receivedDateTime desc&$top=25");
+    return res.value || [];
+  }
+
+  /** Full body of one message (search results carry metadata only). */
+  async function messageBody(token, id) {
+    var m = await graphJson(token, "GET", "/me/messages/" + encodeURIComponent(id) + "?$select=body");
+    return (m && m.body && m.body.content) || "";
+  }
+
   async function createDraftMessage(token, to, subject, html) {
     return graphJson(token, "POST", "/me/messages", {
       subject: subject,
@@ -391,6 +407,8 @@
     createTeamTag: createTeamTag,
     sendMail: sendMail,
     createDraftMessage: createDraftMessage,
+    setupInvites: setupInvites,
+    messageBody: messageBody,
     sendDraft: sendDraft,
     getAttachments: getAttachments,
     getAttachmentBytes: getAttachmentBytes,

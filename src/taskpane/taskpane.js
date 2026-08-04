@@ -8,7 +8,8 @@
  */
 /* global Office, GraphData, document,
    LrrParser, LrrRouting, LrrTeams, LrrDocx, LrrXlsx, LrrPresets, LrrProvision,
-   LrrChapters, LrrContacts, LrrFeed, LrrReportGen, LrrDeadline, LrrFiscal, LrrHarvest */
+   LrrChapters, LrrContacts, LrrFeed, LrrReportGen, LrrDeadline, LrrFiscal, LrrHarvest,
+   LrrInvite, window */
 (function () {
   "use strict";
 
@@ -271,6 +272,8 @@
       saveSettings({ stateName: sel.value, identifiers: byId("identifiers").value });
     });
     on("profileCopy", "click", profileCopy);
+    on("inviteSend", "click", sendInvites);
+    on("findMySetup", "click", findMySetup);
     on("profileApply", "click", profileApply);
 
     document.querySelectorAll(".tab").forEach(function (t) {
@@ -788,6 +791,69 @@
 
   // ---------- org profile ----------
 
+  /** Coordinator: address a person instead of handing out a code. */
+  async function sendInvites() {
+    var emails = LrrReportGen.extractEmails(val("inviteTo"));
+    if (!emails.length) { byId("inviteInfo").textContent = "Add at least one email address first."; return; }
+    var st = settings();
+    if (!st.siteUrl) { byId("inviteInfo").textContent = "Connect your SharePoint site first — otherwise there's nothing to send."; return; }
+    byId("inviteSend").disabled = true;
+    try {
+      var out = {};
+      PROFILE_KEYS.forEach(function (k) { if (st[k]) { out[k] = st[k]; } });
+      var code = btoa(unescape(encodeURIComponent(JSON.stringify(out))));
+      var prof = Office.context.mailbox.userProfile || {};
+      setStatus("work", "Writing the invitation\u2026");
+      var token = await GraphData.getToken();
+      var draft = await GraphData.createDraftMessage(token, emails,
+        LrrInvite.setupSubject(st.sessionName || ""),
+        LrrInvite.inviteHtml({
+          code: code, siteLabel: st.siteUrl,
+          fromName: prof.displayName, fromEmail: prof.emailAddress,
+        }));
+      byId("inviteInfo").textContent = "Invitation drafted for " + emails.length +
+        " person(s) — review it and press Send.";
+      setStatus("info", "Invitation ready in your Drafts for " + emails.join(", ") +
+        ". Nothing is sent until you press Send.");
+      if (draft && draft.webLink) {
+        try { window.open(draft.webLink, "_blank"); } catch (e) { /* it's in Drafts */ }
+      }
+    } catch (e) {
+      setStatus("error", "Couldn't write the invitation: " + friendly(e));
+    } finally {
+      byId("inviteSend").disabled = false;
+    }
+  }
+
+  /** Recipient: let their own mailbox carry the setup to them. */
+  async function findMySetup() {
+    setStatus("work", "Looking for a setup invitation\u2026");
+    try {
+      var token = await GraphData.getToken();
+      var msgs = await GraphData.setupInvites(token, LrrInvite.SUBJECT);
+      if (!msgs.length) {
+        setStatus("error", "No setup invitation found in your mailbox. Ask the coordinator to " +
+          "send one, or paste a setup code below if you were given one.");
+        return;
+      }
+      for (var i = 0; i < Math.min(msgs.length, 5); i++) {
+        msgs[i].body = await GraphData.messageBody(token, msgs[i].id);
+      }
+      var invite = LrrInvite.pickInvite(msgs);
+      if (!invite) {
+        setStatus("error", "Found a setup message but no settings inside it — ask for a resend.");
+        return;
+      }
+      var from = ((invite.from || {}).emailAddress || {}).name ||
+                 ((invite.from || {}).emailAddress || {}).address || "the coordinator";
+      profileApply(LrrInvite.extractSetupCode(invite.body));
+      setStatus("info", "Settings applied from " + from + "'s invitation \u2014 now click " +
+        "\u201cConnect & load routing rules\u201d to sign in on this device.");
+    } catch (e) {
+      setStatus("error", "Couldn't read your setup: " + friendly(e));
+    }
+  }
+
   function profileCopy() {
     var st = settings();
     var out = {};
@@ -812,10 +878,10 @@
     }
   }
 
-  function profileApply() {
+  function profileApply(rawText) {
     try {
-      var raw = byId("profileBlobIn").value.trim();
-      if (!raw) { setStatus("error", "Paste the profile code first."); return; }
+      var raw = String(rawText != null ? rawText : val("profileBlobIn")).trim();
+      if (!raw) { setStatus("error", "Paste the setup code first."); return; }
       var p = JSON.parse(decodeURIComponent(escape(atob(raw))));
       var patch = {};
       PROFILE_KEYS.forEach(function (k) { if (p[k] != null) { patch[k] = p[k]; } });

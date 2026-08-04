@@ -10,7 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
-  <link rel="stylesheet" href="taskpane.css?v=37" />
+  <link rel="stylesheet" href="taskpane.css?v=38" />
 </head>
 <body>
   <header class="app-head">
@@ -210,14 +210,26 @@
 
       <details class="options">
         <summary>Advanced (rarely needed)</summary>
+      <details class="options" open>
+        <summary>Hand this setup to someone else</summary>
+        <p class="hint">Type their email — a backup coordinator, or your successor. The add-in
+           drafts an invitation for you to review and send; they click <b>Find my setup</b> and
+           they're configured. Nothing to copy or paste.</p>
+        <label>Their email <input id="inviteTo" type="text" placeholder="backup@agency.gov" /></label>
+        <button id="inviteSend" class="primary">Write the invitation</button>
+        <p id="inviteInfo" class="hint"></p>
+      </details>
+
       <details class="options">
-        <summary>Share this setup with another coordinator</summary>
+        <summary>Or share a setup code by hand</summary>
         <p class="hint">Generate a code and send it to whoever else runs this — a backup
            coordinator, or your successor. They paste it below and skip the whole setup.</p>
         <button id="profileCopy" class="primary">Generate &amp; copy setup code</button>
         <textarea id="profileBlob" rows="3" readonly placeholder="Your code appears here"></textarea>
         <hr style="border:none;border-top:1px solid var(--line);margin:12px 0" />
-        <p class="hint"><b>Given a code by someone else?</b> Paste it here instead:</p>
+        <p class="hint"><b>Been sent an invitation?</b> You don't need a code:</p>
+        <button id="findMySetup" class="primary">Find my setup</button>
+        <p class="hint" style="margin-top:10px">Given a raw code instead? Paste it here:</p>
         <textarea id="profileBlobIn" rows="3" placeholder="Paste a setup code"></textarea>
         <button id="profileApply">Use this code</button>
       </details>
@@ -350,21 +362,22 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=37"></script>
-  <script src="../routing.js?v=37"></script>
-  <script src="../teams.js?v=37"></script>
-  <script src="../docx.js?v=37"></script>
-  <script src="../graph.js?v=37"></script>
-  <script src="../presets.js?v=37"></script>
-  <script src="../provision.js?v=37"></script>
-  <script src="../contacts.js?v=37"></script>
-  <script src="../reportgen.js?v=37"></script>
-  <script src="../chapters.js?v=37"></script>
-  <script src="../feed.js?v=37"></script>
-  <script src="../deadline.js?v=37"></script>
-  <script src="../fiscal.js?v=37"></script>
-  <script src="../harvest.js?v=37"></script>
-  <script src="../xlsx.js?v=37"></script>
-  <script src="taskpane.js?v=37"></script>
+  <script src="../parser.js?v=38"></script>
+  <script src="../routing.js?v=38"></script>
+  <script src="../teams.js?v=38"></script>
+  <script src="../docx.js?v=38"></script>
+  <script src="../graph.js?v=38"></script>
+  <script src="../presets.js?v=38"></script>
+  <script src="../provision.js?v=38"></script>
+  <script src="../contacts.js?v=38"></script>
+  <script src="../reportgen.js?v=38"></script>
+  <script src="../chapters.js?v=38"></script>
+  <script src="../feed.js?v=38"></script>
+  <script src="../invite.js?v=38"></script>
+  <script src="../deadline.js?v=38"></script>
+  <script src="../fiscal.js?v=38"></script>
+  <script src="../harvest.js?v=38"></script>
+  <script src="../xlsx.js?v=38"></script>
+  <script src="taskpane.js?v=38"></script>
 </body>
 </html>

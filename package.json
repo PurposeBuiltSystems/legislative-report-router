@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "check": "node tools/check-undeclared.js",
-    "test": "node tools/check-undeclared.js && node test/chapters.test.js && node test/contacts.test.js && node test/deadline.test.js && node test/feed.test.js && node test/fiscal.test.js && node test/harvest.test.js && node test/reportgen.test.js && node test/router.test.js",
+    "test": "node tools/check-undeclared.js && node test/chapters.test.js && node test/contacts.test.js && node test/deadline.test.js && node test/feed.test.js && node test/fiscal.test.js && node test/harvest.test.js && node test/reportgen.test.js && node test/router.test.js && node test/invite.test.js",
     "validate": "office-addin-manifest validate manifest.xml"
   },
   "author": "Matthew Miller",
