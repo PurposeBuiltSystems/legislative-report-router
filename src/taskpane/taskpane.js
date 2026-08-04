@@ -789,15 +789,28 @@
     var out = {};
     PROFILE_KEYS.forEach(function (k) { if (st[k]) { out[k] = st[k]; } });
     var blob = btoa(unescape(encodeURIComponent(JSON.stringify(out))));
-    byId("profileBlob").value = blob;
-    byId("profileBlob").select();
-    try { document.execCommand("copy"); } catch (e) { /* manual copy */ }
-    setStatus("info", "Profile code is in the box (and copied). Send it to your team.");
+    var box = byId("profileBlob");
+    box.value = blob;
+    box.select();
+    // modern API first; execCommand still works on a readonly textarea
+    var done = function () {
+      setStatus("info", "Setup code generated and copied. Send it to the other coordinator \u2014 " +
+        "they paste it into \u201cGiven a code by someone else?\u201d below.");
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(blob).then(done, function () {
+        try { document.execCommand("copy"); } catch (e) { /* select-and-copy by hand */ }
+        done();
+      });
+    } else {
+      try { document.execCommand("copy"); } catch (e) { /* select-and-copy by hand */ }
+      done();
+    }
   }
 
   function profileApply() {
     try {
-      var raw = byId("profileBlob").value.trim();
+      var raw = byId("profileBlobIn").value.trim();
       if (!raw) { setStatus("error", "Paste the profile code first."); return; }
       var p = JSON.parse(decodeURIComponent(escape(atob(raw))));
       var patch = {};
