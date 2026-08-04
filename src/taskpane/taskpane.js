@@ -1269,7 +1269,11 @@
     }
   }
 
-  async function connectRules() {
+  /** quiet: suppress the status chatter when called as part of a bigger
+   *  flow (create-lists, auto-draft, self-test). Callers already pass it —
+   *  the parameter had gone missing, so every successful connect threw a
+   *  ReferenceError on the last line under "use strict". */
+  async function connectRules(quiet) {
     byId("connectRules").disabled = true;
     try {
       setStatus("work", "Loading routing rules from SharePoint…");
