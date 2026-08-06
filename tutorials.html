@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tutorials — Legislative Report Router</title>
+  <style>
+    body { font-family: -apple-system, Segoe UI, sans-serif; margin: 3rem auto; max-width: 44rem; padding: 0 1rem; color: #242424; line-height: 1.6; }
+    h1 { color: #0f6cbd; } h2 { color: #0f6cbd; margin-top: 2.6rem; }
+    h3 { margin-top: 1.8rem; }
+    .step { background: #f8f8f8; border-radius: 8px; padding: 10px 14px; margin: 8px 0; }
+    .step b { color: #0f6cbd; }
+    .note { background: #fff8e6; border-radius: 8px; padding: 10px 14px; margin: 12px 0; }
+    .lede { background: #eff6fc; border-radius: 8px; padding: 12px 16px; }
+    .see { border-left: 3px solid #0f6cbd; background: #f4f9fd; padding: 8px 14px; margin: 8px 0 14px; font-size: .95em; }
+    .see b { color: #0f6cbd; }
+    .wrong { border-left: 3px solid #c4314b; background: #fdf3f4; padding: 8px 14px; margin: 8px 0 14px; font-size: .95em; }
+    .wrong b { color: #c4314b; }
+    pre { background: #f4f4f4; border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: .9em; line-height: 1.45; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: .9em; }
+    th, td { border: 1px solid #d1d1d1; padding: 5px 9px; text-align: left; vertical-align: top; }
+    th { background: #eef4f6; }
+    code { background: #f0f0f0; padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+    .toc { background: #f8f8f8; border-radius: 8px; padding: 12px 18px; }
+    .toc li { margin: 4px 0; }
+    footer { margin-top: 3rem; color: #616161; font-size: .9em; }
+    @media print { body { margin: 0.5in; } .toc { display: none; } }
+  </style>
+</head>
+<body>
+  <h1>Legislative Report Router — Tutorials</h1>
+  <p class="lede">These are for the <b>coordinator</b> — the person who receives the bill report
+     and gets it in front of the divisions. If you're a division reviewer who got tagged in
+     Teams, you want the <a href="reviewers.html">two-minute reviewer guide</a> instead.</p>
+
+  <div class="toc">
+    <b>In order</b>
+    <ul>
+      <li><a href="#practice">Tutorial 1 — A practice run that can't touch anything</a> (5 min)</li>
+      <li><a href="#realday">Tutorial 2 — A real report day, start to finish</a></li>
+      <li><a href="#costs">Tutorial 3 — Getting the costs back out</a></li>
+    </ul>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="practice">Tutorial 1 — A practice run that can't touch anything</h2>
+
+  <p>Do this first. It exercises reading, parsing and preview <b>without any setup and without
+     the ability to post anywhere</b>, so you can get familiar before anything is at stake.</p>
+
+  <h3>Step 1 — Make yourself a practice report</h3>
+  <div class="step">Compose a new email in Outlook — don't send it — and paste this into the
+     body, each item on its own line:</div>
+  <pre>HF935
+MVD
+MVD
+medical personnel authorized to withdraw a specimen of blood
+Successor to HSB171, as amended.</pre>
+
+  <h3>Step 2 — Read it</h3>
+  <div class="step">Open <b>Report Router</b> from the ribbon. On the <b>Overview</b> tab, click
+     <b>Read this report</b>.</div>
+  <div class="note"><b>First run only:</b> a standard Microsoft sign-in appears. Sign in as the
+     mailbox you're in. Every permission is <b>delegated</b> — the add-in can only ever reach
+     what you can already reach yourself.</div>
+
+  <h3>Step 3 — Check the parse</h3>
+  <div class="see"><b>You should see</b>, on the <b>Review</b> tab: <b>one</b> bill — HF935,
+     division MVD, with an editable brief — flagged <b>unmatched</b>.</div>
+  <p>Both of those are correct, and each is worth understanding:</p>
+  <ul>
+    <li><b>Unmatched is right</b>, because you haven't connected a routing list yet. There's
+        nowhere to send it, and the add-in says so rather than guessing.</li>
+    <li><b>HSB171 did not become a second bill.</b> It's mentioned in the last line as history,
+        not filed as its own item. Parsing is line-aware for exactly this reason — a
+        successor-bill reference is the single most common way a naive parser invents a bill
+        that doesn't exist.</li>
+  </ul>
+
+  <h3>Step 4 — Look at what would go out</h3>
+  <div class="step">Open the <b>Preview</b> tab.</div>
+  <p>This renders the Teams post that <em>would</em> be sent — the bill number, the brief, the
+     deadline, the tag mention. Nothing has been sent.</p>
+
+  <div class="note"><b>Publish is blocked on purpose</b> until two separate things are true:
+     a routing list is connected in Setup, <b>and</b> you tick an explicit confirmation box.
+     Neither alone is enough. Nothing can post or email until both are.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="realday">Tutorial 2 — A real report day, start to finish</h2>
+
+  <p>This assumes Setup is done — the six-step wizard under <b>⚙️ Setup (one-time, guided)</b>,
+     ending with <b>6 · Prove it all works</b> and its <b>Run all checks</b> button. If the pane
+     doesn't say routing is connected, finish that first; the admin guide has the list schemas.</p>
+
+  <h3>Step 1 — Read the day's report</h3>
+  <div class="step">Open the report email, then <b>Read this report</b> on <b>Overview</b>.</div>
+  <div class="see"><b>You should see</b> the Review tab fill with one entry per bill, each with
+     a division and a plain-language brief.</div>
+
+  <h3>Step 2 — Fix what it got wrong</h3>
+  <p>This is the step that matters, and it's the one people skip. <b>Everything on the Review
+     tab is editable</b> — the brief, the division, the severity. The parser is deterministic
+     and rule-based, not an AI guessing at intent, which means it's predictable but also means
+     it only knows what the report literally said.</p>
+  <div class="step">Anything flagged <b>unmatched</b> needs a division. Select the bills and use
+     <b>Assign</b> to set one in bulk.</div>
+  <div class="wrong"><b>Leave a bill unmatched and it doesn't get routed.</b> That's deliberate —
+     silently guessing a division would put a bill in front of the wrong people and, worse,
+     <em>not</em> in front of the right ones. But it does mean an unmatched bill is your job to
+     resolve before you publish.</div>
+
+  <h3>Step 3 — Pulling in bills from the feed</h3>
+  <div class="step">Optional: on <b>New bills</b>, click <b>Check for new bills</b>, tick the
+     ones you want, and click <b>Add selected bills to today's report →</b>.</div>
+
+  <h3>Step 4 — Preview, properly</h3>
+  <div class="step">Open <b>Preview</b> and read at least a couple of the posts as though you
+     were the person receiving them.</div>
+  <p>Check the <b>deadline</b> in particular. Comments are due <b>48 business hours</b> out,
+     snapped to <b>5:00 PM</b> — weekends and your agency's holidays skipped, and the snap never
+     shortens the window. It appears right in the subject line so a reviewer sees it without
+     opening anything.</p>
+
+  <h3>Step 5 — Publish</h3>
+  <div class="step">Open <b>Publish</b>, tick the confirmation box, and click <b>Publish</b>.</div>
+  <div class="see"><b>What happens:</b> one Teams post per bill, in the right channel, tagging
+     the right division. An audit row is written for each, and tracker rows are created so
+     divisions can mark themselves done.</div>
+  <div class="step">If any post failed — a channel permission, a transient Teams error — use
+     <b>Retry failed only</b>. It won't re-post the ones that already went.</div>
+
+  <h3>Step 6 — The daily report email</h3>
+  <p>The consolidated report is drafted and <b>left in your Drafts</b>. You read it and press
+     Send. As with everything else here, the add-in writes; you send.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="costs">Tutorial 3 — Getting the costs back out</h2>
+
+  <p>Divisions reply in the Teams threads with cost estimates and severity. The whole point of
+     this tutorial is that <b>you never retype any of it</b>.</p>
+
+  <h3>Step 1 — Harvest</h3>
+  <div class="step">Open <b>📜 Publish history</b> and click <b>Harvest from Teams replies</b>.</div>
+  <p>This reads replies <b>to the add-in's own bill posts</b>, in channels you already belong to,
+     and pulls out the money and severity. It reads <b>Word and Excel attachments too</b>, because
+     divisions routinely put the numbers in a spreadsheet rather than in the message.</p>
+  <div class="note">A figure from an attached costing sheet <b>outranks</b> one mentioned in
+     passing in prose. If someone writes "we thought it might be $10k" and attaches a workbook
+     saying $42,000, the workbook wins — that's the considered number.</div>
+
+  <h3>Step 2 — Check before you accept</h3>
+  <div class="step">Review what it found, tick the ones that are right, and click
+     <b>Apply checked to tracker</b>.</div>
+  <p>Nothing is recorded until you tick it. Harvesting is a proposal, not a decision — a
+     sentence like "this won't cost anything like the $2 million in the other bill" contains a
+     number that means the opposite of what a machine would take it for.</p>
+  <div class="see"><b>"TBD" is preserved as "estimate pending", never as zero.</b> A division
+     that hasn't costed something yet must not silently read as a free change.</div>
+
+  <h3>Step 3 — The running total</h3>
+  <div class="step">Under <b>💰 Fiscal impact</b>, click <b>Load fiscal rollup</b> for running
+     totals per fiscal year, then <b>Export CSV</b> if you want it in a budget workbook.</div>
+  <p>This is the number that supports a budget request: what this session's bills would cost,
+     by fiscal year, attributed to the divisions that said so, with the audit trail behind it.</p>
+
+  <h2>What this add-in will never do on its own</h2>
+  <div class="note">It does not post, email, or record anything without an explicit click from
+     you — publishing needs a confirmation checkbox, the daily report is left as a draft, and
+     harvested costs need ticking. There is no publisher server: it is static files running in
+     your Outlook, talking to Microsoft Graph as you. Parsing is deterministic client-side
+     logic — no AI, no external service, no telemetry — and every record it writes goes into
+     <b>your organisation's own</b> SharePoint lists.</div>
+
+  <footer>
+    <a href="quickstart.html">Quick Start</a> ·
+    <a href="reviewers.html">For division reviewers</a> ·
+    <a href="docs/admin-guide.html">Admin guide</a> ·
+    <a href="support.html">Support</a><br />
+    PurposeBuilt Systems · Legislative Report Router
+  </footer>
+</body>
+</html>
