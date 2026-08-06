@@ -13,23 +13,32 @@ a { color: #0f6cbd; } .crumb { font-size: 0.9em; }
 @media print { body { margin: 0.5in; } }
 </style></head><body><p class="crumb"><a href="index.html">← Documentation</a></p><h1 id="required-microsoft-graph-permissions">Required Microsoft Graph permissions</h1>
 <p>All permissions are <b>delegated</b> — the add-in acts as the signed-in<br>coordinator and can never reach anything the coordinator can't. There are<br>no application permissions and no backend.</p>
-<h2 id="required">Required</h2>
+<h2 id="requested-at-sign-in">Requested at sign-in</h2>
 <table>
 <tr><th>Scope</th><th>Used for</th><th>Why not less</th></tr>
-<tr><td><code>Mail.ReadWrite</code></td><td>Read the report message body/attachments; save the compose draft</td><td>Reading a draft's attachments requires more than <code>Mail.Read</code></td></tr>
+<tr><td><code>Mail.ReadWrite</code></td><td>Read the report message body/attachments; save the compose draft; draft the daily report and setup invitations</td><td>Reading a draft's attachments requires more than <code>Mail.Read</code></td></tr>
 <tr><td><code>Mail.Send</code></td><td>Send consolidated division emails; send the original report on publish</td><td>Sending is the product's job; drafts-only would break the workflow</td></tr>
 <tr><td><code>ChannelMessage.Send</code></td><td>Post one message per bill to Teams channels</td><td>The narrowest channel-posting scope</td></tr>
-<tr><td><code>Sites.ReadWrite.All</code></td><td>Read <code>LegislativeRoutingMatrix</code>; write <code>LegislativeAudit</code></td><td>Graph has no list-scoped delegated permission; see hardening below</td></tr>
-<tr><td><code>TeamworkTag.ReadWrite</code></td><td>Setup can create a division's tag (coordinator as first member) so posts always have a mention target</td><td>Tag creation is a setup-time convenience; without it, tags must be created manually in Teams</td></tr>
+<tr><td><code>ChannelMessage.Read.All</code></td><td>Read replies <b>to the add-in's own bill posts</b>, so divisions' cost estimates can be collected without re-typing (History → Harvest)</td><td>Graph has no "replies to messages I posted" scope; this is the narrowest available that can read a thread</td></tr>
+<tr><td><code>Sites.ReadWrite.All</code></td><td>Read <code>LegislativeRoutingMatrix</code>; write <code>LegislativeAudit</code> and <code>BillTracker</code> rows</td><td>Graph has no list-scoped delegated permission; see hardening below</td></tr>
+<tr><td><code>Team.ReadBasic.All</code></td><td>List the teams you belong to, for the setup wizard's Team picker</td><td>Required for <code>/me/joinedTeams</code></td></tr>
+<tr><td><code>Channel.ReadBasic.All</code></td><td>List a team's channels in the setup wizard</td><td>Required for <code>/teams/{id}/channels</code></td></tr>
+<tr><td><code>TeamworkTag.Read</code></td><td>Read a team's tags so a division's tag can be selected</td><td>Read-only</td></tr>
 </table>
-<h2 id="optional">Optional</h2>
+<h2 id="requested-only-when-you-use-the-feature-incremental-consent">Requested only when you use the feature (incremental consent)</h2>
+<p>These are <b>not</b> requested at sign-in. The add-in asks for them at the<br>moment the action is taken, so a tenant that never grants them still gets<br>a fully working add-in everywhere else.</p>
 <table>
-<tr><th>Scope</th><th>Used for</th></tr>
-<tr><td><code>TeamworkTag.Read</code></td><td>The Settings "tag ID lookup" helper (find a tag's GUID by team)</td></tr>
-<tr><td><code>Team.ReadBasic.All</code>, <code>Channel.ReadBasic.All</code></td><td>Future rule-validation helpers</td></tr>
+<tr><th>Scope</th><th>Requested when</th><th>If refused</th></tr>
+<tr><td><code>Sites.Manage.All</code></td><td>You click <b>Create my lists</b> during setup</td><td>Create the three lists by hand in Microsoft Lists (schemas in the admin guide); everything else works</td></tr>
+<tr><td><code>TeamworkTag.ReadWrite</code></td><td>You click <b>➕ Create the tag for this division</b></td><td>Create the tag in Teams (Manage team → Tags) and pick it from the dropdown</td></tr>
 </table>
+<blockquote>Why <code>Sites.Manage.All</code> is needed at all: Microsoft splits these precisely —</blockquote>
+<blockquote><code>Sites.ReadWrite.All</code> is *"edit or delete documents and list items"*, while</blockquote>
+<blockquote>creating a <b>list</b> requires <code>Sites.Manage.All</code>, *"create or delete document</blockquote>
+<blockquote>libraries and lists"*. The add-in only ever uses it to provision its own</blockquote>
+<blockquote>three lists.</blockquote>
 <h2 id="hardening-option">Hardening option</h2>
-<p>If security review balks at <code>Sites.ReadWrite.All</code> (it is delegated —<br>user's-reach-only — but broad), switch the app registration to<br><b><code>Sites.Selected</code></b> and have the SharePoint admin grant the app access to<br>only the legislative site. No code changes required.</p>
+<p>If security review balks at <code>Sites.ReadWrite.All</code> (it is delegated —<br>user's-reach-only — but broad), switch the app registration to<br><b><code>Sites.Selected</code></b> and have the SharePoint admin grant the app access to<br>only the legislative site. No code changes required. Note that list<br>*creation* still needs <code>Sites.Manage.All</code>, so provision the three lists by<br>hand first if you take this route.</p>
 <h2 id="admin-consent">Admin consent</h2>
 <p>Gov tenants typically block user consent. One-time admin consent URL:</p>
 <pre><code>
@@ -37,4 +46,6 @@ https://login.microsoftonline.com/organizations/adminconsent?client_id=0860a653-
 </code></pre>
 <p>(Use the <code>.us</code> authority host for GCC High/DoD.)</p>
 <h2 id="what-is-never-requested">What is never requested</h2>
-<p>No application permissions, no <code>Directory.*</code>, no <code>User.Read.All</code>, no<br><code>ChannelMessage.Read.All</code> — the add-in cannot read Teams messages, other<br>mailboxes, or the directory.</p></body></html>
+<p>No <b>application</b> permissions of any kind, no <code>Directory.*</code>, no<br><code>User.Read.All</code>, no <code>Mail.Read.Shared</code>. The add-in cannot read other<br>people's mailboxes, the directory, or any Teams conversation it did not<br>itself post into — <code>ChannelMessage.Read.All</code> is used solely to follow<br>replies to the add-in's own bill posts, and only in channels the<br>signed-in coordinator already belongs to.</p>
+<h2 id="audience">Audience</h2>
+<p>The app registration is <b>AzureADMultipleOrgs</b> — work or school accounts<br>only. Personal Microsoft accounts are not supported, because the Teams and<br>SharePoint scopes above are not available to them.</p></body></html>
