@@ -45,6 +45,20 @@
   function val(id) { var el = byId(id); return el ? el.value : ""; }
 
   /**
+   * Companions to on(), for the same reason. Outlook desktop caches the pane
+   * HTML far more aggressively than the web client while ?v= still fetches
+   * today's JavaScript, so startup routinely runs new code against an old
+   * page. A single unguarded `byId(x).value` there throws inside
+   * Office.onReady, and Outlook reports that as "Add-in Error" — the whole
+   * pane, not one field. Every startup write goes through these.
+   */
+  function setVal(id, v) { var el = byId(id); if (el) { el.value = v; } }
+  function setText(id, t) { var el = byId(id); if (el) { el.textContent = t; } }
+  function setAttr(id, n, v) { var el = byId(id); if (el) { el.setAttribute(n, v); } }
+  function setProp(id, k, v) { var el = byId(id); if (el) { el[k] = v; } }
+  function isChecked(id) { var el = byId(id); return !!(el && el.checked); }
+
+  /**
    * Show exactly what Microsoft said, under the friendly message. A
    * translated error that turns out to be wrong (as "ask IT for access"
    * did) otherwise leaves nobody anything to debug with.
@@ -245,6 +259,48 @@
     "obsMlk", "obsPresidents", "obsJuneteenth", "obsColumbus", "obsVeterans", "obsDayAfterThanksgiving", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distList", "autoDaily", "autoDailyTime"];
   var PROFILE_KEYS = SETTING_KEYS.concat([]);
 
+  /**
+   * Reflects who is signed in, and shows Sign out only when there is a
+   * cached account to clear. Guarded like everything else in startup: on a
+   * stale cached page these elements may not exist yet.
+   */
+  async function renderAuthState() {
+    var who = null;
+    try { who = await GraphData.currentAccount(); } catch (e) { who = null; }
+    setText("authWho", who ? ("Signed in as " + who) : "Not signed in");
+    setProp("signOut", "hidden", !who);
+    setProp("signIn", "hidden", !!who);
+  }
+
+  async function doSignIn() {
+    setProp("signIn", "disabled", true);
+    try {
+      await GraphData.getToken();
+      setStatus("ok", "Signed in.");
+    } catch (e) {
+      setStatus("error", friendly(e));
+    } finally {
+      setProp("signIn", "disabled", false);
+      renderAuthState();
+    }
+  }
+
+  async function doSignOut() {
+    setProp("signOut", "disabled", true);
+    try {
+      await GraphData.signOut();
+      state.site = null;
+      setStatus("info", "Signed out. This add-in's saved tokens are cleared, so the next action " +
+        "will ask you to sign in again. Your Outlook session is separate and is not " +
+        "affected \u2014 no add-in can end it.");
+    } catch (e) {
+      setStatus("error", friendly(e));
+    } finally {
+      setProp("signOut", "disabled", false);
+      renderAuthState();
+    }
+  }
+
   Office.onReady(function () {
     var s = settings();
     SETTING_KEYS.forEach(function (k) {
@@ -255,22 +311,28 @@
       } else if (s[k] != null && s[k] !== "") { el.value = s[k]; }
     });
     if (s.cloud) { GraphData.setCloud(s.cloud); }
-    if (!s.siteUrl) { byId("settings").setAttribute("open", "open"); }
+    if (!s.siteUrl) { setAttr("settings", "open", "open"); }
 
     var sel = byId("stateName");
-    LrrPresets.ALL_STATE_NAMES.forEach(function (n) {
-      var o = document.createElement("option");
-      o.value = o.textContent = n;
-      sel.appendChild(o);
-    });
-    sel.value = s.stateName || "Iowa";
-    if (!s.trackedChapters) { byId("trackedChapters").value = LrrChapters.DEFAULT_TRACKED.join(", "); }
-    if (!s.identifiers) { byId("identifiers").value = LrrPresets.presetFor(sel.value).identifiers.join(", "); }
-    sel.addEventListener("change", function () {
-      var preset = LrrPresets.presetFor(sel.value);
-      byId("identifiers").value = preset.identifiers.join(", ");
-      saveSettings({ stateName: sel.value, identifiers: byId("identifiers").value });
-    });
+    if (sel) {
+      LrrPresets.ALL_STATE_NAMES.forEach(function (n) {
+        var o = document.createElement("option");
+        o.value = o.textContent = n;
+        sel.appendChild(o);
+      });
+      sel.value = s.stateName || "Iowa";
+      sel.addEventListener("change", function () {
+        var preset = LrrPresets.presetFor(sel.value);
+        setVal("identifiers", preset.identifiers.join(", "));
+        saveSettings({ stateName: sel.value, identifiers: val("identifiers") });
+      });
+    }
+    var stateForPreset = (sel && sel.value) || s.stateName || "Iowa";
+    if (!s.trackedChapters) { setVal("trackedChapters", LrrChapters.DEFAULT_TRACKED.join(", ")); }
+    if (!s.identifiers) { setVal("identifiers", LrrPresets.presetFor(stateForPreset).identifiers.join(", ")); }
+    on("signIn", "click", doSignIn);
+    on("signOut", "click", doSignOut);
+    renderAuthState();
     on("profileCopy", "click", profileCopy);
     on("inviteSend", "click", sendInvites);
     on("findMySetup", "click", findMySetup);
@@ -286,9 +348,10 @@
     on("createLists", "click", createLists);
     on("siteSearchGo", "click", siteSearch);
     on("siteResults", "change", function () {
-      if (byId("siteResults").value) {
-        byId("siteUrl").value = byId("siteResults").value;
-        saveSettings({ siteUrl: byId("siteResults").value });
+      var picked = val("siteResults");
+      if (picked) {
+        setVal("siteUrl", picked);
+        saveSettings({ siteUrl: picked });
         state.site = null;
       }
     });
@@ -302,13 +365,14 @@
     on("wizPrev", "click", function () { wizShow(wizStep - 1); });
     on("wizNext", "click", function () { wizShow(wizStep + 1); });
     on("wizSignIn", "click", async function () {
-      byId("wizSignIn").disabled = true;
+      setProp("wizSignIn", "disabled", true);
       try {
         await GraphData.getToken();
-        byId("wizSignInInfo").textContent = "\u2713 Signed in. Click Next.";
+        setText("wizSignInInfo", "\u2713 Signed in. Click Next.");
+        renderAuthState();
       } catch (e) {
-        byId("wizSignInInfo").textContent = friendly(e);
-      } finally { byId("wizSignIn").disabled = false; }
+        setText("wizSignInInfo", friendly(e));
+      } finally { setProp("wizSignIn", "disabled", false); }
     });
     on("tagCreate", "click", createDivisionTag);
     on("useOneDrive", "click", soloGuidance);
@@ -326,15 +390,15 @@
     on("distList", "input", updateDistInfo);
     updateDistInfo();
     var st0 = settings();
-    if (st0.autoDaily === true || st0.autoDaily === "true") { byId("autoDaily").checked = true; }
+    if (st0.autoDaily === true || st0.autoDaily === "true") { setProp("autoDaily", "checked", true); }
     on("autoDaily", "change", function () {
-      saveSettings({ autoDaily: byId("autoDaily").checked });
+      saveSettings({ autoDaily: isChecked("autoDaily") });
     });
     startAutoDraftTimer();
     on("lookupTags", "click", lookupTags);
     on("bulkApply", "click", bulkApply);
     on("confirmBox", "change", function () {
-      byId("publishGo").disabled = !byId("confirmBox").checked;
+      setProp("publishGo", "disabled", !isChecked("confirmBox"));
     });
     on("publishGo", "click", function () { publish(false); });
     on("retryFailed", "click", function () { publish(true); });
@@ -348,8 +412,9 @@
     SETTING_KEYS.forEach(function (k) {
       on(k, "change", function () {
         var el = byId(k);
+        if (!el) { return; }
         var p = {}; p[k] = el.type === "checkbox" ? el.checked : el.value; saveSettings(p);
-        if (k === "cloud") { GraphData.setCloud(byId(k).value); state.site = null; }
+        if (k === "cloud") { GraphData.setCloud(el.value); state.site = null; }
         if (k === "siteUrl" || k === "routingList" || k === "auditList" || k === "trackerList") { state.site = null; }
       });
     });
@@ -357,12 +422,12 @@
     var item = Office.context.mailbox.item;
     if (item && item.subject && typeof item.subject === "string") {
       state.subject = item.subject; // read mode: plain string
-      byId("stSubject").textContent = state.subject;
+      setText("stSubject", state.subject);
     } else if (item && item.subject && item.subject.getAsync) {
       item.subject.getAsync(function (r) { // compose mode
         if (r.status === Office.AsyncResultStatus.Succeeded) {
           state.subject = r.value || "(no subject)";
-          byId("stSubject").textContent = state.subject;
+          setText("stSubject", state.subject);
         }
       });
     }
@@ -374,7 +439,7 @@
     updateConnBanner();
     updateSetupChecklist();
     if (hadCache) {
-      byId("rulesInfo").textContent = state.rules.length + " routing rule(s) from saved setup.";
+      setText("rulesInfo", state.rules.length + " routing rule(s) from saved setup.");
       maybeAutoParse();
     }
     if (s.siteUrl) {
@@ -385,8 +450,10 @@
         }).catch(function () {
           if (!hadCache) {
             var el = byId("connBanner");
-            el.className = "conn-banner setup";
-            el.textContent = "Saved setup found \u2014 click \u2699\ufe0f Setup \u2192 \u201cConnect & load routing rules\u201d to sign in on this device (one time).";
+            if (el) {
+              el.className = "conn-banner setup";
+              el.textContent = "Saved setup found \u2014 click \u2699\ufe0f Setup \u2192 \u201cConnect & load routing rules\u201d to sign in on this device (one time).";
+            }
           }
         });
       }, 350);

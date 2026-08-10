@@ -88,6 +88,41 @@
   }
 
   /**
+   * Signed-in account, or null. Lets the pane show who is signed in and
+   * decide whether the Sign out control has anything to act on.
+   */
+  async function currentAccount() {
+    try {
+      var pca = await withTimeout(getPca(), 20000, "auth unavailable");
+      var accts = (pca.getAllAccounts && pca.getAllAccounts()) || [];
+      return accts.length ? (accts[0].username || accts[0].name || "signed in") : null;
+    } catch (e) { return null; }
+  }
+
+  /**
+   * Sign out of the ADD-IN. Under nested app authentication Outlook owns the
+   * user's session and no add-in can end it; a button claiming to would be
+   * lying. What this genuinely does is drop every token and account this
+   * add-in has cached, so the next Graph call must authenticate again. The
+   * pane says exactly that, rather than implying more.
+   */
+  async function signOut() {
+    var pca = null;
+    try { pca = await withTimeout(getPca(), 20000, "auth unavailable"); } catch (e) { /* nothing cached to clear */ }
+    if (pca) {
+      var accts = (pca.getAllAccounts && pca.getAllAccounts()) || [];
+      for (var i = 0; i < accts.length; i++) {
+        try {
+          if (pca.clearCache) { await pca.clearCache({ account: accts[i] }); }
+          else if (pca.logoutPopup) { await pca.logoutPopup({ account: accts[i] }); }
+        } catch (e) { /* keep clearing the rest */ }
+      }
+    }
+    pcaPromise = null;   // force a fresh broker handshake next time
+    return true;
+  }
+
+  /**
    * Token that additionally carries TeamworkTag.ReadWrite, requested only
    * when the user clicks "Create the tag" — so a tenant that hasn't granted
    * it still gets a fully working add-in everywhere else.
@@ -387,6 +422,8 @@
   root.GraphData = {
     setCloud: setCloud,
     getToken: getToken,
+    signOut: signOut,
+    currentAccount: currentAccount,
     getTagWriteToken: getTagWriteToken,
     getListCreateToken: getListCreateToken,
     resolveSite: resolveSite,

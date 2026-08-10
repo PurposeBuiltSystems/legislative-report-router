@@ -10,7 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
-  <link rel="stylesheet" href="taskpane.css?v=39" />
+  <link rel="stylesheet" href="taskpane.css?v=40" />
 </head>
 <body>
   <header class="app-head">
@@ -30,6 +30,14 @@
   <!-- Screen 1: Overview -->
   <section id="screen-overview" class="screen">
     <div id="connBanner" class="conn-banner">Checking your saved setup…</div>
+    <!-- Account row. Certification 1100.5.7.1 requires a visible sign-out
+         wherever an add-in signs a user in; it must sit on the first screen,
+         not buried in Setup. -->
+    <div id="authRow" class="auth-row">
+      <span id="authWho">Not signed in</span>
+      <button id="signIn" class="linkish" type="button">Sign in</button>
+      <button id="signOut" class="linkish" type="button" hidden>Sign out</button>
+    </div>
     <div class="stat-grid">
       <div class="stat"><span id="stSubject" class="stat-big">—</span><span>Subject</span></div>
       <div class="stat"><span id="stBills" class="stat-big">0</span><span>Bills detected</span></div>
@@ -362,22 +370,22 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=39"></script>
-  <script src="../routing.js?v=39"></script>
-  <script src="../teams.js?v=39"></script>
-  <script src="../docx.js?v=39"></script>
-  <script src="../graph.js?v=39"></script>
-  <script src="../presets.js?v=39"></script>
-  <script src="../provision.js?v=39"></script>
-  <script src="../contacts.js?v=39"></script>
-  <script src="../reportgen.js?v=39"></script>
-  <script src="../chapters.js?v=39"></script>
-  <script src="../feed.js?v=39"></script>
-  <script src="../invite.js?v=39"></script>
-  <script src="../deadline.js?v=39"></script>
-  <script src="../fiscal.js?v=39"></script>
-  <script src="../harvest.js?v=39"></script>
-  <script src="../xlsx.js?v=39"></script>
-  <script src="taskpane.js?v=39"></script>
+  <script src="../parser.js?v=40"></script>
+  <script src="../routing.js?v=40"></script>
+  <script src="../teams.js?v=40"></script>
+  <script src="../docx.js?v=40"></script>
+  <script src="../graph.js?v=40"></script>
+  <script src="../presets.js?v=40"></script>
+  <script src="../provision.js?v=40"></script>
+  <script src="../contacts.js?v=40"></script>
+  <script src="../reportgen.js?v=40"></script>
+  <script src="../chapters.js?v=40"></script>
+  <script src="../feed.js?v=40"></script>
+  <script src="../invite.js?v=40"></script>
+  <script src="../deadline.js?v=40"></script>
+  <script src="../fiscal.js?v=40"></script>
+  <script src="../harvest.js?v=40"></script>
+  <script src="../xlsx.js?v=40"></script>
+  <script src="taskpane.js?v=40"></script>
 </body>
 </html>

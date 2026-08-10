@@ -258,3 +258,11 @@ button:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, v
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation-duration: .01s !important; }
 }
+
+
+/* Account row — sign in / sign out must be visible on the first screen. */
+.auth-row { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; font-size: 12.5px; color: var(--fg-dim); }
+.auth-row #authWho { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.linkish { background: none; border: none; padding: 2px 4px; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; }
+button.linkish:hover { opacity: .8; }
+button.linkish:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }

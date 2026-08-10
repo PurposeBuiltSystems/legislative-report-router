@@ -19,7 +19,7 @@
   xsi:type="MailApp">
 
   <Id>c02ab6d7-a54e-49d4-b440-6a6da79ea34b</Id>
-  <Version>1.0.0.0</Version>
+  <Version>1.0.0.1</Version>
   <ProviderName>PurposeBuilt Systems LLC</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Legislative Report Router" />
@@ -40,7 +40,7 @@
 
   <Requirements>
     <Sets>
-      <Set Name="Mailbox" MinVersion="1.8" />
+      <Set Name="Mailbox" MinVersion="1.5" />
     </Sets>
   </Requirements>
 
@@ -71,7 +71,7 @@
 
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
     <Requirements>
-      <bt:Sets DefaultMinVersion="1.8">
+      <bt:Sets DefaultMinVersion="1.5">
         <bt:Set Name="Mailbox" />
       </bt:Sets>
     </Requirements>
@@ -145,12 +145,15 @@
       </bt:LongStrings>
     </Resources>
 
-    <!-- V1_1: identical surfaces, plus a pinnable read pane (SupportsPinning
-         is only valid in the 1.1 schema). Clients that understand 1.1 use
-         this; older clients fall back to the block above. -->
+    <!-- V1_1: identical surfaces. SupportsPinning was removed after
+         certification finding 1120.4.8: a pinned pane must re-render for
+         whichever message is selected, and this pane is a workflow console
+         that holds parse/review state across messages. Refreshing it per
+         message would discard a coordinator's in-progress review, so the
+         honest fix is not to claim pinning. -->
     <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
       <Requirements>
-        <bt:Sets DefaultMinVersion="1.8">
+        <bt:Sets DefaultMinVersion="1.5">
           <bt:Set Name="Mailbox" />
         </bt:Sets>
       </Requirements>
@@ -174,7 +177,6 @@
                     </Icon>
                     <Action xsi:type="ShowTaskpane">
                       <SourceLocation resid="Taskpane.Url" />
-                      <SupportsPinning>true</SupportsPinning>
                     </Action>
                   </Control>
                 </Group>
