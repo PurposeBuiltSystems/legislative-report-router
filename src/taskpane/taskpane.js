@@ -286,20 +286,24 @@
   }
 
   async function doSignOut() {
+    // Respond immediately. The previous version awaited a broker handshake
+    // before changing anything on screen, which certification saw as the
+    // button doing nothing at all.
     setProp("signOut", "disabled", true);
+    setProp("signOut", "hidden", true);
+    setProp("signIn", "hidden", false);
+    setText("authWho", "Signed out. This add-in will ask you to sign in again " +
+      "before its next action. Your Outlook session is separate and is not affected.");
+    setStatus("ok", "Signed out of the add-in\u2019s access.");
     try {
       await GraphData.signOut();
-      state.site = null;
-      setStatus("info", "Signed out. This add-in's saved tokens are cleared, so the next action " +
-        "will ask you to sign in again. Your Outlook session is separate and is not " +
-        "affected \u2014 no add-in can end it.");
     } catch (e) {
-      setStatus("error", friendly(e));
+      // The enforced state is already set; a failed cache clear doesn't undo it.
     } finally {
       setProp("signOut", "disabled", false);
-      renderAuthState();
     }
   }
+
 
   Office.onReady(function () {
     var s = settings();
