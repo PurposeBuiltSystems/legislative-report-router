@@ -146,6 +146,24 @@
   }
   function esc(s) { return LrrTeams._internals.esc(s); }
 
+  /**
+   * roamingSettings caps at 32 KB across everything this add-in stores. Over
+   * that, saveAsync FAILS - and a callback that ignores asyncResult.status
+   * turns a failure into silent data loss: the user believes it saved. Every
+   * write of real user data goes through here so a failure is at least said
+   * out loud.
+   */
+  function persistSettings(what) {
+    Office.context.roamingSettings.saveAsync(function (r) {
+      if (r && r.status !== Office.AsyncResultStatus.Succeeded) {
+        setStatus("error", "Couldn't save " + (what || "your settings") +
+          " \u2014 you may be at the 32 KB limit Outlook allows an add-in. " +
+          "Recent changes may not survive a restart.");
+      }
+    });
+  }
+
+
   function setStatus(kind, text) {
     var el = byId("status");
     if (!text) { el.hidden = true; return; }
@@ -162,7 +180,7 @@
     var s = settings();
     Object.keys(patch).forEach(function (k) { s[k] = patch[k]; });
     Office.context.roamingSettings.set(SETTINGS_KEY, JSON.stringify(s));
-    Office.context.roamingSettings.saveAsync(function () {});
+    persistSettings("your settings");
     return s;
   }
 
@@ -187,7 +205,7 @@
       var blob = JSON.stringify({ site: state.site, rules: state.rules, at: new Date().toISOString() });
       if (blob.length < 24000) {
         Office.context.roamingSettings.set(RULES_CACHE_KEY, blob);
-        Office.context.roamingSettings.saveAsync(function () {});
+        persistSettings("the routing-rules cache");
       }
     } catch (e) { /* cache is best-effort */ }
   }
@@ -221,7 +239,7 @@
       Office.context.roamingSettings.set(REPORTED_KEY, JSON.stringify({
         bills: bills.slice(-800), last: new Date().toISOString(),
       }));
-      Office.context.roamingSettings.saveAsync(function () {});
+      persistSettings("the published-bill record");
     } catch (e) { /* best-effort */ }
   }
 
@@ -1814,9 +1832,42 @@
 
   // ---------- draft save/load ----------
 
+  /**
+   * roamingSettings caps at 32 KB for EVERYTHING this add-in stores, and a
+   * saved draft carries one entry per bill. Measured against the real parser,
+   * 50 bills serialised to ~40 KB and the save failed - on a busy session day,
+   * which is exactly when a coordinator most needs it.
+   *
+   * sourceBlock is the raw text each bill was parsed from. It is the largest
+   * field, and nothing reads it back after a draft is loaded, so it is dropped
+   * on save. That roughly halves the payload for free.
+   */
+  function draftItem(it) {
+    var copy = {};
+    Object.keys(it).forEach(function (k) {
+      if (k === "sourceBlock") { return; }   // not read back; the biggest field
+      copy[k] = it[k];
+    });
+    return copy;
+  }
+
   function saveDraft() {
-    var draft = { subject: state.subject, reportKey: state.reportKey, items: state.items, savedAt: new Date().toISOString() };
-    Office.context.roamingSettings.set(DRAFT_KEY, JSON.stringify(draft));
+    var draft = {
+      subject: state.subject,
+      reportKey: state.reportKey,
+      items: (state.items || []).map(draftItem),
+      savedAt: new Date().toISOString(),
+    };
+    var blob = JSON.stringify(draft);
+    // Warn BEFORE attempting, so the advice is actionable rather than a
+    // post-hoc "it failed".
+    if (blob.length > 24000) {
+      setStatus("error", "This draft is too large to save (" + Math.round(blob.length / 1024) +
+        " KB of a 32 KB budget shared with your settings). Publish in two passes, or " +
+        "shorten the briefs, rather than relying on the draft surviving.");
+      return;
+    }
+    Office.context.roamingSettings.set(DRAFT_KEY, blob);
     Office.context.roamingSettings.saveAsync(function (r) {
       if (r.status === Office.AsyncResultStatus.Succeeded) {
         state.lastSaved = new Date().toLocaleTimeString();
