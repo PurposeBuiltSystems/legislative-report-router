@@ -436,7 +436,16 @@
       "?$select=id,@microsoft.graph.downloadUrl");
     var url = meta && meta["@microsoft.graph.downloadUrl"];
     if (!url) { throw new Error("no download URL for that attachment"); }
+    // This is the one Graph-adjacent call that bypasses graphJson, so it also
+    // bypassed its throttle retry. Harvesting a division's cost spreadsheets
+    // downloads several attachments in a row - exactly the burst that gets
+    // throttled - so retry here too.
     var res = await fetch(url);
+    if (res.status === 429 || res.status === 503) {
+      var wait = Number(res.headers.get("Retry-After") || 3) * 1000;
+      await new Promise(function (r) { setTimeout(r, Math.min(wait, 15000)); });
+      res = await fetch(url);
+    }
     if (!res.ok) { throw new Error("attachment download -> " + res.status); }
     var buf = new Uint8Array(await res.arrayBuffer());
     var bin = "";
