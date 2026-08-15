@@ -79,7 +79,8 @@ who" board and replaces individual completeness spreadsheets. Columns:
 | --- | --- | --- |
 | Title | text | bill number (written by the add-in) |
 | Division | text | one row per bill × division |
-| Status | **Choice** | `Pending review` / `In review` / `Commented` / `No comment needed` |
+| Status | **Choice** | `Pending review` / `In review` / `Commented` / `No comment needed` — **your division's review state, not the bill's fate** |
+| BillStatus | Text | The bill's fate, filled by **Check which bills are still alive**. `Enacted` / `Vetoed` / `Advanced` / `Did not advance` / `Did not pass` / `Active` / `Unknown` |
 | DueDate | Date | auto-set to +2 business days at publish |
 | BillLink | text | BillBook URL |
 | Brief | text | first 250 chars |
@@ -87,6 +88,40 @@ who" board and replaces individual completeness spreadsheets. Columns:
 
 The add-in writes one `Pending review` row per bill × division at publish
 time; division staff update Status themselves.
+
+### Bill status, and what the feed can actually tell you
+
+`BillStatus` is derived from the legislature's feed by **Check which bills are
+still alive** on the Fiscal impact panel. It is worth knowing what that can and
+cannot establish.
+
+The feed never states that a bill died — across 4,224 real Iowa entries there
+are no mentions of *funnel*, *died*, *failed* or *withdrawn*. It records the
+opposite: an enactment disposition (`Effective date: 07/01/2025`) and study-bill
+succession (`(Formerly HSB 52.)`). So:
+
+| Status | Basis |
+| --- | --- |
+| `Enacted` | The feed carries an enactment disposition. |
+| `Vetoed` | The description says so. |
+| `Advanced` | A study bill that became a numbered bill, still live. |
+| `Did not advance` | A study bill that never became a numbered bill, **and the session has ended**. |
+| `Did not pass` | A numbered bill with no enactment, **and the session has ended**. |
+| `Active` | No outcome yet, or the session is still running. |
+| `Unknown` | Not in the feed — usually a mistyped bill number. |
+
+**Nothing is called dead until you set *Session adjourned*.** Before that,
+"we haven't seen it pass" and "it failed" are not the same statement.
+
+**Which funnel a bill died in is not derivable** from this feed: it carries no
+funnel dates and no committee actions. `Did not advance` means exactly that.
+
+One detail worth keeping, because it nearly produced a badly wrong answer:
+detection requires `Effective date:` followed by a date. A looser match on
+"effective date" also hits ordinary drafting language — *"...and including
+effective date provisions"* appears in 627 descriptions and says only that the
+bill contains such a clause. The loose form matched 948 entries where 364 were
+genuinely enacted, which would have declared 584 bills law that never passed.
 
 **Pin it in Teams:** in the legislative channel, **+ Add a tab → Lists →
 existing list → BillTracker**. Create these views:

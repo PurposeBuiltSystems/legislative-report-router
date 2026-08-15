@@ -8,7 +8,7 @@
  */
 /* global Office, GraphData, document,
    LrrParser, LrrRouting, LrrTeams, LrrDocx, LrrXlsx, LrrPresets, LrrProvision,
-   LrrChapters, LrrContacts, LrrFeed, LrrReportGen, LrrDeadline, LrrFiscal, LrrHarvest,
+   LrrChapters, LrrContacts, LrrFeed, LrrReportGen, LrrDeadline, LrrFiscal, LrrBillStatus, LrrHarvest,
    LrrInvite, window */
 (function () {
   "use strict";
@@ -273,7 +273,7 @@
     if (screen === "publish") { renderPublishSummary(); }
   }
 
-  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "responseHours", "dueTime", "holidays",
+  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "responseHours", "dueTime", "holidays", "sessionEnd",
     "obsMlk", "obsPresidents", "obsJuneteenth", "obsColumbus", "obsVeterans", "obsDayAfterThanksgiving", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distList", "autoDaily", "autoDailyTime"];
   var PROFILE_KEYS = SETTING_KEYS.concat([]);
 
@@ -426,6 +426,7 @@
     on("retryFailed", "click", function () { publish(true); });
     on("refreshAudit", "click", refreshAudit);
     on("fiscalLoad", "click", loadFiscal);
+    on("statusRefresh", "click", refreshBillStatuses);
     on("fiscalCsv", "click", exportFiscalCsv);
     on("fiscalHarvest", "click", harvestFiscal);
     on("harvestApply", "click", applyHarvest);
@@ -2252,6 +2253,90 @@
   /** Read the BillTracker, ensure the fiscal columns exist (upgrade path
    *  for lists created before this feature), and render running totals
    *  per FY for budget requests. */
+  /**
+   * Mark which tracked bills are still alive, by looking back through the
+   * legislature's own feed rather than waiting for new activity.
+   *
+   * A tracker with no notion of a bill's fate goes stale within one session:
+   * divisions keep being chased about bills that died months ago, and — worse
+   * — the fiscal rollup keeps counting their cost estimates, so a budget
+   * request ends up defended with money attached to bills nobody will pass.
+   *
+   * What the feed supports is set out in billstatus.js. In short: it records
+   * enactment and study-bill succession, never death, so death is inferred
+   * from absence once the session has ended, and nothing is called dead
+   * before that.
+   */
+  async function refreshBillStatuses() {
+    if (!state.site || !state.site.trackerListId) {
+      setStatus("error", "Connect a Bill tracker list in Settings first."); return;
+    }
+    setProp("statusRefresh", "disabled", true);
+    try {
+      setStatus("work", "Reading the legislative feed\u2026");
+      var entries = await loadFeedEntries();
+      if (!entries.length) {
+        setStatus("error", "Couldn't read the bill feed \u2014 nothing to compare against.");
+        return;
+      }
+      var idx = LrrBillStatus.buildIndex(entries);
+      var opts = { sessionEnd: val("sessionEnd").trim() };
+
+      setStatus("work", "Reading the bill tracker\u2026");
+      var token = await GraphData.getToken();
+      try {
+        await GraphData.addListColumn(token, state.site.siteId, state.site.trackerListId,
+          { name: "BillStatus", text: {} });
+      } catch (e) { /* already there, or no rights to alter the list */ }
+
+      var rows = await GraphData.listItems(token, state.site.siteId, state.site.trackerListId, 2000);
+      var counts = {}, written = 0, unchanged = 0, failed = 0;
+      for (var i = 0; i < rows.length; i++) {
+        var f = rows[i].fields || {};
+        var r = LrrBillStatus.statusFor(f.Title || "", idx, opts);
+        counts[r.status] = (counts[r.status] || 0) + 1;
+        if (f.BillStatus === r.status) { unchanged++; continue; }
+        try {
+          await GraphData.updateListItemFields(token, state.site.siteId,
+            state.site.trackerListId, rows[i].id, { BillStatus: r.status });
+          written++;
+        } catch (e) { failed++; }
+      }
+      var parts = Object.keys(counts).sort().map(function (k) { return counts[k] + " " + k; });
+      setStatus(failed ? "info" : "ok",
+        parts.join(" \u00b7 ") + " \u2014 " + written + " updated, " + unchanged + " already current" +
+        (failed ? ", " + failed + " couldn't be written (list permissions)" : "") +
+        (opts.sessionEnd ? "" : " \u2014 set \u201cSession adjourned\u201d to identify bills that died."));
+      lastStatusIndex = { idx: idx, opts: opts };
+      if (lastFiscalFys) { renderFiscal(lastFiscalFys); }
+    } catch (e) {
+      setStatus("error", "Couldn't refresh bill statuses: " + friendly(e));
+    } finally {
+      setProp("statusRefresh", "disabled", false);
+    }
+  }
+
+  /** The feed, whichever source is configured. Shared with the New-bills tab. */
+  async function loadFeedEntries() {
+    var preset = LrrPresets.presetFor(val("stateName") || "Iowa");
+    var tries = [];
+    if (preset && preset.slug) { tries.push("../../feeds/openstates-" + preset.slug + ".json"); }
+    tries.push("../../feeds/IowaBills.xml");
+    for (var i = 0; i < tries.length; i++) {
+      try {
+        var res = await fetch(tries[i] + "?ts=" + Date.now());
+        if (!res.ok) { continue; }
+        var text = await res.text();
+        var entries = /^\s*[{[]/.test(text) ? LrrFeed.parseOpenStates(text) : LrrFeed.parseFeed(text);
+        if (entries && entries.length) { return entries; }
+      } catch (e) { /* try the next source */ }
+    }
+    return [];
+  }
+
+  var lastStatusIndex = null;
+  var lastFiscalFys = null;
+
   async function loadFiscal() {
     if (!state.site || !state.site.trackerListId) {
       setStatus("error", "Connect a Bill tracker list in Settings first."); return;
@@ -2288,7 +2373,8 @@
         } catch (e) { break; }
       }
       var backfillNote = backfilled ? " Filled the numeric cost column on " + backfilled + " row(s) for Power BI." : "";
-      renderFiscal(LrrFiscal.aggregate(fiscalRows));
+      lastFiscalFys = LrrFiscal.aggregate(fiscalRows);
+      renderFiscal(lastFiscalFys);
       byId("fiscalCsv").hidden = !fiscalRows.length;
       setStatus("info", fiscalRows.length + " tracker rows · " +
         fiscalRows.filter(function (r) { return LrrFiscal.parseCost(r.cost) !== null; }).length +
@@ -2316,6 +2402,26 @@
         esc(LrrFiscal.fmtMoney(f.total)) + "</strong> · " + f.billCount + " bill(s), " +
         f.estimated + " estimated, " + f.unestimated + " awaiting estimates";
       box.appendChild(head);
+
+      // A total that mixes live bills with ones that are over is the wrong
+      // number to take to a budget hearing. Say how much of it is already
+      // settled, rather than quietly leaving it in.
+      if (lastStatusIndex) {
+        var closedRows = fiscalRows.filter(function (r) {
+          if ((r.fy || "(no FY)") !== f.fy) { return false; }
+          return LrrBillStatus.isClosed(
+            LrrBillStatus.statusFor(r.bill, lastStatusIndex.idx, lastStatusIndex.opts).status);
+        });
+        if (closedRows.length) {
+          var dead = closedRows.reduce(function (a, r) { return a + (LrrFiscal.parseCost(r.cost) || 0); }, 0);
+          var note = document.createElement("p");
+          note.className = "hint";
+          note.innerHTML = "\u26a0 " + esc(LrrFiscal.fmtMoney(dead)) + " of that is attached to " +
+            closedRows.length + " bill(s) that are no longer live \u2014 live total <strong>" +
+            esc(LrrFiscal.fmtMoney(f.total - dead)) + "</strong>. Use the live figure for a budget request.";
+          box.appendChild(note);
+        }
+      }
       var divs = Object.keys(f.byDivision).sort(function (a, b) { return f.byDivision[b] - f.byDivision[a]; });
       if (divs.length) {
         var dl = document.createElement("p");

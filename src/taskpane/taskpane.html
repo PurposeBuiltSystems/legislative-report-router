@@ -353,11 +353,16 @@
   <!-- Screen 5: Audit -->
   <section id="screen-audit" class="screen" hidden>
     <h3 class="wiz-h">💰 Fiscal impact — running totals for budget requests</h3>
+    <label>Session adjourned (leave blank while the session is running)
+      <input id="sessionEnd" type="date" />
+    </label>
+    <p class="hint">Until this is set nothing is reported as dead: "we haven't seen it pass" and "it failed" only mean the same thing once the session is over.</p>
     <p class="hint">Divisions report estimated costs and impact severity on the BillTracker rows (the Teams Lists tab is the entry form). This rolls them up per fiscal year.</p>
     <div class="actions-row">
       <button id="fiscalLoad" class="primary">Load fiscal rollup</button>
       <button id="fiscalHarvest">Harvest from Teams replies</button>
       <button id="fiscalCsv" hidden>Export CSV</button>
+      <button id="statusRefresh">Check which bills are still alive</button>
     </div>
     <p class="hint">Harvest sweeps the reply threads of published bill posts — prose costs, attached .docx and .xlsx included — and proposes tracker updates you review before anything is written.</p>
     <div id="harvestView"></div>
@@ -383,6 +388,7 @@
   <script src="../feed.js?v=43"></script>
   <script src="../invite.js?v=43"></script>
   <script src="../deadline.js?v=43"></script>
+  <script src="../billstatus.js?v=42"></script>
   <script src="../fiscal.js?v=43"></script>
   <script src="../harvest.js?v=43"></script>
   <script src="../xlsx.js?v=43"></script>
