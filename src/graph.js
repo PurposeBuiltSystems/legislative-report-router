@@ -6,7 +6,9 @@
  * Commercial, GCC (commercial endpoints, gov tenancy), GCC High, DoD.
  *
  * Delegated scopes (see docs/permissions.md):
- *   required: Mail.ReadWrite, Mail.Send, ChannelMessage.Send, Sites.ReadWrite.All
+ *   required: Mail.ReadWrite, Mail.Send, ChannelMessage.Send,
+ *             ChannelMessage.Read.All (listReplies, for History -> Harvest),
+ *             Sites.ReadWrite.All
  *   optional: TeamworkTag.Read, Team.ReadBasic.All, Channel.ReadBasic.All
  */
 /* global msal */
