@@ -14,14 +14,14 @@ const source = raw.slice(0, at) + `
   setStatus = function (kind,text) { self.statuses.push({kind,text}); };
   self.test = { state, loadFilings, routeFilings, maybeAutoDraft, markReported, reportedBills };
 ` + raw.slice(at);
-function load(failAmendments) {
+function load(failAmendments, fullText) {
   const elements = {};
   function element() { return { children: [], checked: true, value: "", appendChild(n) { this.children.push(n); }, addEventListener() {} }; }
   for (const id of ["stateName", "watchDays", "watchTerms", "watchChapters", "hideReported", "loadFilings", "filingsList", "routeFilings", "optDailyReport", "commentWindow", "trackedChapters"]) elements[id] = element();
   elements.stateName.value = "Iowa"; elements.watchDays.value = "3";
   elements.watchTerms.value = "transportation"; elements.commentWindow.value = "48 business hours";
   const today = new Date().toUTCString().replace(" GMT", "");
-  function item(title, description) { return `<item><title><![CDATA[${title}]]></title><description><![CDATA[${description}]]></description><pubDate>${today}</pubDate></item>`; }
+  function item(title, description) { return `<item><title><![CDATA[${title}]]></title><description><![CDATA[${description}]]></description><link><![CDATA[https://www.legis.iowa.gov/legislation/BillBook?ga=91&ba=HF2500]]></link><pubDate>${today}</pubDate></item>`; }
   const bills = '<rss><channel>' + item("HF 2500", "State agency contracts") + item("HF 100", "Miscellaneous provisions") + '</channel></rss>';
   const amendments = '<rss><channel>' + item("S 5210 (SF 2472)", "Amendment to SF 2472") + '</channel></rss>';
   const requests = [], drafts = [], saved = {};
@@ -30,7 +30,7 @@ function load(failAmendments) {
     document: { getElementById:id=>elements[id], createElement: element },
     Office: {onReady() {}, AsyncResultStatus: {Succeeded:"ok"}, context: {mailbox:{userProfile:{}}, roamingSettings:{get:k=>saved[k], set:(k,v)=>{saved[k]=v;}, saveAsync:cb=>cb({status:"ok"})}}},
     GraphData: {getToken:async()=>"token", createDraftMessage:async(t,to,subject,html)=>{drafts.push({to,subject,html}); return {id:"draft"};}},
-    fetch: async url => { requests.push(url); if(url.includes("iowa-screening")) return {ok:false,status:404}; if(url.includes("Amendments")) return {ok:!failAmendments,status:503,text:async()=>amendments}; return {ok:true,text:async()=>bills}; },
+    fetch: async url => { requests.push(url); if(url.includes("iowa-text")) return {ok:true,json:async()=>({text:"Intellectual property developed under research contracts.",version:"introduced bill"})}; if(url.includes("iowa-screening")) return fullText ? {ok:true,json:async()=>({documents:{"91:HF2500":{version:"introduced bill"}}})} : {ok:false,status:404}; if(url.includes("Amendments")) return {ok:!failAmendments,status:503,text:async()=>amendments}; return {ok:true,text:async()=>bills}; },
   };
   for (const [global,name] of Object.entries({LrrParser:"parser",LrrFeed:"feed",LrrChapters:"chapters",LrrScreening:"screening",LrrPresets:"presets",LrrRouting:"routing",LrrTeams:"teams",LrrReportGen:"reportgen"})) context[global] = require("../src/"+name);
   vm.createContext(context); vm.runInContext(source,context);
@@ -48,6 +48,11 @@ function load(failAmendments) {
   assert(manual.requests.some(u=>u.includes("Amendments.xml")));
   manual.test.markReported(manual.test.state.items);
   assert.equal(manual.test.reportedBills().length, 0, "unassigned screening rows remain visible next check");
+  const enriched = load(false, true);
+  await enriched.test.loadFilings();
+  enriched.test.routeFilings();
+  assert(enriched.test.state.items.find(i=>i.billNumber==="HF2500").screening.reasons.includes("Research and intellectual property"), "per-document full text reaches actual screening workflow");
+  assert(enriched.requests.some(u=>u.includes("iowa-text/91/HF2500.json")));
   const morning = load(false);
   await morning.test.maybeAutoDraft();
   assert.equal(morning.test.state.items.length, 3, "morning uses the same screening");

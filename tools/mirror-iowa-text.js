@@ -59,9 +59,24 @@ async function main() {
   const base = path.join(__dirname, "../feeds");
   const file = path.join(base, "iowa-screening.json");
   const previous = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
+  // Keep the browser index small; document bodies live in separate files.
+  for (const [key, metadata] of Object.entries(previous.documents || {})) {
+    if (metadata.text) continue;
+    const documentFile = path.join(base, "iowa-text", key.replace(":", "/") + ".json");
+    if (fs.existsSync(documentFile)) previous.documents[key] = JSON.parse(fs.readFileSync(documentFile, "utf8"));
+    else delete previous.documents[key];
+  }
   const entries = ["IowaBills.xml", "Amendments.xml"].flatMap(name => Feed.parseFeed(fs.readFileSync(path.join(base, name), "utf8")));
   const result = await update(entries, previous);
-  fs.writeFileSync(file + ".tmp", JSON.stringify(result.mirror) + "\n");
+  const index = { documents: {}, failures: result.mirror.failures };
+  for (const [key, doc] of Object.entries(result.mirror.documents)) {
+    const documentFile = path.join(base, "iowa-text", key.replace(":", "/") + ".json");
+    fs.mkdirSync(path.dirname(documentFile), { recursive: true });
+    const body = JSON.stringify(doc) + "\n";
+    if (!fs.existsSync(documentFile) || fs.readFileSync(documentFile, "utf8") !== body) fs.writeFileSync(documentFile, body);
+    index.documents[key] = { url: doc.url, version: doc.version, fetchedAt: doc.fetchedAt };
+  }
+  fs.writeFileSync(file + ".tmp", JSON.stringify(index) + "\n");
   fs.renameSync(file + ".tmp", file);
   console.log(`Iowa text mirror: ${result.succeeded}/${result.attempted} fetched; ${result.pending} awaiting text (summary-only review available).`);
 }

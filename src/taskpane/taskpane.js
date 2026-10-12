@@ -1018,7 +1018,23 @@
       var texts = await fetch("../../feeds/iowa-screening.json?ts=" + Date.now());
       if (texts.ok) { mirror = await texts.json(); }
     } catch (e) { /* summary-only screening remains available */ }
-    return LrrScreening.enrich(entries, mirror);
+    var recent = LrrFeed.watchFilter(entries, [], Number(byId("watchDays").value) || 3);
+    var documents = mirror && mirror.documents || {};
+    // Fetch only documents in this window, with bounded concurrency.
+    var next = 0;
+    async function worker() {
+      while (next < recent.length) {
+        var entry = recent[next++];
+        var key = LrrScreening.entryKey(entry);
+        if (!documents[key] || documents[key].text || !/^\d+:[A-Z]{1,4}-?\d+[A-Z]?$/.test(key)) { continue; }
+        try {
+          var doc = await fetch("../../feeds/iowa-text/" + key.replace(":", "/") + ".json?ts=" + Date.now());
+          if (doc.ok) { documents[key] = await doc.json(); }
+        } catch (e) { /* retain explicit summary-only label */ }
+      }
+    }
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    return LrrScreening.enrich(recent, { documents: documents });
   }
 
   function screenFilings(entries, days) {
