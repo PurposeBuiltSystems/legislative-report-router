@@ -52,7 +52,7 @@
 
   /**
    * Render included items into the Daily Bill Report.
-   * opts: {sessionName, commentWindow, date, preparedBy}
+   * opts: {sessionName, stateName, distributionHeading, commentWindow, deadlineLabel, date, preparedBy}
    * Returns {subject, html, text}.
    */
   function buildDailyReport(items, opts) {
@@ -60,9 +60,28 @@
     var date = opts.date instanceof Date ? opts.date : new Date();
     var included = (items || []).filter(function (it) { return it.routingStatus !== "excluded"; });
 
+    var year = date.getFullYear();
+    var assembly = 91 + Math.floor((year - 2025) / 2);
+    var suffix = assembly % 100 >= 11 && assembly % 100 <= 13 ? "th" :
+      ({ 1: "st", 2: "nd", 3: "rd" }[assembly % 10] || "th");
+    var sessionName = String(opts.sessionName || "").trim() ||
+      ((opts.stateName || "Iowa") === "Iowa"
+        ? year + " Legislative Session – " + (year % 2 ? "1st" : "2nd") +
+          " Session, " + assembly + suffix + " Iowa General Assembly"
+        : year + " " + opts.stateName + " Legislative Session");
+    var audience = opts.distributionHeading || "Executive Leadership Team; Administrative Services/Systems Operations/IT/Transportation Development/Motor Vehicle/Field Operations; Division Legislative Coordinators; FHWA; and others.";
+    var ga = sessionName.match(/(\d+(?:st|nd|rd|th))\s+(?:Iowa\s+)?General Assembly/i);
+    var instructions = "To comment on a bill or amendment, please use the Microsoft Teams " +
+      (ga ? "Legislation " + ga[1] + " General Assembly Network." : "legislation channel assigned to your division.");
+
     var textLines = [];
     textLines.push("Daily Bill Report");
-    if (opts.sessionName) { textLines.push(opts.sessionName); }
+    textLines.push(sessionName);
+    textLines.push("");
+    textLines.push("Distribution List: " + audience);
+    textLines.push("");
+    textLines.push("Division Directors and Legislative Coordinators:");
+    textLines.push(instructions);
     textLines.push("");
     if (opts.deadlineLabel) { textLines.push("Comments due by " + opts.deadlineLabel); }
     if (opts.commentWindow) { textLines.push(opts.commentWindow); }
@@ -76,7 +95,10 @@
     var h = [];
     h.push('<div style="font-family:Segoe UI,Arial,sans-serif;max-width:680px;color:#242424">');
     h.push('<h2 style="margin-bottom:2px">Daily Bill Report</h2>');
-    if (opts.sessionName) { h.push('<p style="margin:0 0 12px;color:#616161">' + esc(opts.sessionName) + "</p>"); }
+    h.push('<p style="margin:0 0 12px;color:#616161">' + esc(sessionName) + "</p>");
+    h.push('<p style="margin:8px 0"><strong>Distribution List:</strong> ' + esc(audience) + "</p>");
+    h.push('<p style="margin:12px 0 4px"><strong>Division Directors and Legislative Coordinators:</strong></p>');
+    h.push('<p style="margin:0 0 12px">' + esc(instructions) + "</p>");
     h.push('<p style="margin:0 0 4px;color:#616161">' + esc(
       date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate())) +
       " · " + included.length + " bill(s)/amendment(s)</p>");

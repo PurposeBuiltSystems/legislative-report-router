@@ -1635,6 +1635,7 @@
       var recips = LrrReportGen.extractEmails(st.distList || "");
       var rep = LrrReportGen.buildDailyReport(items, {
         sessionName: st.sessionName || "",
+        stateName: st.stateName || "Iowa",
         commentWindow: byId("commentWindow").value,
         deadlineLabel: currentDeadline().label,
         preparedBy: ((Office.context.mailbox.userProfile || {}).displayName) || "",
@@ -2587,8 +2588,9 @@
           } else {
             var rep = LrrReportGen.buildDailyReport(included(), {
               sessionName: st2.sessionName || "",
+              stateName: st2.stateName || "Iowa",
               commentWindow: byId("commentWindow").value,
-        deadlineLabel: currentDeadline().label,
+              deadlineLabel: currentDeadline().label,
               preparedBy: (me && me.displayName) || "",
             });
             var reportDraft = await GraphData.createDraftMessage(token, recips, rep.subject, rep.html);

@@ -33,6 +33,20 @@ check("html session", rep.html.indexOf("2027 Session") !== -1, true);
 check("html no excluded bill", rep.html.indexOf("HF2802") === -1, true);
 check("text has window", rep.text.indexOf("48 business hours.") !== -1, true);
 
+// Header context survives both draft paths; no configured session is required.
+var context = G.buildDailyReport(items, { date: new Date(2026, 3, 30), deadlineLabel: "Friday, 5 PM" });
+check("default Iowa session", context.text.includes("2026 Legislative Session – 2nd Session, 91st Iowa General Assembly"), true);
+check("next assembly", G.buildDailyReport([], { date: new Date(2027, 0, 4) }).text.includes("92nd Iowa General Assembly"), true);
+check("other state header", G.buildDailyReport([], { stateName: "Minnesota", date: new Date(2026, 0, 4) }).text.includes("2026 Minnesota Legislative Session"), true);
+for (var format of ["text", "html"]) {
+  check(format + " distribution context", context[format].includes("Distribution List:") && context[format].includes("FHWA"), true);
+  check(format + " coordinator instructions", context[format].includes("Division Directors and Legislative Coordinators:") && context[format].includes("Microsoft Teams Legislation 91st General Assembly Network."), true);
+  check(format + " deadline retained", context[format].includes("Comments due by Friday, 5 PM"), true);
+}
+var custom = G.buildDailyReport([], { sessionName: "<Custom & Session>", distributionHeading: "Research <staff>" });
+check("custom header escaped", custom.html.includes("&lt;Custom &amp; Session&gt;") && custom.html.includes("Research &lt;staff&gt;"), true);
+check("generic Teams instruction for custom session", custom.text.includes("legislation channel assigned to your division."), true);
+
 // 3. Round-trip: our own parser reads the generated text (bill lines standalone)
 var round = P.parseReport(rep.text, { knownDivisions: ["MVD", "TDD", "SOD"] });
 check("round-trip bills", round.items.map(function (i) { return i.billNumber; }), ["HF2801", "SF2110"]);
