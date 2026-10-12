@@ -208,8 +208,10 @@ The Router can compose the daily report itself:
 1. Setup → **Daily Bill Report generation**: paste the report's To: line
    (addresses extract automatically) and set the session name.
 2. Each morning: **Filings** tab → Check new filings. Bills already
-   included in past reports are hidden; new ones show with watch-term and
-   tracked-chapter matches. Select → **Route selected bills**.
+   included in past reports are hidden; all bills, amendments, and Iowa
+   conference reports in the selected window remain visible. Possible impacts
+   show their reasons; filings without a match say **Needs manual screening**.
+   Select → **Add selected filings**.
 3. Divisions are auto-suggested from each rule's CodeChapters column —
    verify on Review (auto-suggested items carry a warning until you look).
 4. **Publish** with "Draft the Daily Bill Report email" ticked (pre-ticked
@@ -220,3 +222,30 @@ The Router can compose the daily report itself:
 
 The generated report's text round-trips through the Router's own parser,
 so recipient agencies running their own Router can parse it directly.
+
+### Agency-wide screening and coverage
+
+Screening includes contracts/procurement, research/intellectual property,
+employment/benefits, funding/grants, and agency administration/legal duties.
+For Iowa, general agency chapters (8, 8A, 8B, 13, 19A, 20, 22, 23, 68B,
+70A) are considered alongside your tracked list. Watch terms highlight
+matches; they no longer hide other filings. Unassigned screening rows are
+not marked reported when a daily draft is generated.
+
+Both the Filings tab and morning draft load Iowa's bill **and amendment**
+feeds. Amendments keep their own identifier and parent reference, so a new
+amendment is not hidden just because its parent bill was previously reported.
+The scheduled mirror fetches official introduced-bill and filed-amendment
+HTML text in batches of 80, caching successful documents and backfilling
+older filings. Full-text clues also inform division suggestions. Every
+suggestion still requires coordinator review. Missing or failed document
+fetches stay visibly **summary only**; failed fetches preserve cached text.
+A missing amendment feed fails the check visibly.
+
+This is a screening queue, not proof of complete legal coverage. The source
+feeds may omit activity, the date window limits what is shown, and the
+introduced bill document does not substitute for later engrossed/enrolled
+versions or bill-history checks. No-match filings require human screening.
+Other states use the configured Open States mirror and receive the same
+broad summary screening, but do not get Iowa document enrichment or a
+separate amendment feed.

@@ -7,7 +7,7 @@
  * durable in the LegislativeAudit SharePoint list (also the dedupe store).
  */
 /* global Office, GraphData, document,
-   LrrParser, LrrRouting, LrrTeams, LrrDocx, LrrXlsx, LrrPresets, LrrProvision,
+   LrrScreening, LrrParser, LrrRouting, LrrTeams, LrrDocx, LrrXlsx, LrrPresets, LrrProvision,
    LrrChapters, LrrContacts, LrrFeed, LrrReportGen, LrrDeadline, LrrFiscal, LrrBillStatus, LrrHarvest,
    LrrInvite, window */
 (function () {
@@ -234,6 +234,7 @@
     try {
       var bills = reportedBills();
       items.forEach(function (it) {
+        if (it.screening && !it.distributedTo.length) { return; } // keep unreviewed filings visible
         if (bills.indexOf(it.billNumber) === -1) { bills.push(it.billNumber); }
       });
       Office.context.roamingSettings.set(REPORTED_KEY, JSON.stringify({
@@ -579,7 +580,7 @@
   function annotateChapters() {
     var tracked = trackedList();
     state.items.forEach(function (it) {
-      it.codeChapters = LrrChapters.extractChapters(it.brief || "");
+      it.codeChapters = it.screening && it.screening.chapters ? it.screening.chapters.slice() : LrrChapters.extractChapters(it.brief || "");
       it.trackedChapters = LrrChapters.matchTracked(it.codeChapters, tracked);
     });
   }
@@ -686,7 +687,7 @@
         LrrChapters.suggestRules(it.codeChapters || [], state.rules).forEach(function (sg) {
           byRule[sg.rule.id] = { rule: sg.rule, why: "ch. " + sg.chapters.join(", ") };
         });
-        LrrRouting.suggestByKeywords((it.title || "") + "\n" + (it.brief || ""), state.rules).forEach(function (sg) {
+        LrrRouting.suggestByKeywords((it.title || "") + "\n" + (it.brief || "") + "\n" + (it.screeningText || ""), state.rules).forEach(function (sg) {
           var why = '\u201c' + sg.keywords.join('\u201d, \u201c') + '\u201d';
           if (byRule[sg.rule.id]) { byRule[sg.rule.id].why += " + " + why; }
           else { byRule[sg.rule.id] = { rule: sg.rule, why: why }; }
@@ -995,43 +996,49 @@
 
   var feedSelection = []; // [{entry, checked}]
 
+  async function loadScreeningEntries() {
+    var preset = LrrPresets.presetFor(byId("stateName").value || "Iowa");
+    if (preset.feed !== "iowa-rss") {
+      var other = await fetch("../../feeds/openstates-" + preset.slug + ".json?ts=" + Date.now());
+      if (!other.ok) { throw new Error("Feed mirror unavailable for " + preset.state); }
+      return LrrFeed.parseOpenStates(await other.text());
+    }
+    // A missing amendment source must fail visibly rather than imply coverage.
+    var entries = [];
+    for (var path of ["IowaBills.xml", "Amendments.xml"]) {
+      var res = await fetch("../../feeds/" + path + "?ts=" + Date.now());
+      if (!res.ok) { throw new Error(path + " mirror unavailable (" + res.status + ")"); }
+      var xml = await res.text();
+      if (!/<rss\b/i.test(xml) || !/<channel\b/i.test(xml)) { throw new Error(path + " is not a valid RSS feed"); }
+      entries = entries.concat(LrrFeed.parseFeed(xml));
+    }
+    // Full-text enrichment is optional: missing documents are explicitly flagged.
+    var mirror = null;
+    try {
+      var texts = await fetch("../../feeds/iowa-screening.json?ts=" + Date.now());
+      if (texts.ok) { mirror = await texts.json(); }
+    } catch (e) { /* summary-only screening remains available */ }
+    return LrrScreening.enrich(entries, mirror);
+  }
+
+  function screenFilings(entries, days) {
+    return LrrScreening.screen(entries, {
+      days: days,
+      stateName: byId("stateName").value || "Iowa",
+      terms: byId("watchTerms").value.split(","),
+      tracked: trackedList(),
+      matchChapters: byId("watchChapters").checked,
+    });
+  }
+
   async function loadFilings() {
     byId("loadFilings").disabled = true;
     try {
       setStatus("work", "Checking the newly-filed feed…");
-      var preset = LrrPresets.presetFor(byId("stateName").value || "Iowa");
-      var entries;
-      if (preset.feed === "iowa-rss") {
-        var res = await fetch("../../feeds/IowaBills.xml?ts=" + Date.now());
-        if (!res.ok) { throw new Error("Feed mirror unavailable (" + res.status + ")"); }
-        entries = LrrFeed.parseFeed(await res.text());
-      } else {
-        var res2 = await fetch("../../feeds/openstates-" + preset.slug + ".json?ts=" + Date.now());
-        if (!res2.ok) {
-          throw new Error("No mirrored feed for " + preset.state + " yet — add it to states.json in the deployment repo (requires the Open States API key; see the admin guide).");
-        }
-        entries = LrrFeed.parseOpenStates(await res2.text());
-      }
-      var terms = byId("watchTerms").value.split(",").map(function (t) { return t.trim(); }).filter(Boolean);
+      var entries = await loadScreeningEntries();
       var days = Number(byId("watchDays").value) || 3;
-      var hits = LrrFeed.watchFilter(entries, terms, days);
-      if (byId("hideReported").checked) {
-        var before = hits.length;
-        hits = LrrReportGen.filterNew(hits, reportedBills());
-        if (before !== hits.length) {
-          setStatus("work", (before - hits.length) + " bill(s) hidden (already in a past report)\u2026");
-        }
-      }
-      if (byId("watchChapters").checked) {
-        var tracked = trackedList();
-        var inWindow = LrrFeed.watchFilter(entries, [], days);
-        inWindow.forEach(function (e) {
-          if (hits.indexOf(e) !== -1) { return; }
-          var chapters = LrrChapters.extractChapters(e.description || "");
-          if (LrrChapters.matchTracked(chapters, tracked).length) { hits.push(e); }
-        });
-        hits.sort(function (a, b) { return b.pubDate - a.pubDate; });
-      }
+      var hits = screenFilings(entries, days);
+      if (byId("hideReported").checked) { hits = LrrReportGen.filterNew(hits, reportedBills()); }
 
       feedSelection = hits.map(function (e) { return { entry: e, checked: true }; });
       var host = byId("filingsList");
@@ -1053,13 +1060,21 @@
         var p = document.createElement("p");
         p.className = "hint";
         p.textContent = e.description;
+        var reason = document.createElement("p");
+        reason.className = "hint warn";
+        reason.textContent = (e.screening.reasons.length
+          ? "Possible agency impact: " + e.screening.reasons.join("; ")
+          : "Needs manual screening — no relevance conclusion") +
+          (e.screening.fullTextAvailable ? " · " + e.screening.textVersion + " text screened" : " · Summary only; review full text");
+        card.appendChild(reason);
         card.appendChild(head); card.appendChild(p);
         host.appendChild(card);
       });
       byId("routeFilings").hidden = !hits.length;
       setStatus("info", hits.length
-        ? hits.length + " watched filing(s) in the last " + days + " day(s). Select and route."
-        : "No watched filings in the window. (Feed mirror updates every 30 minutes on weekdays. " +
+        ? hits.length + " filing(s) screened in the last " + days + " day(s), including " +
+          hits.filter(function (e) { return e.screening.status === "needs-screening"; }).length + " needing manual screening. Select and route."
+        : "No unreported filings in the window. (Feed mirror updates every 30 minutes on weekdays. " +
           "Out of session? Raise the watch window — e.g. 400 days replays the whole past session.)");
     } catch (e) {
       setStatus("error", "Feed check failed: " + friendly(e));
@@ -1082,7 +1097,7 @@
     picked.forEach(function (f, i) {
       if (existing[f.entry.bill]) { return; }
       var item = LrrFeed.toLegislativeItem(f.entry, state.reportKey, state.items.length + i);
-      item.codeChapters = LrrChapters.extractChapters(item.brief || "");
+      item.codeChapters = LrrChapters.extractChapters((item.brief || "") + "\n" + (item.screeningText || ""));
       item.trackedChapters = LrrChapters.matchTracked(item.codeChapters, tracked);
       if (!item.distributedTo.length && state.rules.length) {
         var why = [];
@@ -1091,14 +1106,14 @@
           if (codes.indexOf(sg.rule.divisionCode) === -1) { codes.push(sg.rule.divisionCode); }
           why.push(sg.rule.divisionCode + ": ch. " + sg.chapters.join(","));
         });
-        LrrRouting.suggestByKeywords(item.brief || "", state.rules).forEach(function (sg) {
+        LrrRouting.suggestByKeywords((item.brief || "") + "\n" + (item.screeningText || ""), state.rules).forEach(function (sg) {
           if (codes.indexOf(sg.rule.divisionCode) === -1) { codes.push(sg.rule.divisionCode); }
           why.push(sg.rule.divisionCode + ': "' + sg.keywords.join('", "') + '"');
         });
         if (codes.length) {
           item.distributedTo = codes;
           item.commentRequestedFrom = codes.slice();
-          item.parserWarnings = ["Divisions auto-suggested (" + why.join("; ") + ") — verify."];
+          item.parserWarnings.push("Divisions auto-suggested (" + why.join("; ") + ") — verify.");
         }
       }
       if (state.rules.length) { LrrRouting.routeItem(item, state.rules); }
@@ -1576,26 +1591,11 @@
       autoDraftRan = true;
       setStatus("work", "Morning auto-draft: checking for new bills\u2026");
 
-      // pull the feed (same path as the Filings tab)
-      var preset = LrrPresets.presetFor(byId("stateName").value || "Iowa");
-      var entries;
-      if (preset.feed === "iowa-rss") {
-        var res = await fetch("../../feeds/IowaBills.xml?ts=" + Date.now());
-        if (!res.ok) { throw new Error("feed mirror unavailable"); }
-        entries = LrrFeed.parseFeed(await res.text());
-      } else {
-        var res2 = await fetch("../../feeds/openstates-" + preset.slug + ".json?ts=" + Date.now());
-        if (!res2.ok) { throw new Error("feed mirror unavailable"); }
-        entries = LrrFeed.parseOpenStates(await res2.text());
-      }
-      var terms = byId("watchTerms").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+      // Use exactly the same broad screening as the Filings tab.
+      var entries = await loadScreeningEntries();
       var days = Number(byId("watchDays").value) || 3;
-      var hits = LrrFeed.watchFilter(entries, terms, days);
+      var hits = screenFilings(entries, days);
       var tracked = trackedList();
-      LrrFeed.watchFilter(entries, [], days).forEach(function (e) {
-        if (hits.indexOf(e) !== -1) { return; }
-        if (LrrChapters.matchTracked(LrrChapters.extractChapters(e.description || ""), tracked).length) { hits.push(e); }
-      });
       hits = LrrReportGen.filterNew(hits, reportedBills());
       if (!hits.length) {
         saveSettings({ lastAutoDraftDay: todayKey() });
@@ -1609,19 +1609,19 @@
       var items = [];
       hits.forEach(function (e, i) {
         var item = LrrFeed.toLegislativeItem(e, state.reportKey, i);
-        item.codeChapters = LrrChapters.extractChapters(item.brief || "");
+        item.codeChapters = LrrChapters.extractChapters((item.brief || "") + "\n" + (item.screeningText || ""));
         item.trackedChapters = LrrChapters.matchTracked(item.codeChapters, tracked);
         var codes = [];
         LrrChapters.suggestRules(item.codeChapters, state.rules).forEach(function (sg) {
           if (codes.indexOf(sg.rule.divisionCode) === -1) { codes.push(sg.rule.divisionCode); }
         });
-        LrrRouting.suggestByKeywords(item.brief || "", state.rules).forEach(function (sg) {
+        LrrRouting.suggestByKeywords((item.brief || "") + "\n" + (item.screeningText || ""), state.rules).forEach(function (sg) {
           if (codes.indexOf(sg.rule.divisionCode) === -1) { codes.push(sg.rule.divisionCode); }
         });
         if (codes.length) {
           item.distributedTo = codes;
           item.commentRequestedFrom = codes.slice();
-          item.parserWarnings = ["Divisions auto-suggested \u2014 verify before publishing."];
+          item.parserWarnings.push("Divisions auto-suggested \u2014 verify before publishing.");
         }
         LrrRouting.routeItem(item, state.rules);
         items.push(item);
@@ -1849,7 +1849,7 @@
   function draftItem(it) {
     var copy = {};
     Object.keys(it).forEach(function (k) {
-      if (k === "sourceBlock") { return; }   // not read back; the biggest field
+      if (k === "sourceBlock" || k === "screeningText") { return; }   // not read back; the biggest field
       copy[k] = it[k];
     });
     return copy;

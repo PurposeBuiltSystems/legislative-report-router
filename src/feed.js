@@ -27,10 +27,14 @@
     while ((m = re.exec(String(xml || ""))) !== null) {
       var block = m[1];
       var title = cdata(block, "title");
+      var amendment = title.match(/^([HS]|CCS|CCH)\s*-?\s*(\d+)\s*\(\s*([A-Z]{1,4})\s*-?\s*(\d+)\s*\)$/i);
       var bill = title.replace(/\s+/g, "").toUpperCase(); // "HF 437" -> "HF437"
-      if (!/^[A-Z]{2,4}\d+[A-Z]?$/.test(bill)) { continue; }
+      if (amendment) { bill = amendment[1].toUpperCase() + (/^[HS]$/i.test(amendment[1]) ? "-" : "") + amendment[2]; }
+      if (!amendment && !/^[A-Z]{2,4}\d+[A-Z]?$/.test(bill)) { continue; }
       out.push({
         bill: bill,
+        relatedBill: amendment ? amendment[3].toUpperCase() + (/^[HS]$/i.test(amendment[3]) ? "-" : "") + amendment[4] : "",
+        documentType: amendment ? (/^CC/i.test(amendment[1]) ? "Conference report" : "Amendment") : (bill.match(/^[A-Z]+/) || [""])[0],
         description: cdata(block, "description"),
         link: cdata(block, "link"),
         pubDate: new Date(cdata(block, "pubDate") + " GMT-0600"), // feed times are Central, no zone given
@@ -62,16 +66,22 @@
       id: "feed-" + (idx + 1),
       reportId: reportKey || "new-filings",
       billNumber: entry.bill,
-      documentType: docType,
+      documentType: entry.documentType || docType,
+      relatedBill: entry.relatedBill || "",
+      screening: entry.screening || null,
+      screeningText: entry.fullText || "",
       distributedTo: [],
       commentRequestedFrom: [],
       title: entry.description.slice(0, 120),
       brief: entry.description,
-      referencedBills: [],
+      referencedBills: entry.relatedBill ? [entry.relatedBill] : [],
       sourceLinks: entry.link ? [{ text: entry.bill + " (BillBook)", href: entry.link }] : [],
       sourceBlock: entry.bill + "\n" + entry.description,
-      parserConfidence: 0.9,
-      parserWarnings: ["From the newly-filed feed — assign divisions before publishing."],
+      parserConfidence: entry.screening && entry.screening.status === "needs-screening" ? 0.6 : 0.9,
+      parserWarnings: ["From the newly-filed feed — assign divisions before publishing."].concat(entry.screening ? [
+        entry.screening.reasons.length ? "Possible agency impact: " + entry.screening.reasons.join("; ") + ". Verify applicability." : "Needs manual screening — absence of a keyword match does not rule out agency impact.",
+        entry.screening.fullTextAvailable ? "Screened " + (entry.screening.textVersion || "available") + " text; check subsequent revisions." : "Summary only — open the source to review full text.",
+      ] : []),
       routingStatus: "unmatched",
       matchedRoutingRules: [],
     };

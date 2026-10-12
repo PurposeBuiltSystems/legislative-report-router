@@ -14,7 +14,7 @@
   var DEFAULT_IDS = ["HB", "SB", "HR", "SR", "HJR", "SJR", "HCR", "SCR", "HM", "SM"];
 
   var STATES = {
-    "Iowa":          { ids: ["HF", "SF", "HSB", "SSB", "HJR", "SJR", "HCR", "SCR", "HR", "SR"], feed: "iowa-rss" },
+    "Iowa":          { ids: ["HF", "SF", "HSB", "SSB", "CCS", "CCH", "HJR", "SJR", "HCR", "SCR", "HR", "SR"], feed: "iowa-rss" },
     "Minnesota":     { ids: ["HF", "SF"] },
     "California":    { ids: ["AB", "SB", "ACA", "SCA", "AJR", "SJR", "ACR", "SCR", "AR", "SR"] },
     "Wisconsin":     { ids: ["AB", "SB", "AJR", "SJR", "AR", "SR"] },

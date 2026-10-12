@@ -16,20 +16,38 @@ on:
         default: "21"
         required: false
 
+concurrency:
+  group: legislative-feed-mirror
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
 jobs:
   mirror:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       KEY: ${{ secrets.OPENSTATES_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - name: Fetch Iowa RSS
         run: |
-          curl -sf "https://www.legis.iowa.gov/subscribe/rss/feeds/IowaBills.xml" -o feeds/IowaBills.xml || true
-          curl -sf "https://www.legis.iowa.gov/subscribe/rss/feeds/Amendments.xml" -o feeds/Amendments.xml || true
+          curl -fsS --retry 3 --max-time 60 "https://www.legis.iowa.gov/subscribe/rss/feeds/IowaBills.xml" -o /tmp/IowaBills.xml
+          curl -fsS --retry 3 --max-time 60 "https://www.legis.iowa.gov/subscribe/rss/feeds/Amendments.xml" -o /tmp/Amendments.xml
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          for name in ["IowaBills.xml", "Amendments.xml"]:
+              tree = ET.parse("/tmp/" + name)
+              assert tree.getroot().tag == "rss" and tree.find("channel") is not None, "Invalid " + name
+          PY
+          mv /tmp/IowaBills.xml feeds/IowaBills.xml
+          mv /tmp/Amendments.xml feeds/Amendments.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Mirror Iowa document text for screening
+        run: node tools/mirror-iowa-text.js
       - name: Fetch Open States (per states.json)
         if: ${{ env.KEY != '' }}
         run: |

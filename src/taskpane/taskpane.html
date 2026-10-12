@@ -298,21 +298,21 @@
 
   <!-- Screen 1b: New filings (intraday feed — hours ahead of the end-of-day report) -->
   <section id="screen-filings" class="screen" hidden>
-    <p class="hint">Newly filed bills from the Iowa GA feed (mirrored every 30 minutes) — no waiting for the end-of-day report.</p>
+    <p class="hint">All bills and amendments in the watch window are screened for possible agency impacts. Uncertain filings remain visible for review. Iowa feeds are mirrored every 30 minutes.</p>
     <div class="row2">
       <label>Watch window (days) — out of session, raise this to replay old filings
         <input id="watchDays" type="number" min="1" max="730" value="3" />
       </label>
-      <label>&nbsp;<button id="loadFilings" class="primary" style="width:100%">Check for new bills</button></label>
+      <label>&nbsp;<button id="loadFilings" class="primary" style="width:100%">Check bills and amendments</button></label>
     </div>
     <label class="modes" style="margin-top:6px"><input id="watchChapters" type="checkbox" checked /> Also match bills touching tracked Code chapters</label>
-    <label>Watch terms (comma separated; blank = all bills)
+    <label>Watch terms (comma separated; highlight matches)
       <input id="watchTerms" type="text" value="transportation, motor vehicle, highway, executive department, driver, railroad, aviation" />
     </label>
-    <label class="modes" style="margin-top:4px"><input id="hideReported" type="checkbox" checked /> Hide bills already included in a past daily report</label>
+    <label class="modes" style="margin-top:4px"><input id="hideReported" type="checkbox" checked /> Hide filings already included in a past daily report</label>
     <div id="filingsList"></div>
     <div class="actions-row">
-      <button id="routeFilings" hidden>Add selected bills to today’s report →</button>
+      <button id="routeFilings" hidden>Add selected filings to today’s report →</button>
     </div>
   </section>
 
@@ -375,23 +375,24 @@
 
   <section id="status" class="status" hidden></section>
 
-  <script src="../parser.js?v=44"></script>
+  <script src="../parser.js?v=46"></script>
   <script src="../routing.js?v=44"></script>
   <script src="../teams.js?v=44"></script>
   <script src="../docx.js?v=43"></script>
   <script src="../graph.js?v=44"></script>
-  <script src="../presets.js?v=43"></script>
+  <script src="../presets.js?v=46"></script>
   <script src="../provision.js?v=43"></script>
   <script src="../contacts.js?v=43"></script>
-  <script src="../reportgen.js?v=45"></script>
+  <script src="../reportgen.js?v=46"></script>
   <script src="../chapters.js?v=43"></script>
-  <script src="../feed.js?v=43"></script>
+  <script src="../feed.js?v=46"></script>
+  <script src="../screening.js?v=46"></script>
   <script src="../invite.js?v=43"></script>
   <script src="../deadline.js?v=43"></script>
   <script src="../billstatus.js?v=42"></script>
   <script src="../fiscal.js?v=44"></script>
   <script src="../harvest.js?v=43"></script>
   <script src="../xlsx.js?v=43"></script>
-  <script src="taskpane.js?v=45"></script>
+  <script src="taskpane.js?v=46"></script>
 </body>
 </html>

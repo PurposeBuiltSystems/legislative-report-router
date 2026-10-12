@@ -117,7 +117,7 @@
       var dist = (it.distributedTo || []).join(", ") || "TBD";
       var from = (it.commentRequestedFrom || []).join(", ") || dist;
 
-      textLines.push(it.billNumber);
+      textLines.push(it.documentType === "Amendment" && it.relatedBill ? it.billNumber + " filed on " + it.relatedBill : it.billNumber);
       textLines.push("");
       textLines.push(dist);
       textLines.push(from);

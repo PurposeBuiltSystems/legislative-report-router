@@ -18,7 +18,7 @@
   // ---------- configuration (overridable via opts) ----------
 
   var DEFAULT_IDENTIFIERS = [
-    "HF", "SF", "HSB", "SSB", "HJR", "SJR", "HCR", "SCR", "HR", "SR",
+    "HF", "SF", "HSB", "SSB", "CCS", "CCH", "HJR", "SJR", "HCR", "SCR", "HR", "SR",
   ];
 
   // Division-ish line: short, and made of code-like tokens (allows
@@ -136,7 +136,7 @@
   /** Strip report header: everything before the first boundary line. */
   function headerLines(lines, idRe) {
     for (var i = 0; i < lines.length; i++) {
-      if (idRe.test(lines[i])) { return i; }
+      if (idRe.test(lines[i]) || AMENDMENT_LINE_RE.test(lines[i])) { return i; }
     }
     return lines.length;
   }
