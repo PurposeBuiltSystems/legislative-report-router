@@ -76,6 +76,12 @@ check("real suffix mid-sentence: $1.2M impact", F.parseCost("$1.2M impact"), 120
 check("300k still works", F.parseCost("300k"), 300000);
 check("spelled-out unaffected", F.parseCost("1.5 million total"), 1500000);
 
+// Untrusted strings cannot become spreadsheet formulas; numeric savings stay numeric.
+var safeCsv = F.rollupCsv([{ fy: "SFY2027", division: "=1+1", bill: "HF 1", cost: -10, notes: "line\rbreak" }]);
+check("division formula becomes text", safeCsv.indexOf(",'=1+1,") !== -1, true);
+check("savings stay numeric", safeCsv.indexOf(",-10,") !== -1, true);
+check("CR-only note quoted", safeCsv.indexOf('"line\rbreak"') !== -1, true);
+
 if (failures) {
   console.error("\n" + failures + " fiscal test(s) FAILED");
   process.exit(1);

@@ -85,7 +85,9 @@
 
   function csvEscape(v) {
     var s = String(v == null ? "" : v);
-    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    // Keep untrusted text from becoming a formula when opened in Excel.
+    if (typeof v !== "number" && /^[\s\uFEFF]*[=+@-]/.test(s)) { s = "'" + s; }
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
 
   /** Detail rows plus a TOTAL line per FY — pivots cleanly in Excel. */

@@ -164,26 +164,25 @@
    * it still gets a fully working add-in everywhere else.
    */
   async function getTagWriteToken() {
-    var pca = await getPca();
-    var scopes = SCOPES.concat([TAG_WRITE_SCOPE]);
-    try {
-      var silent = await pca.acquireTokenSilent({ scopes: scopes });
-      return silent.accessToken;
-    } catch (e) {
-      var interactive = await pca.acquireTokenPopup({ scopes: scopes });
-      return interactive.accessToken;
-    }
+    return getAdditionalScopeToken(TAG_WRITE_SCOPE, "tag creation");
   }
 
   /** Token that additionally carries Sites.Manage.All, for creating lists. */
   async function getListCreateToken() {
-    var pca = await getPca();
-    var scopes = SCOPES.concat([LIST_CREATE_SCOPE]);
+    return getAdditionalScopeToken(LIST_CREATE_SCOPE, "list creation");
+  }
+
+  async function getAdditionalScopeToken(scope, action) {
+    var pca = await withTimeout(getPca(), 20000,
+      "Sign-in didn't start. Fully quit Outlook and reopen, then try again.");
+    var scopes = SCOPES.concat([scope]);
     try {
+      if (signedOut) { throw new Error("signed out of the add-in"); }
       return (await withTimeout(pca.acquireTokenSilent({ scopes: scopes }), 20000, "silent timeout")).accessToken;
     } catch (e) {
       var interactive = await withTimeout(pca.acquireTokenPopup({ scopes: scopes }), 120000,
-        "Sign-in for list creation didn't finish \u2014 look for a Microsoft window behind Outlook.");
+        "Sign-in for " + action + " didn't finish — look for a Microsoft window behind Outlook.");
+      setSignedOut(false);
       return interactive.accessToken;
     }
   }
@@ -196,8 +195,14 @@
     });
     if (res.status === 429 || res.status === 503) {
       // one respectful retry on throttle
-      var wait = Number(res.headers.get("Retry-After") || 3) * 1000;
-      await new Promise(function (r) { setTimeout(r, Math.min(wait, 15000)); });
+      var retryAfter = res.headers.get("Retry-After");
+      var wait = retryAfter && /^\d+(\.\d+)?$/.test(retryAfter.trim())
+        ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now();
+      if (!isFinite(wait)) { wait = 3000; }
+      wait = Math.max(0, wait);
+      // Surface long throttles rather than retrying before the server allows it.
+      if (wait > 15000) { throw new Error("Graph is busy. Retry in " + Math.ceil(wait / 1000) + " seconds."); }
+      await new Promise(function (r) { setTimeout(r, wait); });
       res = await fetch(graphBase() + path, {
         method: method,
         headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
@@ -205,7 +210,8 @@
       });
     }
     if (!res.ok) { throw new Error("Graph " + method + " " + path.split("?")[0] + " -> " + res.status + " " + (await res.text()).slice(0, 400)); }
-    return res.status === 204 ? null : res.json();
+    // Mail send actions return 202 Accepted with no JSON body.
+    return res.status === 202 || res.status === 204 ? null : res.json();
   }
 
   // ---------- SharePoint (routing matrix + audit) ----------
@@ -235,9 +241,27 @@
     return { siteId: site.id, name: site.displayName };
   }
 
+  /** Read every collection page without silently returning a partial result. */
+  async function collection(token, path) {
+    var out = [];
+    var url = path;
+    var count = 0;
+    while (url && count++ < 20) {
+      var page = await graphJson(token, "GET", url);
+      out = out.concat(page.value || []);
+      var next = page["@odata.nextLink"];
+      if (next && next.indexOf(graphBase() + "/") !== 0) {
+        throw new Error("Unexpected Graph paging URL.");
+      }
+      url = next ? next.slice(graphBase().length) : null;
+    }
+    if (url) { throw new Error("Graph results exceeded the scan limit. Narrow the selection and try again."); }
+    return out;
+  }
+
   async function findList(token, siteId, listName) {
-    var res = await graphJson(token, "GET", "/sites/" + siteId + "/lists?$select=id,name,displayName&$top=200");
-    var hit = (res.value || []).find(function (l) {
+    var lists = await collection(token, "/sites/" + siteId + "/lists?$select=id,name,displayName&$top=200");
+    var hit = lists.find(function (l) {
       return l.displayName === listName || l.name === listName;
     });
     if (!hit) { throw new Error('List "' + listName + '" not found on the site.'); }
@@ -254,6 +278,7 @@
       out = out.concat(page.value || []);
       url = page["@odata.nextLink"] ? page["@odata.nextLink"].replace(graphBase(), "") : null;
     }
+    if (url) { throw new Error("Graph results exceeded the scan limit. Narrow the selection and try again."); }
     return out;
   }
 
@@ -292,13 +317,13 @@
   // ---------- Teams ----------
 
   async function joinedTeams(token) {
-    var res = await graphJson(token, "GET", "/me/joinedTeams?$select=id,displayName");
-    return (res.value || []).sort(function (a, b) { return a.displayName.localeCompare(b.displayName); });
+    var teams = await collection(token, "/me/joinedTeams?$select=id,displayName");
+    return teams.sort(function (a, b) { return a.displayName.localeCompare(b.displayName); });
   }
 
   async function listChannels(token, teamId) {
-    var res = await graphJson(token, "GET", "/teams/" + teamId + "/channels?$select=id,displayName");
-    return (res.value || []).sort(function (a, b) { return a.displayName.localeCompare(b.displayName); });
+    var channels = await collection(token, "/teams/" + teamId + "/channels?$select=id,displayName");
+    return channels.sort(function (a, b) { return a.displayName.localeCompare(b.displayName); });
   }
 
   async function followedSites(token) {
@@ -355,8 +380,7 @@
   }
 
   async function listTeamTags(token, teamId) {
-    var res = await graphJson(token, "GET", "/teams/" + teamId + "/tags");
-    return res.value || [];
+    return collection(token, "/teams/" + teamId + "/tags");
   }
 
   // ---------- mail ----------
@@ -403,9 +427,8 @@
   }
 
   async function getAttachments(token, messageId) {
-    var res = await graphJson(token, "GET", "/me/messages/" + encodeURIComponent(messageId) +
+    return collection(token, "/me/messages/" + encodeURIComponent(messageId) +
       "/attachments?$select=id,name,contentType,size");
-    return res.value || [];
   }
 
   /** All replies to a channel message (fiscal harvest), capped paging. */
@@ -419,6 +442,7 @@
       out = out.concat(page.value || []);
       url = page["@odata.nextLink"] ? page["@odata.nextLink"].replace(graphBase(), "") : null;
     }
+    if (url) { throw new Error("Graph results exceeded the scan limit. Narrow the selection and try again."); }
     return out;
   }
 
@@ -444,8 +468,14 @@
     // throttled - so retry here too.
     var res = await fetch(url);
     if (res.status === 429 || res.status === 503) {
-      var wait = Number(res.headers.get("Retry-After") || 3) * 1000;
-      await new Promise(function (r) { setTimeout(r, Math.min(wait, 15000)); });
+      var retryAfter = res.headers.get("Retry-After");
+      var wait = retryAfter && /^\d+(\.\d+)?$/.test(retryAfter.trim())
+        ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now();
+      if (!isFinite(wait)) { wait = 3000; }
+      wait = Math.max(0, wait);
+      // Surface long throttles rather than retrying before the server allows it.
+      if (wait > 15000) { throw new Error("Graph is busy. Retry in " + Math.ceil(wait / 1000) + " seconds."); }
+      await new Promise(function (r) { setTimeout(r, wait); });
       res = await fetch(url);
     }
     if (!res.ok) { throw new Error("attachment download -> " + res.status); }

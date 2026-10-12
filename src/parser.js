@@ -49,7 +49,8 @@
     s = s.replace(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
       function (_, href, inner) {
         var text = inner.replace(/<[^>]+>/g, "").trim();
-        if (href && !/^javascript:/i.test(href)) { links.push({ text: text, href: href }); }
+        href = decodeEntities(href).trim();
+        if (/^https?:\/\//i.test(href) && !/[\u0000-\u0020]/.test(href)) { links.push({ text: text, href: href }); }
         return text;
       });
     s = s

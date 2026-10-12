@@ -72,14 +72,16 @@
     opts = opts || {};
     var t = opts.template || DEFAULT_TEMPLATE;
     var m = buildMentions(rulesForChannel);
-    var linkHtml = (item.sourceLinks || []).slice(0, 1).map(function (l) {
+    var linkHtml = (item.sourceLinks || []).filter(function (l) {
+      return l && /^https?:\/\//i.test(String(l.href || "")) && !/[\u0000-\u0020]/.test(l.href);
+    }).slice(0, 1).map(function (l) {
       return '<br>Open bill: <a href="' + esc(l.href) + '">' + esc(l.text || l.href) + "</a>";
     }).join("");
 
     var content =
       (m.atHtml ? m.atHtml + "<br><br>" : "") +
       "<strong>" + esc(item.billNumber) + "</strong>" +
-      (item.title && item.title !== item.brief.split("\n")[0] ? " — " + esc(item.title) : "") +
+      (item.title && item.title !== String(item.brief || "").split("\n")[0] ? " — " + esc(item.title) : "") +
       (opts.deadlineLabel ? "<br>⏰ <strong>Comments due by " + esc(opts.deadlineLabel) + "</strong>" : "") +
       "<br><br>Distributed To: " + esc((item.distributedTo || []).join(", ") || "—") +
       "<br>Comment Requested From: " + esc((item.commentRequestedFrom || []).join(", ") || "—") +

@@ -89,7 +89,9 @@
     }
 
     included.forEach(function (it) {
-      var link = (it.sourceLinks || [])[0];
+      var link = (it.sourceLinks || []).find(function (l) {
+        return l && /^https?:\/\//i.test(String(l.href || "")) && !/[\u0000-\u0020]/.test(l.href);
+      });
       var dist = (it.distributedTo || []).join(", ") || "TBD";
       var from = (it.commentRequestedFrom || []).join(", ") || dist;
 

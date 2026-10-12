@@ -1275,6 +1275,7 @@
       if (!state.site) {
         var site = await GraphData.resolveSite(token, byId("siteUrl").value);
         var routingListId = await GraphData.findList(token, site.siteId, byId("routingList").value.trim() || "LegislativeRoutingMatrix");
+        state._auditCache = null;
         state.site = { siteId: site.siteId, routingListId: routingListId };
       }
       if (!state.site.routingListId) {
@@ -1465,6 +1466,7 @@
       var raw = await GraphData.listItems(token, site.siteId, routingListId);
       state.rules = raw.map(function (r) { return LrrRouting.ruleFromSharePoint(r.fields || {}, r.id); })
         .filter(function (r) { return r.divisionCode; });
+      state._auditCache = null;
       state.site = { siteId: site.siteId, routingListId: routingListId, auditListId: auditListId, trackerListId: trackerListId };
       byId("rulesInfo").textContent = state.rules.length + " routing rule(s) loaded from " + site.name +
         " (" + state.rules.filter(function (r) { return r.teamsTagId; }).length + " with Teams tags).";
@@ -2466,11 +2468,16 @@
   }
 
   async function publish(retryOnly) {
+    if (state.publishing) { return; }
+    if (!isChecked("confirmBox")) { setStatus("error", "Confirm the reviewed distribution before publishing."); return; }
     if (!state.site) { setStatus("error", "Connect the SharePoint routing/audit lists in Settings first."); return; }
     var doTeams = byId("optTeams").checked;
     var doEmail = byId("optEmail").checked;
     var doOriginal = byId("optOriginal").checked;
+    state.publishing = true;
+    state._auditCache = null; // refresh durable publication records for this run
     byId("publishGo").disabled = true;
+    byId("retryFailed").disabled = true;
     byId("publishLog").innerHTML = "";
     var failures = 0;
 
@@ -2487,7 +2494,7 @@
           for (var gI = 0; gI < groups.length; gI++) {
             var g = groups[gI];
             var key = LrrTeams.idempotencyKey(state.reportKey, it.billNumber, g.channelId);
-            if (retryOnly && state.results[key] && state.results[key].status === "published") { continue; }
+            if (retryOnly && (!state.results[key] || state.results[key].status !== "failed")) { continue; }
             if (await alreadyPublished(token, key)) {
               logLine(it.billNumber + " → " + g.channelId.slice(0, 12) + "…: already published — skipped (idempotent).", "warn");
               continue;
@@ -2540,12 +2547,13 @@
         }
       }
 
-      if (doEmail && !retryOnly) {
+      if (doEmail) {
         var mailGroups = LrrRouting.groupByRule(included());
         for (var mI = 0; mI < mailGroups.length; mI++) {
           var mg = mailGroups[mI];
           if (!(mg.rule.emails || []).length) { continue; }
           var mkey = LrrTeams.idempotencyKey(state.reportKey, "EMAIL", mg.rule.id);
+          if (retryOnly && (!state.results[mkey] || state.results[mkey].status !== "failed")) { continue; }
           if (await alreadyPublished(token, mkey)) { logLine("✉ " + mg.rule.divisionCode + ": email already sent — skipped.", "warn"); continue; }
           try {
             var mail = LrrTeams.buildDivisionEmail(mg.rule, mg.items, opts);
@@ -2560,12 +2568,17 @@
             });
           } catch (e) {
             failures++;
+            state.results[mkey] = { status: "failed", error: e.message };
             logLine("✗ Email to " + mg.rule.divisionCode + ": " + e.message, "err");
           }
         }
       }
 
-      if (byId("optDailyReport").checked && !retryOnly) {
+      var reportDraftKey = LrrTeams.idempotencyKey(state.reportKey, "DAILY-DRAFT", "mail");
+      var originalKey = LrrTeams.idempotencyKey(state.reportKey, "ORIGINAL", "mail");
+      if (isChecked("optDailyReport") &&
+          (retryOnly ? state.results[reportDraftKey] && state.results[reportDraftKey].status === "failed"
+                     : !state.results[reportDraftKey] || state.results[reportDraftKey].status !== "published")) {
         try {
           var st2 = settings();
           var recips = LrrReportGen.extractEmails(st2.distList || "");
@@ -2578,24 +2591,30 @@
         deadlineLabel: currentDeadline().label,
               preparedBy: (me && me.displayName) || "",
             });
-            await GraphData.createDraftMessage(token, recips, rep.subject, rep.html);
+            var reportDraft = await GraphData.createDraftMessage(token, recips, rep.subject, rep.html);
+            state.results[reportDraftKey] = { status: "published", messageId: reportDraft.id };
             markReported(included());
             logLine("\u2713 Daily Bill Report draft created — " + rep.count + " bills, " + recips.length +
               " recipients. Review it in your Drafts folder and send.");
           }
         } catch (e) {
           failures++;
+          state.results[reportDraftKey] = { status: "failed", error: e.message };
           logLine("\u2717 Daily Bill Report draft failed: " + e.message, "err");
         }
       }
 
-      if (doOriginal && !retryOnly) {
+      if (doOriginal &&
+          (retryOnly ? state.results[originalKey] && state.results[originalKey].status === "failed"
+                     : !state.results[originalKey] || state.results[originalKey].status !== "published")) {
         try {
           var msgId = await restMessageId();
           await GraphData.sendDraft(token, msgId);
+          state.results[originalKey] = { status: "published" };
           logLine("✓ Original report email sent.");
         } catch (e) {
           failures++;
+          state.results[originalKey] = { status: "failed", error: e.message };
           logLine("✗ Sending the original failed: " + e.message + " (if this is a received message, it was already sent).", "err");
         }
       }
@@ -2607,6 +2626,8 @@
     } catch (e) {
       setStatus("error", "Publish failed: " + friendly(e));
     } finally {
+      state.publishing = false;
+      byId("retryFailed").disabled = false;
       byId("publishGo").disabled = !byId("confirmBox").checked;
     }
   }

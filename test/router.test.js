@@ -410,6 +410,16 @@ check("both top-priority channels", mcItem.matchedRoutingRules, ["a", "b"]);
 check("dormant lower priority excluded", mcItem.matchedRoutingRules.indexOf("c"), -1);
 check("multi-channel matched", mcItem.routingStatus, "matched");
 
+// Links from mail must be ordinary web URLs, including when previewed in the pane.
+for (var unsafeHref of ["javascript:alert(1)", " javascript:alert(1)", "java&#115;cript:alert(1)", "data:text/html,evil", "file:///tmp/x"]) {
+  var linked = P.parseReport('<div>HF101<br>MVD<br>MVD<br>Brief<br><a href="' + unsafeHref + '">Bill</a></div>', { knownDivisions: KNOWN });
+  check("unsafe source URL discarded: " + unsafeHref, linked.items[0].sourceLinks.length, 0);
+  var safeMessage = T.buildChannelMessage({ billNumber: "HF101", title: "Title", sourceLinks: [{ href: unsafeHref }], distributedTo: [] }, []);
+  check("payload blocks unsafe source URL: " + unsafeHref, safeMessage.body.content.indexOf("<a href=") === -1, true);
+}
+var queryLink = P.parseReport('<div>HF101<br>MVD<br>MVD<br>Brief<br><a href="https://example.gov/bill?id=1&amp;view=full">Bill</a></div>', { knownDivisions: KNOWN });
+check("source URL query entities decoded once", queryLink.items[0].sourceLinks[0].href, "https://example.gov/bill?id=1&view=full");
+
 if (failures) {
   console.error("\n" + failures + " test(s) FAILED");
   process.exit(1);

@@ -48,6 +48,10 @@ var entries = [{ bill: "HF2801" }, { bill: "SF2110" }, { bill: "HF2803" }];
 check("filterNew", G.filterNew(entries, ["hf2801", "SF2110"]).map(function (e) { return e.bill; }), ["HF2803"]);
 check("filterNew empty set", G.filterNew(entries, []).length, 3);
 
+for (var unsafe of ["javascript:alert(1)", "data:text/html,evil", "file:///tmp/bill", " https://example.gov"]) {
+  var safeReport = G.buildDailyReport([{ billNumber: "HF1", sourceLinks: [{ href: unsafe }] }]);
+  check("report rejects unsafe link " + unsafe, safeReport.html.indexOf("<a href=") === -1, true);
+}
 if (failures) {
   console.error("\n" + failures + " reportgen test(s) FAILED");
   process.exit(1);
