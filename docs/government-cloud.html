@@ -12,7 +12,8 @@ blockquote { border-left: 4px solid #0f6cbd; margin: 12px 0; padding: 4px 14px; 
 a { color: #0f6cbd; } .crumb { font-size: 0.9em; }
 @media print { body { margin: 0.5in; } }
 </style></head><body><p class="crumb"><a href="index.html">← Documentation</a></p><h1 id="government-cloud-configuration">Government cloud configuration</h1>
-<p>No endpoint is hardcoded. The Settings → "Cloud environment" selector maps:</p>
+<p>Endpoint configuration does not certify government-cloud operation. Validate authentication, required Graph APIs, hosting policy and a complete publication workflow in the target tenant before deployment.</p>
+<p>The Settings → "Cloud environment" selector maps:</p>
 <table>
 <tr><th>Environment</th><th>Graph host</th><th>Sign-in authority</th></tr>
 <tr><td>Commercial</td><td><code>https://graph.microsoft.com</code></td><td><code>https://login.microsoftonline.com</code></td></tr>
@@ -23,6 +24,6 @@ a { color: #0f6cbd; } .crumb { font-size: 0.9em; }
 <p>Notes:</p>
 <ul>
 <li>GCC runs on the commercial endpoints (it is a compliance boundary, not an endpoint boundary); GCC High and DoD use the <code>.us</code> sovereign endpoints.</li>
-<li>For GCC High/DoD the Entra app registration must exist in (or be consented into) the sovereign tenant; SPA redirect URIs are cloud-agnostic (GitHub Pages), but agencies that disallow external hosting can serve the static files from any internal HTTPS host — update the manifest URLs, nothing else changes (there is no backend).</li>
+<li>GCC High/DoD require a separate application registration in the sovereign cloud; a commercial multitenant registration cannot span national clouds. For a separate sovereign deployment, set <code>CLIENT_ID</code> in <code>src/graph.js</code> to that registration's client ID, configure the appropriate SPA/broker redirect for its host, and update manifest URLs if hosting changes. Selecting a cloud in the public deployment does not replace its commercial registration. See <a href="https://learn.microsoft.com/en-us/entra/identity-platform/authentication-national-cloud">Microsoft's national-cloud authentication guidance</a>.</li>
 <li>Teams tag mention support and Graph feature parity can lag in sovereign clouds; if <code>mentions</code> with <code>mentioned.tag</code> is rejected, the post still succeeds without the mention and the audit row records the response.</li>
 </ul></body></html>
