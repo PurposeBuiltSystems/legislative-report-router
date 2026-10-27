@@ -29,7 +29,7 @@ function load() {
       listTeamMembers: async () => { throw new Error("must not query Team directory"); },
       listTeamTagMembers: async () => [{ userId: "alice" }],
       updateRecipientEmails: async () => { calls.emails++; }
-    }, LrrContacts: require("../src/contacts"), LrrRecipients: require("../src/recipients"), LrrRouting: require("../src/routing")
+    }, LrrContacts: require("../src/contacts"), LrrReportGen: require("../src/reportgen"), LrrRecipients: require("../src/recipients"), LrrRouting: require("../src/routing")
   };
   vm.runInNewContext(source, context);
   context.self.api.state.site = { siteId: "s", routingListId: "l" };

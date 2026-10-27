@@ -130,7 +130,7 @@
     var st = settings();
     var withChannel = state.rules.filter(function (r) { return r.teamsTeamId && r.teamsChannelId; }).length;
     var withPeople = state.rules.filter(function (r) { return (r.emails || []).length; }).length;
-    var distN = (typeof LrrReportGen !== "undefined") ? LrrReportGen.extractEmails(st.distList || "").length : 0;
+    var distN = (typeof LrrReportGen !== "undefined") ? dailyReportRecipients(st).length : 0;
     var steps = [
       [!!st.siteUrl, "Pick where your lists live", "use \u2460 above"],
       [!!(state.site && state.site.routingListId), "Create & connect your lists", "use \u2461 and Connect"],
@@ -244,11 +244,36 @@
     } catch (e) { /* best-effort */ }
   }
 
+  function useDivisionDistribution(st) {
+    return st.distFromDivisions === true || st.distFromDivisions === "true";
+  }
+
+  function dailyReportRecipients(st) {
+    st = st || settings();
+    var sources = [st.distList || ""];
+    if (useDivisionDistribution(st)) {
+      state.rules.filter(function (rule) { return rule.divisionCode && LrrRouting.ruleActive(rule); }).forEach(function (rule) {
+        sources.push((rule.emails || []).join("; "));
+      });
+    }
+    // The parser lowercases and deduplicates across divisions and extras.
+    return LrrReportGen.extractEmails(sources.join("; "));
+  }
+
+  function distributionFormSettings() {
+    var st = Object.assign({}, settings());
+    if (byId("distList")) { st.distList = val("distList"); }
+    if (byId("distFromDivisions")) { st.distFromDivisions = isChecked("distFromDivisions"); }
+    return st;
+  }
+
   function updateDistInfo() {
     var el = byId("distInfo");
     if (!el) { return; }
-    var n = LrrReportGen.extractEmails(byId("distList").value).length;
-    el.textContent = n ? n + " address(es) recognized." : "Paste the To: line from a past report \u2014 names and brackets are fine.";
+    var st = distributionFormSettings(), addresses = dailyReportRecipients(st);
+    el.textContent = (useDivisionDistribution(st) ? "All active division contacts plus additional recipients: " : "Separate distribution list: ") +
+      addresses.length + " unique address(es). " + (addresses.length ? "Review these recipients before creating the daily report draft." : "Add division contacts or paste email recipients below.");
+    setVal("distRecipients", addresses.join("; "));
   }
 
   function maybeAutoParse() {
@@ -275,7 +300,7 @@
   }
 
   var SETTING_KEYS = ["sharedRecipients", "cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "responseHours", "dueTime", "holidays", "sessionEnd",
-    "obsMlk", "obsPresidents", "obsJuneteenth", "obsColumbus", "obsVeterans", "obsDayAfterThanksgiving", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distList", "autoDaily", "autoDailyTime"];
+    "obsMlk", "obsPresidents", "obsJuneteenth", "obsColumbus", "obsVeterans", "obsDayAfterThanksgiving", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distFromDivisions", "distList", "autoDaily", "autoDailyTime"];
   var PROFILE_KEYS = SETTING_KEYS.concat([]);
 
   /**
@@ -427,7 +452,7 @@
     wizShow(1);
     on("runChecks", "click", runChecks);
     on("copyChecks", "click", copyChecks);
-    on("distList", "input", updateDistInfo);
+    on("distList", "input", function () { resetPublicationConfirmation(); updateDistInfo(); });
     updateDistInfo();
     var st0 = settings();
     if (st0.autoDaily === true || st0.autoDaily === "true") { setProp("autoDaily", "checked", true); }
@@ -458,6 +483,9 @@
         var el = byId(k);
         if (!el) { return; }
         var p = {}; p[k] = el.type === "checkbox" ? el.checked : el.value; saveSettings(p);
+        if (k === "distFromDivisions" || k === "distList") {
+          resetPublicationConfirmation(); updateDistInfo(); updateSetupChecklist();
+        }
         if (k === "cloud") { GraphData.setCloud(el.value); state.site = null; }
         if (k === "siteUrl" || k === "routingList" || k === "auditList" || k === "trackerList") { state.site = null; }
       });
@@ -480,6 +508,7 @@
     // useful instantly; a silent refresh follows. If sign-in needs interaction
     // (first run on a new device), we say so calmly instead of erroring.
     var hadCache = loadRulesCache();
+    updateDistInfo();
     updateConnBanner();
     updateSetupChecklist();
     if (hadCache) {
@@ -843,6 +872,7 @@
 
   function resetPublicationConfirmation() {
     sharedRecipientsReady = false;
+    divisionDistributionReady = false;
     sharedRecipientsGeneration++;
     setProp("confirmBox", "checked", false);
     setProp("publishGo", "disabled", true);
@@ -1385,6 +1415,7 @@
       var merged = (rule.emails || []).concat([email]);
       await GraphData.updateListItemFields(token, state.site.siteId, state.site.routingListId, rule.id, { Emails: merged.join("; ") });
       rule.emails = merged;
+      updateDistInfo();
       resetPublicationConfirmation();
       saveRulesCache();
       byId("quickEmail").value = "";
@@ -1553,6 +1584,7 @@
       }
       if (state.items.length) { LrrRouting.routeAll(state.items, state.rules); refreshStats(); renderItems(); }
       saveRulesCache();
+      updateDistInfo();
       updateConnBanner();
       updateSetupChecklist();
       renderRoutesSummary();
@@ -1629,11 +1661,13 @@
       var now = new Date();
       var due = new Date(now.getFullYear(), now.getMonth(), now.getDate(), +parts[0] || 7, +parts[1] || 30);
       if (now < due) { return; } // not time yet
-      if (!LrrReportGen.extractEmails(st.distList || "").length) { return; } // not configured
-      if (!state.rules.length) {
+      if (!useDivisionDistribution(st) && !dailyReportRecipients(st).length) { return; } // not configured
+      if (!state.rules.length || useDivisionDistribution(st)) {
         try { await connectRules(true); } catch (e) { return; } // sign-in needed — wait for a manual open
       }
 
+      if (useDivisionDistribution(st) && st.sharedRecipients && !(await refreshSharedRecipients())) { return; }
+      if (!dailyReportRecipients(st).length) { return; }
       autoDraftRan = true;
       setStatus("work", "Morning auto-draft: checking for new bills\u2026");
 
@@ -1678,7 +1712,7 @@
 
       // draft only — never posts, never sends
       var token = await GraphData.getToken();
-      var recips = LrrReportGen.extractEmails(st.distList || "");
+      var recips = dailyReportRecipients(st);
       var rep = LrrReportGen.buildDailyReport(items, {
         sessionName: st.sessionName || "",
         stateName: st.stateName || "Iowa",
@@ -2100,6 +2134,7 @@
 
   // Refresh before Preview, then require review of that exact audience before
   // Publish. Never expand recipients after the publication confirmation.
+  var divisionDistributionReady = false;
   var sharedRecipientsPending = null;
   var sharedRecipientsReady = false;
   var sharedRecipientsGeneration = 0;
@@ -2127,6 +2162,7 @@
         var result = await LrrRecipients.reconcile(GraphData, token, rules, site, LrrRecipients.mappings(rows, rules));
         if (state.site !== site || generation !== sharedRecipientsGeneration) { throw new Error("Setup changed during refresh. Refresh contacts again."); }
         state.rules = rules;
+        updateDistInfo();
         if (state.items.length) { LrrRouting.routeAll(state.items, state.rules); }
         saveRulesCache();
         sharedRecipientWarnings = result.warnings;
@@ -2152,9 +2188,16 @@
   }
 
   async function prepareSharedPreview() {
-    if (!settings().sharedRecipients) { renderPreview(); return; }
+    if (!settings().sharedRecipients) {
+      if (useDivisionDistribution(settings())) {
+        resetPublicationConfirmation();
+        try { await connectRules(true); }
+        catch (e) { setText("previewList", "Division contacts could not reload. Reconnect the routing list and open Preview again."); return; }
+      }
+      renderPreview(); divisionDistributionReady = true; return;
+    }
     setText("previewList", "Refreshing Teams and email contacts before preview…");
-    if (await refreshSharedRecipients()) { renderPreview(); sharedRecipientsReady = true; }
+    if (await refreshSharedRecipients()) { renderPreview(); sharedRecipientsReady = true; divisionDistributionReady = true; }
     else { setText("previewList", "Contacts could not refresh. Resolve the message in Setup, then open Preview again."); }
   }
 
@@ -2222,6 +2265,12 @@
       warning.textContent = "Email-only contacts needing attention: " + sharedRecipientWarnings.join(" ");
       host.appendChild(warning);
     }
+    if (useDivisionDistribution(settings())) {
+      var recipients = document.createElement("p");
+      recipients.className = "hint";
+      recipients.textContent = "Daily report distribution (all active divisions + extras): " + dailyReportRecipients().join("; ");
+      host.appendChild(recipients);
+    }
     var opts = { template: { commentWindow: byId("commentWindow").value }, deadlineLabel: currentDeadline().label };
     included().forEach(function (it) {
       channelGroups(it).forEach(function (g) {
@@ -2273,7 +2322,7 @@
       (byId("optOriginal").checked ? "<br>The original Outlook message will be sent." : "") +
       (byId("optDailyReport").checked
         ? "<br>The <strong>Daily Bill Report draft</strong> will be created for <strong>" +
-          LrrReportGen.extractEmails((settings().distList || "")).length + "</strong> recipients (review in Drafts, then send)."
+          dailyReportRecipients().length + "</strong> recipients (review in Drafts, then send)."
         : "");
   }
 
@@ -2822,6 +2871,9 @@
 
   async function publish(retryOnly) {
     if (state.publishing) { return; }
+    if (useDivisionDistribution(settings()) && isChecked("optDailyReport") && !divisionDistributionReady) {
+      setStatus("error", "Open Preview to refresh and review the daily report's division contacts before creating its draft."); return;
+    }
     if (settings().sharedRecipients && (!sharedRecipientsReady || sharedRecipientsPending)) {
       setStatus("error", "Open Preview to refresh and review shared Teams/email recipients before publishing."); return;
     }
@@ -2937,7 +2989,7 @@
                      : !state.results[reportDraftKey] || state.results[reportDraftKey].status !== "published")) {
         try {
           var st2 = settings();
-          var recips = LrrReportGen.extractEmails(st2.distList || "");
+          var recips = dailyReportRecipients(st2);
           if (!recips.length) {
             logLine("\u26a0 Daily Bill Report skipped: no distribution list set (Setup \u2192 Daily Bill Report generation).", "warn");
           } else {

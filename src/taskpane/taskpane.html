@@ -202,10 +202,15 @@
         <label>Session name (report header)
           <input id="sessionName" type="text" placeholder="Leave blank to use the current legislative session" />
         </label>
-        <label>Distribution list — paste your report's To: line (addresses extract automatically)
+        <label><input id="distFromDivisions" type="checkbox" /> Use all division contacts for the daily report</label>
+        <p class="hint">When selected, the router combines all active division email contacts and removes duplicates. The field below adds extra recipients, such as leadership. Open Preview to review the combined audience before creating a report draft.</p>
+        <label>Distribution list, or additional recipients when using division contacts
           <textarea id="distList" rows="3" placeholder="Doe, Jane &lt;jane.doe@iowadot.us&gt;; Roe, Bob &lt;bob.roe@iowadot.us&gt;; …"></textarea>
         </label>
         <p id="distInfo" class="hint"></p>
+        <label>Daily report recipients (preview)
+          <textarea id="distRecipients" rows="3" readonly></textarea>
+        </label>
         <div class="row2">
           <label class="check" style="align-self:end"><input id="autoDaily" type="checkbox" /> Draft it for me each morning</label>
           <label>at
@@ -417,6 +422,6 @@
   <script src="../budget-dashboard.js?v=1"></script>
   <script src="../harvest.js?v=43"></script>
   <script src="../xlsx.js?v=43"></script>
-  <script src="taskpane.js?v=20261027c"></script>
+  <script src="taskpane.js?v=20261027d"></script>
 </body>
 </html>

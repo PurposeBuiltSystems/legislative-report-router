@@ -27,7 +27,7 @@ function load(){
  };
  const context={self:{statuses:[]},document,GraphData:graph,
   Office:{onReady(){},AsyncResultStatus:{Succeeded:"ok"},context:{roamingSettings:{get:k=>stored[k],set:(k,v)=>{stored[k]=v;},saveAsync:cb=>cb({status:"ok"})}}},
-  LrrRecipients:require("../src/recipients"),LrrRouting:require("../src/routing"),LrrContacts:require("../src/contacts")};
+  LrrReportGen:require("../src/reportgen"),LrrRecipients:require("../src/recipients"),LrrRouting:require("../src/routing"),LrrContacts:require("../src/contacts")};
  vm.runInNewContext(source,context);
  context.self.api.state.site={siteId:"s",routingListId:"l"};
  return {api:context.self.api,document,rows,stored,calls,graph};

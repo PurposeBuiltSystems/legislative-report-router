@@ -87,3 +87,9 @@ The in-router dashboard filters BillTracker data by fiscal year and division. Pu
 Load and review the fiscal rollup, then choose Publish budget snapshot to SharePoint. The published snapshot includes every loaded fiscal year and division and displays the data-load timestamp. In Teams, add a SharePoint tab and select the generated page. Refresh the rollup and republish to update it; the Teams snapshot does not refresh itself when tracker rows change.
 
 Unknown estimates remain separate from zero-cost estimates. Savings, spending and net estimates are shown separately; totals include all tracked bills and carry status/duplicate-row warnings. Detail is limited to 150 displayed rows with a link to the full editable BillTracker.
+
+## Daily report distribution from division contacts
+
+Step 5 offers Use all division contacts for the daily report. It combines the email contacts of every currently active division route, excludes expired/future/inactive rules and Contact metadata records, and removes duplicate addresses without regard to case. The existing distribution field adds extra recipients when this option is enabled; when disabled, it remains a separate manual distribution list.
+
+Setup shows the resolved recipient list. Preview reloads division contacts and requires a new confirmation before creating the daily report draft. The morning draft schedule uses the same recipient calculation and refreshes division/shared contacts first. This changes draft recipients only; it does not send the daily report automatically or change targeted per-division email behavior. No new permission or manifest is needed. Existing saved distribution behavior remains the default until the option is enabled.
