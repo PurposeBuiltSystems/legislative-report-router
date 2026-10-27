@@ -214,6 +214,31 @@
     return res.status === 202 || res.status === 204 ? null : res.json();
   }
 
+  async function trackerWebUrl(token, siteId, listId) {
+    return (await graphJson(token, "GET", "/sites/" + siteId + "/lists/" + listId + "?$select=webUrl")).webUrl;
+  }
+
+  // Stable page name + ownership marker make retries update only our own
+  // dashboard. A conflict never authorizes overwriting someone else's page.
+  async function publishBudgetPage(token, siteId, payload) {
+    if (!payload || !/^lrr-budget-[a-zA-Z0-9]+\.aspx$/.test(payload.name) ||
+        !/^LRR_BUDGET_V1:/.test(payload.description || "")) { throw new Error("Invalid budget dashboard page."); }
+    var pages = await collection(token, "/sites/" + siteId + "/pages/microsoft.graph.sitePage?$filter=" +
+      encodeURIComponent("name eq '" + payload.name + "'") + "&$select=id,name,description,webUrl");
+    var page = pages.find(function (p) { return p.name === payload.name; });
+    if (page) {
+      if (page.description !== payload.description) { throw new Error("A different page already uses the dashboard name. No page was overwritten."); }
+      var update = Object.assign({}, payload); delete update.name; delete update.pageLayout;
+      var updated = await graphJson(token, "PATCH", "/sites/" + siteId + "/pages/" + page.id + "/microsoft.graph.sitePage", update);
+      page = Object.assign({}, page, updated);
+    } else {
+      page = await graphJson(token, "POST", "/sites/" + siteId + "/pages", payload);
+    }
+    if (!page || !page.id) { throw new Error("SharePoint did not return the dashboard page ID. Check Site Pages before retrying."); }
+    await graphJson(token, "POST", "/sites/" + siteId + "/pages/" + page.id + "/microsoft.graph.sitePage/publish");
+    return page;
+  }
+
   // ---------- SharePoint (routing matrix + audit) ----------
 
   /**
@@ -512,6 +537,8 @@
     getTagWriteToken: getTagWriteToken,
     getListCreateToken: getListCreateToken,
     resolveSite: resolveSite,
+    trackerWebUrl: trackerWebUrl,
+    publishBudgetPage: publishBudgetPage,
     findList: findList,
     listItems: listItems,
     createList: createList,

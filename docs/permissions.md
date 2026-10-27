@@ -79,3 +79,11 @@ Tag emails are added to the division's Emails column. Contacts outside its tag u
 Refresh happens in the open add-in on demand and before Preview; Publish uses the reviewed audience. Reconciliation is additive. To remove a recipient, remove their email from the route and their division tag membership; to forget a saved identity/email match, delete its Contact row in the routing list. Existing list-column length limits still apply to the Emails column.
 
 No new Outlook manifest, new Graph scope, schema provisioning, or additional admin consent is required for this matching path. Existing permissions and access must already be granted.
+
+## Budget dashboard in Teams
+
+The in-router dashboard filters BillTracker data by fiscal year and division. Publishing creates or updates a native SharePoint site page using the existing Sites.ReadWrite.All delegated permission; no new Graph scope, Teams app manifest or Power BI license is requested. Site/page editing rights and any existing page approval process still apply.
+
+Load and review the fiscal rollup, then choose Publish budget snapshot to SharePoint. The published snapshot includes every loaded fiscal year and division and displays the data-load timestamp. In Teams, add a SharePoint tab and select the generated page. Refresh the rollup and republish to update it; the Teams snapshot does not refresh itself when tracker rows change.
+
+Unknown estimates remain separate from zero-cost estimates. Savings, spending and net estimates are shown separately; totals include all tracked bills and carry status/duplicate-row warnings. Detail is limited to 150 displayed rows with a link to the full editable BillTracker.

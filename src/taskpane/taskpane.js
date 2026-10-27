@@ -9,7 +9,7 @@
 /* global Office, GraphData, document,
    LrrScreening, LrrParser, LrrRouting, LrrTeams, LrrDocx, LrrXlsx, LrrPresets, LrrProvision,
    LrrChapters, LrrContacts, LrrFeed, LrrReportGen, LrrDeadline, LrrFiscal, LrrBillStatus, LrrHarvest,
-   LrrInvite, LrrRecipients, window */
+   LrrInvite, LrrRecipients, LrrBudget, window */
 (function () {
   "use strict";
 
@@ -446,6 +446,9 @@
     on("fiscalLoad", "click", loadFiscal);
     on("statusRefresh", "click", refreshBillStatuses);
     on("fiscalCsv", "click", exportFiscalCsv);
+    on("budgetFy", "change", renderBudgetDashboard);
+    on("budgetDivision", "change", renderBudgetDashboard);
+    on("budgetPublish", "click", publishBudgetDashboard);
     on("fiscalHarvest", "click", harvestFiscal);
     on("harvestApply", "click", applyHarvest);
     on("loadFilings", "click", loadFilings);
@@ -2592,7 +2595,7 @@
         (failed ? ", " + failed + " couldn't be written (list permissions)" : "") +
         (opts.sessionEnd ? "" : " \u2014 set \u201cSession adjourned\u201d to identify bills that died."));
       lastStatusIndex = { idx: idx, opts: opts };
-      if (lastFiscalFys) { renderFiscal(lastFiscalFys); }
+      if (lastFiscalFys) { renderFiscal(lastFiscalFys); renderBudgetDashboard(); }
     } catch (e) {
       setStatus("error", "Couldn't refresh bill statuses: " + friendly(e));
     } finally {
@@ -2625,6 +2628,8 @@
     if (!state.site || !state.site.trackerListId) {
       setStatus("error", "Connect a Bill tracker list in Settings first."); return;
     }
+    fiscalSnapshot = null;
+    setProp("budgetPublish", "disabled", true);
     byId("fiscalLoad").disabled = true;
     try {
       var token = await GraphData.getToken();
@@ -2657,6 +2662,9 @@
         } catch (e) { break; }
       }
       var backfillNote = backfilled ? " Filled the numeric cost column on " + backfilled + " row(s) for Power BI." : "";
+      fiscalSnapshot = { site: state.site, at: new Date().toISOString() };
+      budgetFilters();
+      renderBudgetDashboard();
       lastFiscalFys = LrrFiscal.aggregate(fiscalRows);
       renderFiscal(lastFiscalFys);
       byId("fiscalCsv").hidden = !fiscalRows.length;
@@ -2669,6 +2677,69 @@
     } finally {
       byId("fiscalLoad").disabled = false;
     }
+  }
+
+  var fiscalSnapshot = null;
+
+  function budgetRows() {
+    return fiscalRows.map(function (row) {
+      var copy = Object.assign({}, row);
+      if (lastStatusIndex) {
+        var status = LrrBillStatus.statusFor(row.bill, lastStatusIndex.idx, lastStatusIndex.opts).status;
+        copy.closed = status === LrrBillStatus.STATUS.UNKNOWN ? null : LrrBillStatus.isClosed(status);
+      }
+      return copy;
+    });
+  }
+
+  function budgetFilters() {
+    ["budgetFy", "budgetDivision"].forEach(function (id) {
+      var field = id === "budgetFy" ? "fy" : "division", select = byId(id);
+      if (!select) { return; }
+      var previous = select.value;
+      select.innerHTML = "";
+      var all = document.createElement("option"); all.value = ""; all.textContent = id === "budgetFy" ? "All fiscal years" : "All divisions"; select.appendChild(all);
+      Array.from(new Set(fiscalRows.map(function (r) { return r[field] || (field === "fy" ? "(no FY)" : "(none)"); }))).sort().forEach(function (value) {
+        var option = document.createElement("option"); option.value = value; option.textContent = value; select.appendChild(option);
+      });
+      select.value = previous; if (select.selectedIndex < 0) { select.value = ""; }
+    });
+  }
+
+  function renderBudgetDashboard() {
+    if (!byId("budgetDashboard")) { return; }
+    if (!fiscalSnapshot || fiscalSnapshot.site !== state.site) {
+      setText("budgetDashboard", "Load the fiscal rollup to view the budget dashboard.");
+      setProp("budgetPublish", "disabled", true); return;
+    }
+    if (typeof LrrBudget === "undefined") { setText("budgetDashboard", "Reload the add-in to load the dashboard."); return; }
+    var fy = val("budgetFy"), division = val("budgetDivision");
+    byId("budgetDashboard").innerHTML = LrrBudget.html(budgetRows(), { filters: { fy: fy, division: division },
+      label: (fy || "All fiscal years") + " · " + (division || "All divisions"), asOf: fiscalSnapshot.at });
+    setProp("budgetPublish", "disabled", !fiscalRows.length);
+  }
+
+  async function publishBudgetDashboard() {
+    if (!fiscalSnapshot || fiscalSnapshot.site !== state.site || !fiscalRows.length) {
+      setText("budgetPublishInfo", "Load and review the fiscal rollup for the connected tracker first."); return;
+    }
+    setProp("budgetPublish", "disabled", true);
+    var snapshot = fiscalSnapshot, site = state.site;
+    try {
+      var token = await GraphData.getToken();
+      if (snapshot !== fiscalSnapshot || site !== state.site) { throw new Error("The connected tracker changed. Reload the rollup first."); }
+      var trackerUrl = await GraphData.trackerWebUrl(token, site.siteId, site.trackerListId);
+      var payload = LrrBudget.page(budgetRows(), { asOf: snapshot.at, trackerId: site.trackerListId, trackerUrl: trackerUrl });
+      var page = await GraphData.publishBudgetPage(token, site.siteId, payload);
+      var host = byId("budgetPublishInfo"); host.textContent = "Dashboard publish requested. If your site requires page approval, complete it in SharePoint. In Teams: add a SharePoint tab, select this page, and name it Budget. ";
+      if (page.webUrl && /^https:\/\//i.test(page.webUrl)) {
+        var link = document.createElement("a"); link.href = page.webUrl; link.target = "_blank"; link.rel = "noopener"; link.textContent = "Open budget dashboard";
+        host.appendChild(link);
+      }
+      setStatus("info", "Budget dashboard saved to SharePoint. It includes all loaded fiscal years and divisions; refresh and republish to update the Teams view.");
+    } catch (e) {
+      setText("budgetPublishInfo", "Could not finish publishing: " + (e.message || e) + ". Check SharePoint Site Pages before retrying; an unpublished draft may already exist. Existing site/page editing rights are required.");
+    } finally { setProp("budgetPublish", "disabled", !fiscalRows.length || !fiscalSnapshot || fiscalSnapshot.site !== state.site); }
   }
 
   function renderFiscal(fys) {
