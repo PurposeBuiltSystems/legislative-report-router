@@ -130,7 +130,7 @@
 
       <!-- Step 3: divisions, channels, tags -->
       <div class="wiz-step" data-wiz="3" hidden>
-        <h3 class="wiz-h">3 · Add each division — its channel and its tag</h3>
+        <h3 class="wiz-h">3 · Route each division to your channel and tag</h3>
         <p class="hint">One or many channels: add a division again with a second channel and bills post to both. <b>Every division should have a tag</b> — that's what makes the right people get notified. No tag yet? Create one right here.</p>
         <div id="routesSummary" class="hint"></div>
         <div class="row2">
@@ -141,7 +141,7 @@
           <select id="rbTeam"><option value="">Loading your teams…</option></select>
         </label>
         <div class="row2">
-          <label>Channel <select id="rbChannel"><option value="">Pick a team first</option></select></label>
+          <label>Posting channel (the same legislative channel can serve every division) <select id="rbChannel"><option value="">Pick a team first</option></select></label>
           <label>Tag <select id="rbTag"><option value="">Pick a team first</option></select></label>
         </div>
         <button id="tagCreate">➕ Create the tag for this division</button>
@@ -162,7 +162,11 @@
 
       <!-- Step 4: people -->
       <div class="wiz-step" data-wiz="4" hidden>
-        <h3 class="wiz-h">4 · Put people on divisions</h3>
+        <h3 class="wiz-h">4 · Division contacts for Teams and email</h3>
+        <p class="hint">Add people in Teams tags, the routing list's Emails column, or paste contacts below. Shared contacts combines them for division emails and Teams notifications in your selected channel.</p>
+        <label><input id="sharedRecipients" type="checkbox" /> Use shared contacts for Teams and email</label>
+        <button id="recipientSync" type="button">Refresh shared contacts</button>
+        <p id="recipientSyncInfo" class="hint" aria-live="polite">Connect a division route first. Refresh reads Team membership and may ask for IT consent. Contacts outside the tag get direct @mentions; people outside the Team stay email-only. Refresh adds tag emails to the list; it never removes contacts or changes Team/tag membership. Shared contacts refresh again before Preview.</p>
         <div class="row2">
           <label>Quick add one person
             <input id="quickEmail" type="text" placeholder="jane.doe@iowadot.us" />
@@ -379,10 +383,11 @@
   <script src="../routing.js?v=44"></script>
   <script src="../teams.js?v=44"></script>
   <script src="../docx.js?v=43"></script>
-  <script src="../graph.js?v=44"></script>
+  <script src="../graph.js?v=20261027"></script>
   <script src="../presets.js?v=46"></script>
   <script src="../provision.js?v=43"></script>
   <script src="../contacts.js?v=43"></script>
+  <script src="../recipients.js?v=1"></script>
   <script src="../reportgen.js?v=46"></script>
   <script src="../chapters.js?v=43"></script>
   <script src="../feed.js?v=46"></script>
@@ -393,6 +398,6 @@
   <script src="../fiscal.js?v=44"></script>
   <script src="../harvest.js?v=43"></script>
   <script src="../xlsx.js?v=43"></script>
-  <script src="taskpane.js?v=47"></script>
+  <script src="taskpane.js?v=20261027"></script>
 </body>
 </html>

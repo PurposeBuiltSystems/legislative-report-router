@@ -187,10 +187,10 @@
     }
   }
 
-  async function graphJson(token, method, path, body) {
+  async function graphJson(token, method, path, body, extraHeaders) {
     var res = await fetch(graphBase() + path, {
       method: method,
-      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      headers: Object.assign({ Authorization: "Bearer " + token, "Content-Type": "application/json" }, extraHeaders),
       body: body ? JSON.stringify(body) : undefined,
     });
     if (res.status === 429 || res.status === 503) {
@@ -205,7 +205,7 @@
       await new Promise(function (r) { setTimeout(r, wait); });
       res = await fetch(graphBase() + path, {
         method: method,
-        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        headers: Object.assign({ Authorization: "Bearer " + token, "Content-Type": "application/json" }, extraHeaders),
         body: body ? JSON.stringify(body) : undefined,
       });
     }
@@ -310,6 +310,11 @@
     return graphJson(token, "PATCH", "/sites/" + siteId + "/lists/" + listId + "/items/" + itemId + "/fields", fields);
   }
 
+  async function updateRecipientEmails(token, siteId, listId, itemId, fields, etag) {
+    if (!etag) { throw new Error("The routing row has no version. Reconnect and refresh contacts before updating it."); }
+    return graphJson(token, "PATCH", "/sites/" + siteId + "/lists/" + listId + "/items/" + itemId + "/fields", fields, { "If-Match": etag });
+  }
+
   async function deleteListItem(token, siteId, listId, itemId) {
     return graphJson(token, "DELETE", "/sites/" + siteId + "/lists/" + listId + "/items/" + itemId);
   }
@@ -377,6 +382,19 @@
       displayName: displayName,
       members: [{ userId: oid }],
     });
+  }
+
+  // Incremental read permission; never changes who belongs to a Team.
+  async function getRecipientToken() {
+    return getAdditionalScopeToken("TeamMember.Read.All", "shared Teams and email contacts");
+  }
+
+  async function listTeamMembers(token, teamId) {
+    return collection(token, "/teams/" + encodeURIComponent(teamId) + "/members");
+  }
+
+  async function listTeamTagMembers(token, teamId, tagId) {
+    return collection(token, "/teams/" + encodeURIComponent(teamId) + "/tags/" + encodeURIComponent(tagId) + "/members");
   }
 
   async function listTeamTags(token, teamId) {
@@ -501,6 +519,8 @@
     currentAccount: currentAccount,
     isSignedOut: isSignedOut,
     getTagWriteToken: getTagWriteToken,
+    getRecipientToken: getRecipientToken,
+    listTeamMembers: listTeamMembers,
     getListCreateToken: getListCreateToken,
     resolveSite: resolveSite,
     findList: findList,
@@ -509,6 +529,7 @@
     addListColumn: addListColumn,
     addListItem: addListItem,
     updateListItemFields: updateListItemFields,
+    updateRecipientEmails: updateRecipientEmails,
     deleteListItem: deleteListItem,
     joinedTeams: joinedTeams,
     listChannels: listChannels,
@@ -519,6 +540,7 @@
     teamSite: teamSite,
     postChannelMessage: postChannelMessage,
     listTeamTags: listTeamTags,
+    listTeamTagMembers: listTeamTagMembers,
     createTeamTag: createTeamTag,
     sendMail: sendMail,
     createDraftMessage: createDraftMessage,

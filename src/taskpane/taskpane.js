@@ -9,7 +9,7 @@
 /* global Office, GraphData, document,
    LrrScreening, LrrParser, LrrRouting, LrrTeams, LrrDocx, LrrXlsx, LrrPresets, LrrProvision,
    LrrChapters, LrrContacts, LrrFeed, LrrReportGen, LrrDeadline, LrrFiscal, LrrBillStatus, LrrHarvest,
-   LrrInvite, window */
+   LrrInvite, LrrRecipients, window */
 (function () {
   "use strict";
 
@@ -270,11 +270,11 @@
     document.querySelectorAll(".tab").forEach(function (t) {
       t.classList.toggle("active", t.getAttribute("data-screen") === screen);
     });
-    if (screen === "preview") { renderPreview(); }
+    if (screen === "preview") { prepareSharedPreview(); }
     if (screen === "publish") { renderPublishSummary(); }
   }
 
-  var SETTING_KEYS = ["cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "responseHours", "dueTime", "holidays", "sessionEnd",
+  var SETTING_KEYS = ["sharedRecipients", "cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "responseHours", "dueTime", "holidays", "sessionEnd",
     "obsMlk", "obsPresidents", "obsJuneteenth", "obsColumbus", "obsVeterans", "obsDayAfterThanksgiving", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distList", "autoDaily", "autoDailyTime"];
   var PROFILE_KEYS = SETTING_KEYS.concat([]);
 
@@ -385,6 +385,17 @@
     on("contactPreview", "click", contactPreview);
     on("contactApply", "click", contactApply);
     on("quickAdd", "click", quickAddContact);
+    on("sharedRecipients", "change", function () {
+      saveSettings({ sharedRecipients: isChecked("sharedRecipients") });
+      resetPublicationConfirmation();
+      if (!isChecked("sharedRecipients") && state.site) { connectRules(false).catch(function () {}); }
+      setText("recipientSyncInfo", "Refresh shared contacts, then Preview before publishing.");
+    });
+    on("recipientSync", "click", async function () {
+      setProp("sharedRecipients", "checked", true);
+      saveSettings({ sharedRecipients: true });
+      await refreshSharedRecipients();
+    });
     on("wizPrev", "click", function () { wizShow(wizStep - 1); });
     on("wizNext", "click", function () { wizShow(wizStep + 1); });
     on("wizSignIn", "click", async function () {
@@ -819,6 +830,13 @@
     });
     refreshStats(); renderItems();
     setStatus("info", "Route " + rule.divisionCode + " applied to all included bills.");
+  }
+
+  function resetPublicationConfirmation() {
+    sharedRecipientsReady = false;
+    sharedRecipientsGeneration++;
+    setProp("confirmBox", "checked", false);
+    setProp("publishGo", "disabled", true);
   }
 
   // ---------- setup wizard ----------
@@ -1358,6 +1376,7 @@
       var merged = (rule.emails || []).concat([email]);
       await GraphData.updateListItemFields(token, state.site.siteId, state.site.routingListId, rule.id, { Emails: merged.join("; ") });
       rule.emails = merged;
+      resetPublicationConfirmation();
       saveRulesCache();
       byId("quickEmail").value = "";
       updateSetupChecklist();
@@ -1481,6 +1500,7 @@
    *  the parameter had gone missing, so every successful connect threw a
    *  ReferenceError on the last line under "use strict". */
   async function connectRules(quiet) {
+    resetPublicationConfirmation();
     byId("connectRules").disabled = true;
     try {
       setStatus("work", "Loading routing rules from SharePoint…");
@@ -1911,6 +1931,66 @@
     } catch (e) { setStatus("error", "Couldn't load the draft."); }
   }
 
+  // Refresh before Preview, then require review of that exact audience before
+  // Publish. Never expand recipients after the publication confirmation.
+  var sharedRecipientsPending = null;
+  var sharedRecipientsReady = false;
+  var sharedRecipientsGeneration = 0;
+  var sharedRecipientWarnings = [];
+
+  async function refreshSharedRecipients() {
+    if (sharedRecipientsPending) { return sharedRecipientsPending; }
+    resetPublicationConfirmation();
+    sharedRecipientsReady = false;
+    setProp("recipientSync", "disabled", true);
+    var generation = sharedRecipientsGeneration;
+    var pending = (async function () {
+      try {
+        if (!state.site || !state.site.routingListId) { throw new Error("Connect the routing list first."); }
+        if (typeof LrrRecipients === "undefined") { throw new Error("Reload the add-in to load shared contacts."); }
+        var site = state.site;
+        var token = await GraphData.getRecipientToken();
+        var rows = await GraphData.listItems(token, site.siteId, site.routingListId);
+        var rules = rows.map(function (row) {
+          var rule = LrrRouting.ruleFromSharePoint(row.fields || {}, row.id);
+          rule.recipientEtag = row.eTag || row["@odata.etag"] || (row.fields || {})["@odata.etag"];
+          return rule;
+        })
+          .filter(function (rule) { return rule.divisionCode; });
+        var result = await LrrRecipients.reconcile(GraphData, token, rules, site);
+        if (state.site !== site || generation !== sharedRecipientsGeneration) { throw new Error("Setup changed during refresh. Refresh contacts again."); }
+        state.rules = rules;
+        if (state.items.length) { LrrRouting.routeAll(state.items, state.rules); }
+        saveRulesCache();
+        sharedRecipientWarnings = result.warnings;
+        setText("recipientSyncInfo", "Shared contacts refreshed for " + result.rules + " route(s). " +
+          result.changed + " routing row(s) updated. " + (result.warnings.length ? result.warnings.join(" ") : "All email contacts match Team members."));
+        setStatus(result.warnings.length ? "error" : "info", result.warnings.length
+          ? "Contacts refreshed with email-only exceptions. Check shared contacts in Setup before publishing."
+          : "Teams and email recipients refreshed. Preview the distribution before publishing.");
+        return true;
+      } catch (e) {
+        setText("recipientSyncInfo", "Shared contacts could not refresh: " + (e.message || e) +
+          " Reading Team members may require IT consent for TeamMember.Read.All. No complete shared audience is ready.");
+        setStatus("error", "Shared contacts could not refresh. See Step 4 in Setup; publishing is blocked until refreshed.");
+        return false;
+      }
+    })();
+    sharedRecipientsPending = pending;
+    try { return await pending; }
+    finally {
+      if (sharedRecipientsPending === pending) { sharedRecipientsPending = null; }
+      setProp("recipientSync", "disabled", false);
+    }
+  }
+
+  async function prepareSharedPreview() {
+    if (!settings().sharedRecipients) { renderPreview(); return; }
+    setText("previewList", "Refreshing Teams and email contacts before preview…");
+    if (await refreshSharedRecipients()) { renderPreview(); sharedRecipientsReady = true; }
+    else { setText("previewList", "Contacts could not refresh. Resolve the message in Setup, then open Preview again."); }
+  }
+
   // ---------- preview ----------
 
   /** item → [{teamId, channelId, rules[]}] grouped so one channel gets ONE post. */
@@ -1951,9 +2031,30 @@
     return { date: d, label: LrrDeadline.formatDeadline(d) };
   }
 
+  // One division can post to several channels; its shared audience still
+  // receives only one consolidated email, with each bill listed once.
+  function divisionEmailGroups(items) {
+    var raw = LrrRouting.groupByRule(items);
+    if (!settings().sharedRecipients) { return raw; }
+    var groups = new Map();
+    raw.forEach(function (g) {
+      var key = String(g.rule.divisionCode).trim().toLowerCase();
+      if (!groups.has(key)) { groups.set(key, { rule: g.rule, items: [] }); }
+      var target = groups.get(key);
+      g.items.forEach(function (item) { if (target.items.indexOf(item) === -1) { target.items.push(item); } });
+    });
+    return Array.from(groups.values());
+  }
+
   function renderPreview() {
     var host = byId("previewList");
     host.innerHTML = "";
+    if (settings().sharedRecipients && sharedRecipientWarnings.length) {
+      var warning = document.createElement("p");
+      warning.className = "warnbox";
+      warning.textContent = "Email-only contacts needing attention: " + sharedRecipientWarnings.join(" ");
+      host.appendChild(warning);
+    }
     var opts = { template: { commentWindow: byId("commentWindow").value }, deadlineLabel: currentDeadline().label };
     included().forEach(function (it) {
       channelGroups(it).forEach(function (g) {
@@ -1970,7 +2071,7 @@
         host.appendChild(box);
       });
     });
-    LrrRouting.groupByRule(included()).forEach(function (g) {
+    divisionEmailGroups(included()).forEach(function (g) {
       if (!(g.rule.emails || []).length) { return; }
       var mail = LrrTeams.buildDivisionEmail(g.rule, g.items, { template: { commentWindow: byId("commentWindow").value }, deadlineLabel: currentDeadline().label });
       var box = document.createElement("div");
@@ -1995,7 +2096,7 @@
         g.rules.forEach(function (r) { if (r.teamsTagId) { tags[r.teamsTagId] = 1; } });
       });
     });
-    LrrRouting.groupByRule(items).forEach(function (g) {
+    divisionEmailGroups(items).forEach(function (g) {
       (g.rule.emails || []).forEach(function (e) { recipients[e] = 1; });
     });
     byId("publishSummary").innerHTML =
@@ -2486,6 +2587,9 @@
 
   async function publish(retryOnly) {
     if (state.publishing) { return; }
+    if (settings().sharedRecipients && (!sharedRecipientsReady || sharedRecipientsPending)) {
+      setStatus("error", "Open Preview to refresh and review shared Teams/email recipients before publishing."); return;
+    }
     if (!isChecked("confirmBox")) { setStatus("error", "Confirm the reviewed distribution before publishing."); return; }
     if (!state.site) { setStatus("error", "Connect the SharePoint routing/audit lists in Settings first."); return; }
     var doTeams = byId("optTeams").checked;
@@ -2565,7 +2669,7 @@
       }
 
       if (doEmail) {
-        var mailGroups = LrrRouting.groupByRule(included());
+        var mailGroups = divisionEmailGroups(included());
         for (var mI = 0; mI < mailGroups.length; mI++) {
           var mg = mailGroups[mI];
           if (!(mg.rule.emails || []).length) { continue; }

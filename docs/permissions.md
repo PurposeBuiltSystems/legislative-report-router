@@ -26,6 +26,7 @@ a fully working add-in everywhere else.
 | Scope | Requested when | If refused |
 | --- | --- | --- |
 | `Sites.Manage.All` | You click **Create my lists** during setup | Create the three lists by hand in Microsoft Lists (schemas in the admin guide); everything else works |
+| `TeamMember.Read.All` | You enable shared Teams/email contacts and refresh them | Shared contacts stays blocked until IT grants consent; existing separate recipients remain available if you turn the feature off |
 | `TeamworkTag.ReadWrite` | You click **➕ Create the tag for this division** | Create the tag in Teams (Manage team → Tags) and pick it from the dropdown |
 
 > Why `Sites.Manage.All` is needed at all: Microsoft splits these precisely —
@@ -67,3 +68,12 @@ signed-in coordinator already belongs to.
 The app registration is **AzureADMultipleOrgs** — work or school accounts
 only. Personal Microsoft accounts are not supported, because the Teams and
 SharePoint scopes above are not available to them.
+
+## Shared Teams and email contacts
+
+Step 4 can combine division email contacts with the selected Teams tag members.
+`TeamMember.Read.All` resolves tag user IDs to email addresses and maps pasted/list contacts to existing Team members.
+Emails from tags are added to the division routing rows; this is additive, not deletion synchronization. Removing a person requires removing them from both sources.
+Email contacts outside the tag receive direct user mentions in the configured channel. Contacts outside the Team stay email-only and are listed as exceptions.
+No Team membership is changed. The delegated-only add-in does not add members to existing tags: Microsoft's current tag-member creation API requires application permission.
+Refresh runs in the open add-in on demand and before Preview, not as a background service. Publish uses the reviewed audience and blocks if refresh fails.
