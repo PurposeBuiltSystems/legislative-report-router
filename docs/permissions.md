@@ -26,7 +26,6 @@ a fully working add-in everywhere else.
 | Scope | Requested when | If refused |
 | --- | --- | --- |
 | `Sites.Manage.All` | You click **Create my lists** during setup | Create the three lists by hand in Microsoft Lists (schemas in the admin guide); everything else works |
-| `TeamMember.Read.All` | You enable shared Teams/email contacts and refresh them | Shared contacts stays blocked until IT grants consent; existing separate recipients remain available if you turn the feature off |
 | `TeamworkTag.ReadWrite` | You click **➕ Create the tag for this division** | Create the tag in Teams (Manage team → Tags) and pick it from the dropdown |
 
 > Why `Sites.Manage.All` is needed at all: Microsoft splits these precisely —
@@ -69,11 +68,14 @@ The app registration is **AzureADMultipleOrgs** — work or school accounts
 only. Personal Microsoft accounts are not supported, because the Teams and
 SharePoint scopes above are not available to them.
 
-## Shared Teams and email contacts
+## Shared Teams and email contacts — no additional permission
 
-Step 4 can combine division email contacts with the selected Teams tag members.
-`TeamMember.Read.All` resolves tag user IDs to email addresses and maps pasted/list contacts to existing Team members.
-Emails from tags are added to the division routing rows; this is additive, not deletion synchronization. Removing a person requires removing them from both sources.
-Email contacts outside the tag receive direct user mentions in the configured channel. Contacts outside the Team stay email-only and are listed as exceptions.
-No Team membership is changed. The delegated-only add-in does not add members to existing tags: Microsoft's current tag-member creation API requires application permission.
-Refresh runs in the open add-in on demand and before Preview, not as a background service. Publish uses the reviewed audience and blocks if refresh fails.
+Step 4 matches Teams tag user IDs to user-supplied email addresses. Name/email/division paste suggests choices, but only confirmed matches are saved. The matching form reads the Team's tags and tag members using existing TeamworkTag.Read; it never requests TeamMember.Read.All, directory access, or application permissions.
+
+Confirmed matches are stored as contact records in the existing routing list, using existing columns: Notes = LRR_CONTACT_MATCH_V1, TeamsTeamId, MentionUserIds, MentionUserEmails, DivisionName (person's name), and IsActive = false. These rows are excluded from division routing. One record per person avoids putting a whole division's map in a short text field. Other coordinators reuse the same matches.
+
+Tag emails are added to the division's Emails column. Contacts outside its tag use direct user mentions. Email contacts without a confirmed Teams identity remain email-only and are shown as exceptions. New tag members without an email match block shared-audience publishing until matched. If a person is absent from the form, add them to a tag in the Team in Teams, then reload. The add-in does not create Team membership or change existing tag membership.
+
+Refresh happens in the open add-in on demand and before Preview; Publish uses the reviewed audience. Reconciliation is additive. To remove a recipient, remove their email from the route and their division tag membership; to forget a saved identity/email match, delete its Contact row in the routing list. Existing list-column length limits still apply to the Emails column.
+
+No new Outlook manifest, new Graph scope, schema provisioning, or additional admin consent is required for this matching path. Existing permissions and access must already be granted.

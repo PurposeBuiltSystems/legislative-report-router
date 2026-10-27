@@ -384,15 +384,6 @@
     });
   }
 
-  // Incremental read permission; never changes who belongs to a Team.
-  async function getRecipientToken() {
-    return getAdditionalScopeToken("TeamMember.Read.All", "shared Teams and email contacts");
-  }
-
-  async function listTeamMembers(token, teamId) {
-    return collection(token, "/teams/" + encodeURIComponent(teamId) + "/members");
-  }
-
   async function listTeamTagMembers(token, teamId, tagId) {
     return collection(token, "/teams/" + encodeURIComponent(teamId) + "/tags/" + encodeURIComponent(tagId) + "/members");
   }
@@ -519,8 +510,6 @@
     currentAccount: currentAccount,
     isSignedOut: isSignedOut,
     getTagWriteToken: getTagWriteToken,
-    getRecipientToken: getRecipientToken,
-    listTeamMembers: listTeamMembers,
     getListCreateToken: getListCreateToken,
     resolveSite: resolveSite,
     findList: findList,

@@ -166,7 +166,7 @@
         <p class="hint">Add people in Teams tags, the routing list's Emails column, or paste contacts below. Shared contacts combines them for division emails and Teams notifications in your selected channel.</p>
         <label><input id="sharedRecipients" type="checkbox" /> Use shared contacts for Teams and email</label>
         <button id="recipientSync" type="button">Refresh shared contacts</button>
-        <p id="recipientSyncInfo" class="hint" aria-live="polite">Connect a division route first. Refresh reads Team membership and may ask for IT consent. Contacts outside the tag get direct @mentions; people outside the Team stay email-only. Refresh adds tag emails to the list; it never removes contacts or changes Team/tag membership. Shared contacts refresh again before Preview.</p>
+        <p id="recipientSyncInfo" class="hint" aria-live="polite">Connect a division route first. Match tag members to email addresses below—no new permission is needed. Confirmed contacts outside the division tag get direct @mentions. Unmatched contacts stay email-only. Refresh adds tag emails to the list; it never removes contacts or changes Team/tag membership. Shared contacts refresh again before Preview.</p>
         <div class="row2">
           <label>Quick add one person
             <input id="quickEmail" type="text" placeholder="jane.doe@iowadot.us" />
@@ -185,6 +185,15 @@
           <button id="contactApply" class="primary" disabled>Apply</button>
         </div>
         <div id="contactPlan" class="hint"></div>
+        <details class="options" open>
+          <summary>Match Teams people to emails — no extra permission</summary>
+          <p class="hint">Choose the division in the dropdown above. Paste Name, Email, Division rows to suggest matches, or enter emails here. A name suggestion only takes effect after you confirm it. People must already be visible in this Team's tags; add missing people in Teams first.</p>
+          <button id="recipientMatchesLoad" type="button">Load people and saved matches</button>
+          <p id="recipientMatchInfo" class="hint" aria-live="polite"></p>
+          <div id="recipientMatchRows"></div>
+          <button id="recipientMatchAdd" type="button" disabled>Add another match</button>
+          <button id="recipientMatchesSave" type="button" class="primary" disabled>Save confirmed matches</button>
+        </details>
       </div>
 
       <!-- Step 5: the daily report -->
@@ -380,14 +389,14 @@
   <section id="status" class="status" hidden></section>
 
   <script src="../parser.js?v=46"></script>
-  <script src="../routing.js?v=44"></script>
+  <script src="../routing.js?v=20261027b"></script>
   <script src="../teams.js?v=44"></script>
   <script src="../docx.js?v=43"></script>
-  <script src="../graph.js?v=20261027"></script>
+  <script src="../graph.js?v=20261027b"></script>
   <script src="../presets.js?v=46"></script>
   <script src="../provision.js?v=43"></script>
   <script src="../contacts.js?v=43"></script>
-  <script src="../recipients.js?v=1"></script>
+  <script src="../recipients.js?v=2"></script>
   <script src="../reportgen.js?v=46"></script>
   <script src="../chapters.js?v=43"></script>
   <script src="../feed.js?v=46"></script>
@@ -398,6 +407,6 @@
   <script src="../fiscal.js?v=44"></script>
   <script src="../harvest.js?v=43"></script>
   <script src="../xlsx.js?v=43"></script>
-  <script src="taskpane.js?v=20261027"></script>
+  <script src="taskpane.js?v=20261027b"></script>
 </body>
 </html>

@@ -21,7 +21,7 @@ function load() {
   return { api: context.self.GraphData, timers, saved, silent, popup, hang: () => { hang = true; } };
 }
 (async () => {
-  for (const [name, scope] of [["getTagWriteToken", "TeamworkTag.ReadWrite"], ["getListCreateToken", "Sites.Manage.All"], ["getRecipientToken", "TeamMember.Read.All"]]) {
+  for (const [name, scope] of [["getTagWriteToken", "TeamworkTag.ReadWrite"], ["getListCreateToken", "Sites.Manage.All"]]) {
     const g = load();
     assert.equal(await g.api[name](), "interactive");
     assert.equal(g.silent.length, 0, "signed-out actions require interactive authentication");

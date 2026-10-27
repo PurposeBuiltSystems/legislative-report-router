@@ -204,7 +204,7 @@
   function ruleFromSharePoint(fields, id) {
     return {
       id: String(id != null ? id : (fields.id || fields.ID || "")),
-      divisionCode: fields.DivisionCode || fields.Title || "",
+      divisionCode: fields.Notes === "LRR_CONTACT_MATCH_V1" ? "" : (fields.DivisionCode || fields.Title || ""),
       divisionName: fields.DivisionName || "",
       aliases: splitList(fields.Aliases),
       emails: splitList(fields.Emails),

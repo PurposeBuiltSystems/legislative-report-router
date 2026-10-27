@@ -385,6 +385,12 @@
     on("contactPreview", "click", contactPreview);
     on("contactApply", "click", contactApply);
     on("quickAdd", "click", quickAddContact);
+    on("recipientMatchesLoad", "click", loadRecipientMatches);
+    on("recipientMatchesSave", "click", saveRecipientMatches);
+    on("recipientMatchAdd", "click", function () {
+      if (recipientMatchSession) { matchRow(recipientMatchSession.people, null, "", false, false); }
+    });
+    on("quickDivision", "change", clearRecipientMatches);
     on("sharedRecipients", "change", function () {
       saveSettings({ sharedRecipients: isChecked("sharedRecipients") });
       resetPublicationConfirmation();
@@ -1392,6 +1398,7 @@
 
   function contactPreview() {
     var parsed = LrrContacts.parseContactRows(byId("contactRows").value);
+    contactNameHints = parsed.rows;
     var plan = LrrContacts.mergePlan(parsed.rows, state.rules);
     contactPlanCache = plan;
     var lines = [];
@@ -1931,6 +1938,163 @@
     } catch (e) { setStatus("error", "Couldn't load the draft."); }
   }
 
+  // Contact rows use existing list columns; one record per confirmed person
+  // avoids SharePoint's short single-line fields limiting a division's map.
+  var recipientMatchSession = null;
+  var recipientMatchRows = [];
+  var contactNameHints = [];
+
+  function matchRow(people, person, address, confirmed, required) {
+    var box = document.createElement("div");
+    box.className = "options";
+    var personLabel = document.createElement("label");
+    personLabel.textContent = required ? "Tag member — needs an email for both delivery methods" : "Teams person";
+    var select = document.createElement("select");
+    var empty = document.createElement("option"); empty.value = ""; empty.textContent = "Choose the matching person"; select.appendChild(empty);
+    people.forEach(function (p) {
+      var option = document.createElement("option"); option.value = p.userId;
+      option.textContent = (p.displayName || "Unnamed person") + " · " + p.userId.slice(-8);
+      select.appendChild(option);
+    });
+    select.value = person ? person.userId : "";
+    if (required) { select.disabled = true; }
+    personLabel.appendChild(select); box.appendChild(personLabel);
+    var emailLabel = document.createElement("label"); emailLabel.textContent = "Email address";
+    var input = document.createElement("input"); input.type = "email"; input.value = address || "";
+    input.placeholder = "person@agency.gov"; emailLabel.appendChild(input); box.appendChild(emailLabel);
+    var confirmLabel = document.createElement("label");
+    var check = document.createElement("input"); check.type = "checkbox"; check.checked = !!confirmed;
+    confirmLabel.appendChild(check);
+    confirmLabel.appendChild(document.createTextNode(" I confirm this email belongs to this Teams person"));
+    box.appendChild(confirmLabel);
+    function changed() { check.checked = false; resetPublicationConfirmation(); }
+    input.addEventListener("input", changed); select.addEventListener("change", changed);
+    byId("recipientMatchRows").appendChild(box);
+    var row = { person: select, email: input, confirmed: check, required: required };
+    recipientMatchRows.push(row);
+    return row;
+  }
+
+  function clearRecipientMatches() {
+    recipientMatchSession = null; recipientMatchRows = [];
+    setText("recipientMatchRows", "");
+    setProp("recipientMatchesSave", "disabled", true);
+    setProp("recipientMatchAdd", "disabled", true);
+  }
+
+  async function loadRecipientMatches() {
+    clearRecipientMatches(); resetPublicationConfirmation();
+    setProp("recipientMatchesLoad", "disabled", true);
+    try {
+      if (!state.site || !state.site.routingListId) { throw new Error("Connect the routing list first."); }
+      var site = state.site, ruleId = val("quickDivision");
+      var token = await GraphData.getToken();
+      var rows = await GraphData.listItems(token, site.siteId, site.routingListId);
+      var raw = rows.find(function (r) { return String(r.id) === ruleId && !LrrRecipients.isContactRecord(r.fields); });
+      if (!raw) { throw new Error("Choose a division above first."); }
+      var rule = LrrRouting.ruleFromSharePoint(raw.fields || {}, raw.id);
+      rule.recipientEtag = raw.eTag || raw["@odata.etag"] || (raw.fields || {})["@odata.etag"];
+      setText("recipientMatchInfo", "Loading people already visible in this Team's tags…");
+      var roster = await LrrRecipients.loadPeople(GraphData, token, rule);
+      if (state.site !== site || val("quickDivision") !== ruleId) { throw new Error("The selected division changed. Load matches again."); }
+      var rules = rows.map(function (r) { return LrrRouting.ruleFromSharePoint(r.fields || {}, r.id); }).filter(function (r) { return r.divisionCode; });
+      var matches = LrrRecipients.mappings(rows, rules).filter(function (m) { return m.teamId === rule.teamsTeamId; });
+      var people = roster.people;
+      matches.forEach(function (m) {
+        if (!people.some(function (p) { return p.userId === m.userId; })) { people.push({ userId: m.userId, displayName: m.displayName + " (saved match)" }); }
+      });
+      people.sort(function (a, b) { return String(a.displayName || "").localeCompare(String(b.displayName || "")); });
+      var pasted = contactNameHints.concat(LrrContacts.parseContactRows(val("contactRows")).rows);
+      var represented = [];
+      roster.selected.forEach(function (id) {
+        var person = people.find(function (p) { return p.userId === id; });
+        var saved = matches.find(function (m) { return m.userId === id; });
+        var address = saved ? saved.email : LrrRecipients.suggest(person, people, pasted, rule);
+        matchRow(people, person, address, !!saved, true);
+        if (address) { represented.push(address.toLowerCase()); }
+      });
+      var addresses = (rule.emails || []).slice();
+      pasted.forEach(function (p) {
+        if ((p.divisions || []).some(function (d) {
+          return [rule.divisionCode, rule.divisionName].concat(rule.aliases || []).some(function (code) { return String(code).toLowerCase() === String(d).toLowerCase(); });
+        })) { addresses.push(p.email); }
+      });
+      Array.from(new Set(addresses.map(function (e) { return e.trim().toLowerCase(); }))).forEach(function (address) {
+        if (represented.indexOf(address) !== -1) { return; }
+        var saved = matches.filter(function (m) { return m.email === address; });
+        var candidate = saved.length === 1 ? people.find(function (p) { return p.userId === saved[0].userId; }) : null;
+        if (!candidate) {
+          var suggested = people.filter(function (p) { return LrrRecipients.suggest(p, people, pasted, rule) === address; });
+          if (suggested.length === 1) { candidate = suggested[0]; }
+        }
+        matchRow(people, candidate, address, saved.length === 1, false);
+      });
+      recipientMatchSession = { site: site, rule: rule, matches: matches, people: people };
+      if (!recipientMatchRows.length) { matchRow(people, null, "", false, false); }
+      setProp("recipientMatchesSave", "disabled", false); setProp("recipientMatchAdd", "disabled", false);
+      setText("recipientMatchInfo", "Confirm each suggested match, then save. Blank or unchecked rows are not saved. " +
+        "If someone is missing, add them to a tag in this Team in Teams, then load again. Matches are shared with other coordinators in the existing routing list.");
+    } catch (e) { setText("recipientMatchInfo", "Could not load matches: " + (e.message || e)); }
+    finally { setProp("recipientMatchesLoad", "disabled", false); }
+  }
+
+  async function saveRecipientMatches() {
+    if (!recipientMatchSession) { return; }
+    var session = recipientMatchSession;
+    var writesStarted = false;
+    setProp("recipientMatchesSave", "disabled", true);
+    try {
+      if (state.site !== session.site || val("quickDivision") !== session.rule.id) { throw new Error("The selected division changed. Load matches again."); }
+      var chosen = new Map();
+      recipientMatchRows.filter(function (r) { return r.confirmed.checked; }).forEach(function (r) {
+        var person = session.people.find(function (p) { return p.userId === r.person.value; });
+        var address = r.email.value.trim().toLowerCase();
+        if (!person || !/^[^\s@;,]+@[^\s@;,]+\.[^\s@;,]+$/.test(address)) { throw new Error("Every confirmed row needs a selected Teams person and a valid email address."); }
+        if (chosen.has(person.userId) && chosen.get(person.userId).email !== address) { throw new Error("One Teams person has two different email matches. Choose one email for that person."); }
+        chosen.set(person.userId, { person: person, email: address });
+      });
+      if (!chosen.size) { throw new Error("Confirm at least one match first."); }
+      resetPublicationConfirmation();
+      var token = await GraphData.getToken();
+      if (state.site !== session.site) { throw new Error("The connected site changed. Load matches again."); }
+      var entries = Array.from(chosen.values());
+      writesStarted = true;
+      for (var i = 0; i < entries.length; i++) {
+        var match = entries[i];
+        var saved = session.matches.find(function (m) { return m.userId === match.person.userId; });
+        var fields = { Title: "Contact: " + (match.person.displayName || match.email).slice(0, 240), DivisionCode: "",
+          DivisionName: (match.person.displayName || match.email).slice(0, 255), TeamsTeamId: session.rule.teamsTeamId,
+          MentionUserIds: match.person.userId, MentionUserEmails: match.email, Emails: match.email,
+          IsActive: false, Notes: LrrRecipients.MARKER };
+        if (saved && saved.id) {
+          if (saved.email !== match.email) { await GraphData.updateRecipientEmails(token, session.site.siteId, session.site.routingListId, saved.id, fields, saved.etag); }
+        } else { await GraphData.addListItem(token, session.site.siteId, session.site.routingListId, fields); }
+      }
+      var emails = Array.from(new Set((session.rule.emails || []).concat(entries.map(function (e) { return e.email; }))));
+      if (emails.join("; ") !== (session.rule.emails || []).join("; ")) {
+        await GraphData.updateRecipientEmails(token, session.site.siteId, session.site.routingListId, session.rule.id, { Emails: emails.join("; ") }, session.rule.recipientEtag);
+      }
+      recipientMatchSession = null;
+      setProp("sharedRecipients", "checked", true); saveSettings({ sharedRecipients: true });
+      await connectRules(true);
+      var ready = await refreshSharedRecipients();
+      setText("recipientMatchInfo", entries.length + " confirmed match(es) saved. " + (ready
+        ? "Open Preview to review Teams and email delivery."
+        : "Some people still need attention; see the shared contacts message above. Load matches again to continue."));
+      setProp("recipientMatchAdd", "disabled", true);
+    } catch (e) {
+      // A partial save may already exist. Reload its versions instead of
+      // blindly replaying creates or overwriting another coordinator's edit.
+      if (writesStarted) {
+        recipientMatchSession = null; setProp("recipientMatchAdd", "disabled", true);
+        setText("recipientMatchInfo", "Could not finish saving: " + (e.message || e) + ". Some matches may have saved. Load matches again before retrying.");
+      } else {
+        setProp("recipientMatchesSave", "disabled", false);
+        setText("recipientMatchInfo", "Check your matches: " + (e.message || e));
+      }
+    }
+  }
+
   // Refresh before Preview, then require review of that exact audience before
   // Publish. Never expand recipients after the publication confirmation.
   var sharedRecipientsPending = null;
@@ -1949,7 +2113,7 @@
         if (!state.site || !state.site.routingListId) { throw new Error("Connect the routing list first."); }
         if (typeof LrrRecipients === "undefined") { throw new Error("Reload the add-in to load shared contacts."); }
         var site = state.site;
-        var token = await GraphData.getRecipientToken();
+        var token = await GraphData.getToken();
         var rows = await GraphData.listItems(token, site.siteId, site.routingListId);
         var rules = rows.map(function (row) {
           var rule = LrrRouting.ruleFromSharePoint(row.fields || {}, row.id);
@@ -1957,7 +2121,7 @@
           return rule;
         })
           .filter(function (rule) { return rule.divisionCode; });
-        var result = await LrrRecipients.reconcile(GraphData, token, rules, site);
+        var result = await LrrRecipients.reconcile(GraphData, token, rules, site, LrrRecipients.mappings(rows, rules));
         if (state.site !== site || generation !== sharedRecipientsGeneration) { throw new Error("Setup changed during refresh. Refresh contacts again."); }
         state.rules = rules;
         if (state.items.length) { LrrRouting.routeAll(state.items, state.rules); }
@@ -1971,7 +2135,7 @@
         return true;
       } catch (e) {
         setText("recipientSyncInfo", "Shared contacts could not refresh: " + (e.message || e) +
-          " Reading Team members may require IT consent for TeamMember.Read.All. No complete shared audience is ready.");
+          " Open Match Teams people to emails in Step 4. No extra permission is required. Publishing waits for a complete shared audience.");
         setStatus("error", "Shared contacts could not refresh. See Step 4 in Setup; publishing is blocked until refreshed.");
         return false;
       }

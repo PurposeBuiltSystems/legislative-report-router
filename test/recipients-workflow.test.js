@@ -6,13 +6,16 @@ const index = raw.lastIndexOf("})();");
 const source = raw.slice(0, index) + `
   renderPreview=function(){self.previews++;};
   setStatus=function(kind,text){self.statuses.push(text);};
-  connectRules=async function(){state.rules=(await GraphData.listItems()).map(function(r){return LrrRouting.ruleFromSharePoint(r.fields,r.id);});};
+  connectRules=async function(){state.rules=(await GraphData.listItems()).map(function(r){return LrrRouting.ruleFromSharePoint(r.fields,r.id);}).filter(function(r){return r.divisionCode;});};
   self.api={state,refreshSharedRecipients,prepareSharedPreview,publish,resetPublicationConfirmation,contactPreview,contactApply,quickAddContact,divisionEmailGroups};
 ` + raw.slice(index);
 function load() {
   const elements = {}, stored = { "lrr.settings": JSON.stringify({ sharedRecipients: true }) };
   const calls = { reads: 0, emails: 0 };
   const rows = [{ id: "1", eTag: '"version1"', fields: { DivisionCode: "MVD", TeamsTeamId: "team", TeamsChannelId: "main", TeamsTagId: "tag", Emails: "bob@agency.gov" } }];
+  for (const [id,name,email] of [["alice","Alice","alice@agency.gov"],["bob","Bob","bob@agency.gov"],["carol","Carol","carol@agency.gov"]]) {
+    rows.push({id:"match-"+id,fields:{Notes:"LRR_CONTACT_MATCH_V1",TeamsTeamId:"team",MentionUserIds:id,MentionUserEmails:email,DivisionName:name,IsActive:false}});
+  }
   const context = { self: { previews: 0, statuses: [] },
     Office: { onReady() {}, AsyncResultStatus: { Succeeded: "ok" }, context: { roamingSettings: {
       get: k => stored[k], set: (k,v) => { stored[k]=v; }, saveAsync: cb => cb({ status: "ok" })
@@ -20,10 +23,10 @@ function load() {
     document: { getElementById: id => elements[id] || (elements[id]={ checked: false, disabled: false, textContent: "" }) },
     GraphData: {
       getToken: async () => "token",
-      getRecipientToken: async () => "token",
+      getRecipientToken: async () => { throw new Error("must not request new permission"); },
       listItems: async () => { calls.reads++; return rows; },
       updateListItemFields: async (t,s,l,id,fields) => { Object.assign(rows[0].fields, fields); },
-      listTeamMembers: async () => [{ userId: "alice", email: "alice@agency.gov" }, { userId: "bob", email: "bob@agency.gov" }],
+      listTeamMembers: async () => { throw new Error("must not query Team directory"); },
       listTeamTagMembers: async () => [{ userId: "alice" }],
       updateRecipientEmails: async () => { calls.emails++; }
     }, LrrContacts: require("../src/contacts"), LrrRecipients: require("../src/recipients"), LrrRouting: require("../src/routing")
