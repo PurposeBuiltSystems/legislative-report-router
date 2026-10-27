@@ -19,6 +19,27 @@
     return m ? m[1].trim() : "";
   }
 
+  var centralFormat = null;
+  // The RSS timestamps omit their zone. Resolve Central wall time through
+  // the timezone database so summer filings aren't shifted an hour ahead.
+  function centralDate(value) {
+    value = String(value || "").trim();
+    if (/(?:GMT|UTC|CST|CDT|Z|[+-]\d{2}:?\d{2})$/i.test(value)) { return new Date(value); }
+    var wall = new Date(value + " GMT");
+    if (isNaN(wall.getTime())) { return new Date(NaN); }
+    if (!centralFormat) { centralFormat = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }); }
+    var guess = wall.getTime() + 6 * 3600000;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      var parts = {};
+      centralFormat.formatToParts(new Date(guess)).forEach(function (p) { if (p.type !== "literal") { parts[p.type] = Number(p.value); } });
+      var shown = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+      var delta = wall.getTime() - shown;
+      if (!delta) { return new Date(guess); }
+      guess += delta;
+    }
+    return new Date(NaN); // a nonexistent clock time establishes no coverage
+  }
+
   /** RSS XML → [{bill, description, link, pubDate(Date), raw}] newest first. */
   function parseFeed(xml) {
     var out = [];
@@ -37,7 +58,7 @@
         documentType: amendment ? (/^CC/i.test(amendment[1]) ? "Conference report" : "Amendment") : (bill.match(/^[A-Z]+/) || [""])[0],
         description: cdata(block, "description"),
         link: cdata(block, "link"),
-        pubDate: new Date(cdata(block, "pubDate") + " GMT-0600"), // feed times are Central, no zone given
+        pubDate: centralDate(cdata(block, "pubDate")), // feed times are Central, DST-aware
       });
     }
     out.sort(function (a, b) { return b.pubDate - a.pubDate; });
@@ -68,6 +89,7 @@
       billNumber: entry.bill,
       documentType: entry.documentType || docType,
       relatedBill: entry.relatedBill || "",
+      parentBill: entry.parentBill || null,
       screening: entry.screening || null,
       screeningText: entry.fullText || "",
       distributedTo: [],
@@ -75,7 +97,7 @@
       title: entry.description.slice(0, 120),
       brief: entry.description,
       referencedBills: entry.relatedBill ? [entry.relatedBill] : [],
-      sourceLinks: entry.link ? [{ text: entry.bill + " (BillBook)", href: entry.link }] : [],
+      sourceLinks: (entry.link ? [{ text: entry.bill + " (BillBook)", href: entry.link }] : []).concat(entry.parentBill && entry.parentBill.link ? [{ text: "Parent bill " + entry.parentBill.bill, href: entry.parentBill.link }] : []).concat(entry.parentBill && entry.parentBill.textUrl ? [{ text: "Parent bill text (" + (entry.parentBill.version || "mirrored version") + ")", href: entry.parentBill.textUrl }] : []),
       sourceBlock: entry.bill + "\n" + entry.description,
       parserConfidence: entry.screening && entry.screening.status === "needs-screening" ? 0.6 : 0.9,
       parserWarnings: ["From the newly-filed feed — assign divisions before publishing."].concat(entry.screening ? [

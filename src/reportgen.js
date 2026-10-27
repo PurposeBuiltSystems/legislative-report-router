@@ -14,6 +14,19 @@
 (function (root) {
   "use strict";
 
+  function parentHtml(parent) {
+    var text = "<p>" + esc(parentContext(parent));
+    if (/^https:\/\/www\.legis\.iowa\.gov\//i.test(parent.link || "")) { text += ' <a href="' + esc(parent.link) + '">Open parent bill ' + esc(parent.bill) + '</a>'; }
+    if (/^https:\/\/www\.legis\.iowa\.gov\//i.test(parent.textUrl || "")) { text += ' · <a href="' + esc(parent.textUrl) + '">Parent bill text (' + esc(parent.version || "mirrored version") + ')</a>'; }
+    return text + "</p>";
+  }
+
+  function parentContext(parent) {
+    if (!parent) { return ""; }
+    var api = typeof module !== "undefined" && module.exports ? require("./amendments") : root.LrrAmendments;
+    return api.text(parent);
+  }
+
   function esc(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -122,6 +135,7 @@
       textLines.push(dist);
       textLines.push(from);
       textLines.push(it.brief || "(no summary)");
+      if (it.parentBill) { textLines.push(parentContext(it.parentBill) + (it.parentBill.link ? " " + it.parentBill.link : "")); }
       if (link) { textLines.push(link.href); }
       textLines.push("");
 
@@ -132,6 +146,7 @@
       h.push('<p style="margin:2px 0;color:#616161">Distributed To: <b>' + esc(dist) +
         "</b> · Comment Requested From: <b>" + esc(from) + "</b></p>");
       h.push('<p style="margin:4px 0">' + esc(it.brief || "(no summary)").replace(/\n/g, "<br>") + "</p>");
+      if (it.parentBill) { h.push(parentHtml(it.parentBill)); }
       h.push("</div>");
     });
 

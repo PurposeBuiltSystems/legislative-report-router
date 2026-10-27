@@ -13,6 +13,19 @@
 (function (root) {
   "use strict";
 
+  function parentHtml(parent) {
+    var text = "<p>" + esc(parentContext(parent));
+    if (/^https:\/\/www\.legis\.iowa\.gov\//i.test(parent.link || "")) { text += ' <a href="' + esc(parent.link) + '">Open parent bill ' + esc(parent.bill) + '</a>'; }
+    if (/^https:\/\/www\.legis\.iowa\.gov\//i.test(parent.textUrl || "")) { text += ' · <a href="' + esc(parent.textUrl) + '">Parent bill text (' + esc(parent.version || "mirrored version") + ')</a>'; }
+    return text + "</p>";
+  }
+
+  function parentContext(parent) {
+    if (!parent) { return ""; }
+    var api = typeof module !== "undefined" && module.exports ? require("./amendments") : root.LrrAmendments;
+    return api.text(parent);
+  }
+
   function esc(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -86,6 +99,7 @@
       "<br><br>Distributed To: " + esc((item.distributedTo || []).join(", ") || "—") +
       "<br>Comment Requested From: " + esc((item.commentRequestedFrom || []).join(", ") || "—") +
       "<br><br><strong>Brief:</strong><br>" + nl2br(item.brief || "(none)") +
+      (item.parentBill ? "<br><br>" + esc(parentContext(item.parentBill)) : "") +
       (t.commentWindow ? "<br><br>" + esc(t.commentWindow) : "") +
       linkHtml;
 
@@ -110,7 +124,8 @@
       return "<h3 style=\"margin:14px 0 2px\">" + esc(it.billNumber) + "</h3>" +
         "<p style=\"margin:2px 0;color:#616161\">Distributed To: " + esc((it.distributedTo || []).join(", ")) +
         " · Comment Requested From: " + esc((it.commentRequestedFrom || []).join(", ")) + "</p>" +
-        "<p style=\"margin:4px 0\">" + nl2br(it.brief || "") + "</p>";
+        "<p style=\"margin:4px 0\">" + nl2br(it.brief || "") + "</p>" +
+        (it.parentBill ? parentHtml(it.parentBill) : "");
     }).join("");
     return {
       subject: (opts.subjectPrefix || "Legislative bills for review") + " — " +

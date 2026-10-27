@@ -91,6 +91,9 @@ check("ny boundary", nyReport.items.length, 1);
 check("ny bill", nyReport.items[0].billNumber, "A1234");
 check("50 states + congress", Presets.ALL_STATE_NAMES.length, 51);
 
+check("summer Central timestamp uses daylight time", entries.find(e=>e.bill==="HF437").pubDate.toISOString(), "2026-07-13T17:37:28.000Z");
+check("winter Central timestamp uses standard time", entries.find(e=>e.bill==="HSB622").pubDate.toISOString(), "2026-01-05T19:15:20.000Z");
+
 if (failures) {
   console.error("\n" + failures + " feed test(s) FAILED");
   process.exit(1);

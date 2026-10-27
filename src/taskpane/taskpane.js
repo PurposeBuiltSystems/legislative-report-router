@@ -9,7 +9,7 @@
 /* global Office, GraphData, document,
    LrrScreening, LrrParser, LrrRouting, LrrTeams, LrrDocx, LrrXlsx, LrrPresets, LrrProvision,
    LrrChapters, LrrContacts, LrrFeed, LrrReportGen, LrrDeadline, LrrFiscal, LrrBillStatus, LrrHarvest,
-   LrrInvite, LrrRecipients, LrrBudget, window */
+   LrrInvite, LrrRecipients, LrrBudget, LrrWatch, LrrAmendments, window */
 (function () {
   "use strict";
 
@@ -477,6 +477,9 @@
     on("fiscalHarvest", "click", harvestFiscal);
     on("harvestApply", "click", applyHarvest);
     on("loadFilings", "click", loadFilings);
+    on("markWatchReviewed", "click", markWatchReviewed);
+    ["watchDays", "watchTerms", "watchChapters", "trackedChapters", "stateName", "hideReported", "siteUrl", "routingList", "auditList", "cloud"].forEach(function (id) { on(id, "change", invalidateWatchCheck); });
+    renderWatchWindow();
     on("routeFilings", "click", routeFilings);
     SETTING_KEYS.forEach(function (k) {
       on(k, "change", function () {
@@ -714,6 +717,14 @@
         unk.className = "unknown";
         unk.textContent = "No active route for: " + it.unknownDivisions.join(", ") + " — pick a route below, fix the division, or exclude this bill.";
         card.appendChild(unk);
+      }
+      if (it.latestSourceBrief) {
+        var latest = document.createElement("p"); latest.className = "hint warn";
+        latest.textContent = "Latest feed summary (your edited brief is preserved): " + it.latestSourceBrief; card.appendChild(latest);
+      }
+      if (it.parentBill) {
+        var parentContext = document.createElement("p"); parentContext.className = "hint";
+        parentContext.textContent = LrrAmendments.text(it.parentBill); card.appendChild(parentContext);
       }
       if (it.parserWarnings.length) {
         var pw = document.createElement("p");
@@ -1053,6 +1064,106 @@
 
   var feedSelection = []; // [{entry, checked}]
 
+  var WATCH_KEY = "lrr.watchWindow";
+  var currentWatchCheck = null;
+
+  function watchConfig() {
+    return { stateName: val("stateName") || "Iowa", days: Math.max(1, Math.min(730, Number(val("watchDays")) || 3)),
+      terms: val("watchTerms").split(","), tracked: trackedList(), matchChapters: isChecked("watchChapters") };
+  }
+  function renderWatchWindow(snapshot) {
+    if (!snapshot) {
+      try { snapshot = JSON.parse(Office.context.roamingSettings.get(WATCH_KEY) || "null"); } catch (e) { snapshot = null; }
+    }
+    if (!snapshot) { setText("watchWindowInfo", "No successful watch check recorded yet. Checking does not mark filings reviewed."); return; }
+    var text = "Last successful feed check: " + new Date(snapshot.checkedAt).toLocaleString() + " · " + snapshot.stateName +
+      ". Searched window: " + new Date(snapshot.from).toLocaleString() + " through " + new Date(snapshot.to).toLocaleString() + " (" + snapshot.days + " day(s)). " +
+      snapshot.total + " filing version(s); " + snapshot.hidden + " unchanged reviewed version(s) hidden.";
+    if (snapshot.historyError) { text += " Review history unavailable; versions were not hidden: " + snapshot.historyError; }
+    if (snapshot.lastReviewed) { text += " Last shared review: " + new Date(snapshot.lastReviewed.reviewedAt).toLocaleString() +
+      " · " + snapshot.lastReviewed.count + " selected filing(s)" + (snapshot.lastReviewed.complete ? "; all versions found in that check were reviewed." : "; other filings may still need review."); }
+    setText("watchWindowInfo", text);
+  }
+  function invalidateWatchCheck() {
+    currentWatchCheck = null;
+    setProp("markWatchReviewed", "disabled", true);
+    renderWatchWindow();
+  }
+  async function prepareWatchCheck(entries, started, config, forceHideReviewed) {
+    var site = state.site, rows = [], historyError = "";
+    if (site && site.auditListId) {
+      try { rows = await GraphData.listItems(await GraphData.getToken(), site.siteId, site.auditListId, 2000); }
+      catch (e) { historyError = "Could not read the shared audit list: " + String(e.message || e).slice(0, 180) + ". Resolve the read error before marking reviewed."; }
+    } else { historyError = "Connect the SharePoint routing/audit lists to share review marks."; }
+    var snapshot = await LrrWatch.prepare(entries, config, started, rows);
+    snapshot.site = site; snapshot.historyError = historyError;
+    snapshot.total = snapshot.entries.length;
+    snapshot.visible = snapshot.entries.filter(function (e) { return !(forceHideReviewed || isChecked("hideReported")) || !snapshot.reviewed.has(e.key); });
+    snapshot.hidden = snapshot.total - snapshot.visible.length;
+    return snapshot;
+  }
+  function rememberWatchCheck(snapshot) {
+    var record = { scope: snapshot.scope, stateName: snapshot.stateName, days: snapshot.days, from: snapshot.from, to: snapshot.to,
+      checkedAt: snapshot.checkedAt, total: snapshot.total, hidden: snapshot.hidden, historyError: snapshot.historyError, lastReviewed: snapshot.lastReviewed };
+    try { Office.context.roamingSettings.set(WATCH_KEY, JSON.stringify(record)); persistSettings("the last watch window"); } catch (e) { /* shared review history remains authoritative */ }
+    renderWatchWindow(record);
+  }
+
+  async function markWatchReviewed() {
+    var snapshot = currentWatchCheck;
+    if (!snapshot || !snapshot.site || !snapshot.site.auditListId || snapshot.historyError) {
+      setStatus("error", "Run a successful watch check with the audit list connected before marking reviewed."); return;
+    }
+    var selected = feedSelection.filter(function (f) { return f.checked; });
+    if (!selected.length && snapshot.entries.some(function (e) { return !snapshot.reviewed.has(e.key); })) {
+      setStatus("error", "Select the filing versions you have reviewed first."); return;
+    }
+    setProp("markWatchReviewed", "disabled", true); setProp("loadFilings", "disabled", true);
+    var saved = 0;
+    try {
+      if (state.site !== snapshot.site || watchConfig().days !== snapshot.days || await LrrWatch.scope(watchConfig()) !== snapshot.scope) {
+        throw new Error("The watch settings or connected site changed. Check the window again.");
+      }
+      var token = await GraphData.getToken();
+      var rows = await GraphData.listItems(token, snapshot.site.siteId, snapshot.site.auditListId, 2000);
+      var prior = LrrWatch.history(rows, snapshot.scope);
+      var pending = selected.filter(function (e) { return !prior.reviewed.has(e.key); });
+      var next = 0, failure = null;
+      var publishedBy = ((Office.context.mailbox || {}).userProfile || {}).emailAddress || "";
+      async function worker() {
+        while (next < pending.length && !failure) {
+          var chosen = pending[next++];
+          try {
+            await GraphData.addListItem(token, snapshot.site.siteId, snapshot.site.auditListId, {
+              Title: chosen.entry.bill, ReportKey: "watch:" + snapshot.scope, IdempotencyKey: chosen.key, Status: "watch-reviewed",
+              PublishedBy: publishedBy, SourceSubject: (chosen.entry.textVersion || "Feed summary") .slice(0, 255),
+            });
+            prior.reviewed.add(chosen.key); saved++;
+            setStatus("work", "Recording reviewed versions: " + saved + "/" + pending.length);
+          } catch (e) { failure = e; }
+        }
+      }
+      await Promise.all([worker(), worker(), worker()]);
+      if (failure) { throw failure; }
+      var complete = snapshot.entries.every(function (e) { return prior.reviewed.has(e.key); });
+      var marker = { from: snapshot.from, to: snapshot.to, reviewedAt: new Date().toISOString(), count: selected.length, complete: complete };
+      await GraphData.addListItem(token, snapshot.site.siteId, snapshot.site.auditListId, {
+        Title: "Watch window review", ReportKey: "watch:" + snapshot.scope, Status: "watch-window", PublishedBy: publishedBy,
+        IdempotencyKey: "watch-window:" + snapshot.scope + ":" + marker.reviewedAt, SourceSubject: JSON.stringify(marker),
+      });
+      snapshot.reviewed = prior.reviewed; snapshot.lastReviewed = marker;
+      if (currentWatchCheck === snapshot) { rememberWatchCheck(snapshot); }
+      setStatus("info", selected.length + " selected filing version(s) marked reviewed. Unchanged versions will be hidden on the next check; new or changed versions remain visible. Nothing was published or emailed.");
+    } catch (e) {
+      setStatus("error", "Review marking interrupted: " + (e.message || e) + ". " + saved + " version mark(s) saved; the full window was not marked complete. Check again before retrying.");
+    } finally {
+      setProp("loadFilings", "disabled", false);
+      setProp("markWatchReviewed", "disabled", currentWatchCheck !== snapshot);
+    }
+  }
+
+
+
   async function loadScreeningEntries() {
     var preset = LrrPresets.presetFor(byId("stateName").value || "Iowa");
     if (preset.feed !== "iowa-rss") {
@@ -1075,13 +1186,18 @@
       var texts = await fetch("../../feeds/iowa-screening.json?ts=" + Date.now());
       if (texts.ok) { mirror = await texts.json(); }
     } catch (e) { /* summary-only screening remains available */ }
-    var recent = LrrFeed.watchFilter(entries, [], Number(byId("watchDays").value) || 3);
+    var recent = LrrFeed.watchFilter(entries, [], watchConfig().days);
     var documents = mirror && mirror.documents || {};
     // Fetch only documents in this window, with bounded concurrency.
+    var documentEntries = recent.slice();
+    recent.forEach(function (e) {
+      var parent = LrrAmendments.parentEntry(e);
+      if (parent && !documentEntries.some(function (d) { return LrrScreening.entryKey(d) === LrrScreening.entryKey(parent); })) { documentEntries.push(parent); }
+    });
     var next = 0;
     async function worker() {
-      while (next < recent.length) {
-        var entry = recent[next++];
+      while (next < documentEntries.length) {
+        var entry = documentEntries[next++];
         var key = LrrScreening.entryKey(entry);
         if (!documents[key] || documents[key].text || !/^\d+:[A-Z]{1,4}-?\d+[A-Z]?$/.test(key)) { continue; }
         try {
@@ -1091,29 +1207,28 @@
       }
     }
     await Promise.all([worker(), worker(), worker(), worker()]);
-    return LrrScreening.enrich(recent, { documents: documents });
+    return LrrAmendments.attach(LrrScreening.enrich(recent, { documents: documents }), entries, documents);
   }
 
-  function screenFilings(entries, days) {
-    return LrrScreening.screen(entries, {
-      days: days,
-      stateName: byId("stateName").value || "Iowa",
-      terms: byId("watchTerms").value.split(","),
-      tracked: trackedList(),
-      matchChapters: byId("watchChapters").checked,
-    });
+  function screenFilings(entries, days, now, config) {
+    config = config || watchConfig();
+    return LrrScreening.screen(entries, { days: days, now: now, stateName: config.stateName,
+      terms: config.terms, tracked: config.tracked, matchChapters: config.matchChapters });
   }
 
   async function loadFilings() {
     byId("loadFilings").disabled = true;
+    invalidateWatchCheck();
+    var started = new Date(), config = watchConfig();
     try {
       setStatus("work", "Checking the newly-filed feed…");
       var entries = await loadScreeningEntries();
-      var days = Number(byId("watchDays").value) || 3;
-      var hits = screenFilings(entries, days);
-      if (byId("hideReported").checked) { hits = LrrReportGen.filterNew(hits, reportedBills()); }
-
-      feedSelection = hits.map(function (e) { return { entry: e, checked: true }; });
+      var days = config.days;
+      var allHits = screenFilings(entries, days, started, config);
+      var snapshot = await prepareWatchCheck(allHits, started, config);
+      if (JSON.stringify(config) !== JSON.stringify(watchConfig())) { throw new Error("Watch filters changed during the check. Run it again."); }
+      var hits = snapshot.visible.map(function (e) { return e.entry; });
+      feedSelection = snapshot.visible.map(function (e) { return { entry: e.entry, key: e.key, checked: true }; });
       var host = byId("filingsList");
       host.innerHTML = "";
       hits.forEach(function (e, i) {
@@ -1139,16 +1254,24 @@
           ? "Possible agency impact: " + e.screening.reasons.join("; ")
           : "Needs manual screening — no relevance conclusion") +
           (e.screening.fullTextAvailable ? " · " + e.screening.textVersion + " text screened" : " · Summary only; review full text");
+        if (e.parentBill) {
+          var parentContext = document.createElement("p"); parentContext.className = "hint";
+          parentContext.textContent = LrrAmendments.text(e.parentBill); card.appendChild(parentContext);
+          if (e.parentBill.link) { var parentLink = document.createElement("a"); parentLink.href = e.parentBill.link; parentLink.target = "_blank"; parentLink.rel = "noopener"; parentLink.textContent = "Open parent bill " + e.parentBill.bill; card.appendChild(parentLink); }
+        }
         card.appendChild(reason);
         card.appendChild(head); card.appendChild(p);
         host.appendChild(card);
       });
+      currentWatchCheck = snapshot;
+      rememberWatchCheck(snapshot);
+      setProp("markWatchReviewed", "disabled", !snapshot.site || !snapshot.site.auditListId || !!snapshot.historyError);
       byId("routeFilings").hidden = !hits.length;
-      setStatus("info", hits.length
+      setStatus(snapshot.historyError ? "error" : "info", (snapshot.historyError ? snapshot.historyError + " Showing all versions. " : "") + (hits.length
         ? hits.length + " filing(s) screened in the last " + days + " day(s), including " +
           hits.filter(function (e) { return e.screening.status === "needs-screening"; }).length + " needing manual screening. Select and route."
-        : "No unreported filings in the window. (Feed mirror updates every 30 minutes on weekdays. " +
-          "Out of session? Raise the watch window — e.g. 400 days replays the whole past session.)");
+        : "No new or changed unreviewed filing versions in the window. (Feed mirror updates every 30 minutes on weekdays. " +
+          "Out of session? Raise the watch window — e.g. 400 days replays the whole past session.)"));
     } catch (e) {
       setStatus("error", "Feed check failed: " + friendly(e));
     } finally {
@@ -1164,11 +1287,30 @@
       state.subject = "New filings " + new Date().toLocaleDateString();
     }
     var existing = {};
-    state.items.forEach(function (it) { existing[it.billNumber] = true; });
-    var added = 0;
+    state.items.forEach(function (it) { existing[it.billNumber] = it; });
+    var added = 0, updated = 0;
     var tracked = trackedList();
     picked.forEach(function (f, i) {
-      if (existing[f.entry.bill]) { return; }
+      var previous = existing[f.entry.bill];
+      if (previous) {
+        if (f.key && previous.watchKey !== f.key) {
+          var fresh = LrrFeed.toLegislativeItem(f.entry, state.reportKey, i);
+          var priorSource = String(previous.sourceBlock || "").split("\n").slice(1).join("\n");
+          if (previous.brief === priorSource) { previous.brief = fresh.brief; previous.title = fresh.title; delete previous.latestSourceBrief; }
+          else { previous.latestSourceBrief = fresh.brief; }
+          previous.sourceBlock = fresh.sourceBlock;
+          previous.parentBill = fresh.parentBill; previous.relatedBill = fresh.relatedBill; previous.documentType = fresh.documentType; previous.referencedBills = fresh.referencedBills; previous.screening = fresh.screening; previous.screeningText = fresh.screeningText;
+          previous.sourceLinks = fresh.sourceLinks; previous.watchKey = f.key;
+          previous.codeChapters = LrrChapters.extractChapters(fresh.brief + "\n" + fresh.screeningText);
+          previous.trackedChapters = LrrChapters.matchTracked(previous.codeChapters, tracked);
+          previous.parserWarnings = previous.parserWarnings || [];
+          var updateWarning = "Source version or watch criteria changed. Review the latest source and your brief before publishing.";
+          if (previous.parserWarnings.indexOf(updateWarning) === -1) { previous.parserWarnings.push(updateWarning); }
+          if (state.rules.length) { LrrRouting.routeItem(previous, state.rules); }
+          updated++;
+        }
+        return;
+      }
       var item = LrrFeed.toLegislativeItem(f.entry, state.reportKey, state.items.length + i);
       item.codeChapters = LrrChapters.extractChapters((item.brief || "") + "\n" + (item.screeningText || ""));
       item.trackedChapters = LrrChapters.matchTracked(item.codeChapters, tracked);
@@ -1190,13 +1332,16 @@
         }
       }
       if (state.rules.length) { LrrRouting.routeItem(item, state.rules); }
+      item.watchKey = f.key || "";
       state.items.push(item);
+      existing[item.billNumber] = item;
       added++;
     });
     refreshStats(); renderItems();
     if (byId("optDailyReport")) { byId("optDailyReport").checked = true; }
     var auto = state.items.filter(function (it) { return it.routingStatus === "matched"; }).length;
-    setStatus("info", added + " bill(s) added — " + auto + " auto-routed from Code chapters. Verify in Review, then Publish (the Daily Bill Report draft is pre-ticked).");
+    if (added || updated) { resetPublicationConfirmation(); }
+    setStatus("info", added + " new filing(s) added, " + updated + " existing review item(s) refreshed — " + auto + " auto-routed from Code chapters. Verify in Review, then Publish (the Daily Bill Report draft is pre-ticked).");
     show("review");
   }
 
@@ -1541,6 +1686,7 @@
    *  the parameter had gone missing, so every successful connect threw a
    *  ReferenceError on the last line under "use strict". */
   async function connectRules(quiet) {
+    invalidateWatchCheck();
     resetPublicationConfirmation();
     byId("connectRules").disabled = true;
     try {
@@ -1673,10 +1819,12 @@
 
       // Use exactly the same broad screening as the Filings tab.
       var entries = await loadScreeningEntries();
-      var days = Number(byId("watchDays").value) || 3;
-      var hits = screenFilings(entries, days);
+      var days = watchConfig().days;
+      var snapshot = await prepareWatchCheck(screenFilings(entries, days), new Date(), watchConfig(), true);
+      if (snapshot.historyError && state.site && state.site.auditListId) { throw new Error(snapshot.historyError); }
+      rememberWatchCheck(snapshot);
+      var hits = snapshot.visible.map(function (e) { return e.entry; });
       var tracked = trackedList();
-      hits = LrrReportGen.filterNew(hits, reportedBills());
       if (!hits.length) {
         saveSettings({ lastAutoDraftDay: todayKey() });
         setStatus("info", "Morning check: no new bills since your last report. \u2615");
@@ -1721,7 +1869,7 @@
         preparedBy: ((Office.context.mailbox.userProfile || {}).displayName) || "",
       });
       await GraphData.createDraftMessage(token, recips, rep.subject, rep.html);
-      markReported(items);
+      // Drafting does not mark versions reviewed or delivered.
       saveSettings({ lastAutoDraftDay: todayKey() });
       var unrouted = items.filter(function (it) { return it.routingStatus !== "matched"; }).length;
       setStatus("info", "\u2600\ufe0f Today's Daily Bill Report is drafted \u2014 " + rep.count + " bill(s), " +
@@ -3002,7 +3150,7 @@
             });
             var reportDraft = await GraphData.createDraftMessage(token, recips, rep.subject, rep.html);
             state.results[reportDraftKey] = { status: "published", messageId: reportDraft.id };
-            markReported(included());
+            // Drafting does not mark versions reviewed or delivered.
             logLine("\u2713 Daily Bill Report draft created — " + rep.count + " bills, " + recips.length +
               " recipients. Review it in your Drafts folder and send.");
           }
@@ -3051,7 +3199,7 @@
       var items = await GraphData.listItems(token, state.site.siteId, state.site.auditListId, 200);
       var host = byId("auditListView");
       host.innerHTML = "";
-      items.slice().reverse().slice(0, 100).forEach(function (i) {
+      items.filter(function (row) { return !/^watch-/.test((row.fields || {}).Status || ""); }).slice().reverse().slice(0, 100).forEach(function (i) {
         var f = i.fields || {};
         var p = document.createElement("p");
         p.className = "audit-row " + (f.Status === "failed" ? "err" : "");
