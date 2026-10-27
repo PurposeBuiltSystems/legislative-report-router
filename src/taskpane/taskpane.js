@@ -1064,6 +1064,29 @@
 
   var feedSelection = []; // [{entry, checked}]
 
+  var watchModulesPromise = null;
+  async function ensureWatchModules() {
+    if (typeof LrrWatch !== "undefined" && typeof LrrAmendments !== "undefined") { return; }
+    if (!watchModulesPromise) {
+      watchModulesPromise = Promise.all([
+        [typeof LrrWatch !== "undefined", "../watch-window.js?v=1"],
+        [typeof LrrAmendments !== "undefined", "../amendments.js?v=1"],
+      ].filter(function (module) { return !module[0]; }).map(function (module) {
+        return new Promise(function (resolve, reject) {
+          var timer = setTimeout(function () { reject(new Error("Watch tools did not load. Reload the add-in and try again.")); }, 20000);
+          var script = document.createElement("script");
+          script.src = new URL(module[1], document.baseURI).href;
+          script.onload = function () { clearTimeout(timer); resolve(); };
+          script.onerror = function () { clearTimeout(timer); reject(new Error("Watch tools could not load. Reload the add-in and try again.")); };
+          document.head.appendChild(script);
+        });
+      })).then(function () {
+        if (typeof LrrWatch === "undefined" || typeof LrrAmendments === "undefined") { throw new Error("Reload the add-in to finish loading watch tools."); }
+      }).catch(function (e) { watchModulesPromise = null; throw e; });
+    }
+    return watchModulesPromise;
+  }
+
   var WATCH_KEY = "lrr.watchWindow";
   var currentWatchCheck = null;
 
@@ -1090,6 +1113,7 @@
     renderWatchWindow();
   }
   async function prepareWatchCheck(entries, started, config, forceHideReviewed) {
+    await ensureWatchModules();
     var site = state.site, rows = [], historyError = "";
     if (site && site.auditListId) {
       try { rows = await GraphData.listItems(await GraphData.getToken(), site.siteId, site.auditListId, 2000); }
@@ -1165,6 +1189,7 @@
 
 
   async function loadScreeningEntries() {
+    await ensureWatchModules();
     var preset = LrrPresets.presetFor(byId("stateName").value || "Iowa");
     if (preset.feed !== "iowa-rss") {
       var other = await fetch("../../feeds/openstates-" + preset.slug + ".json?ts=" + Date.now());
