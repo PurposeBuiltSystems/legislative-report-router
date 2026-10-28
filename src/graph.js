@@ -41,9 +41,15 @@
 
   var cloudKey = "commercial";
   var pcaPromise = null;
+  var workflowSession = null;
+  function rememberSession(result) {
+    workflowSession = result.account && result.account.username ? { token: result.accessToken, username: result.account.username } : null;
+    return result.accessToken;
+  }
+  function authenticatedAccount(token) { return !signedOut && workflowSession && workflowSession.token === token ? workflowSession.username : null; }
 
   function setCloud(key) {
-    if (CLOUDS[key] && key !== cloudKey) { cloudKey = key; pcaPromise = null; }
+    if (CLOUDS[key] && key !== cloudKey) { cloudKey = key; pcaPromise = null; workflowSession = null; }
   }
 
   function graphBase() { return CLOUDS[cloudKey].graph + "/v1.0"; }
@@ -81,7 +87,7 @@
       // Signed out means signed out: skip the silent path so the user must
       // actually re-authenticate, otherwise the button would be decorative.
       if (signedOut) { throw new Error("signed out of the add-in"); }
-      return (await withTimeout(pca.acquireTokenSilent({ scopes: SCOPES }), 20000, "silent timeout")).accessToken;
+      return rememberSession(await withTimeout(pca.acquireTokenSilent({ scopes: SCOPES }), 20000, "silent timeout"));
     } catch (e) {
       var interactive = await withTimeout(
         pca.acquireTokenPopup({ scopes: SCOPES }), 120000,
@@ -89,7 +95,7 @@
         "check for it (or Mission Control), finish signing in, and click again. If no window " +
         "appeared at all, fully quit Outlook (Cmd+Q), reopen, and retry.");
       setSignedOut(false);   // a real interactive sign-in ends the signed-out state
-      return interactive.accessToken;
+      return rememberSession(interactive);
     }
   }
 
@@ -139,6 +145,7 @@
    */
   function signOut() {
     setSignedOut(true);
+    workflowSession = null;
     var pending = pcaPromise;      // only clear what already exists; never start a handshake here
     pcaPromise = null;
     if (!pending) { return Promise.resolve(true); }
@@ -183,7 +190,7 @@
       var interactive = await withTimeout(pca.acquireTokenPopup({ scopes: scopes }), 120000,
         "Sign-in for " + action + " didn't finish — look for a Microsoft window behind Outlook.");
       setSignedOut(false);
-      return interactive.accessToken;
+      return rememberSession(interactive);
     }
   }
 
@@ -537,6 +544,7 @@
     getTagWriteToken: getTagWriteToken,
     getListCreateToken: getListCreateToken,
     resolveSite: resolveSite,
+    authenticatedAccount: authenticatedAccount,
     trackerWebUrl: trackerWebUrl,
     listWebUrl: trackerWebUrl,
     publishBudgetPage: publishBudgetPage,

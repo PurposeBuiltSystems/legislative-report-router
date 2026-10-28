@@ -9,7 +9,7 @@
 /* global Office, GraphData, document,
    LrrScreening, LrrParser, LrrRouting, LrrTeams, LrrDocx, LrrXlsx, LrrPresets, LrrProvision,
    LrrChapters, LrrContacts, LrrFeed, LrrReportGen, LrrDeadline, LrrFiscal, LrrBillStatus, LrrHarvest,
-   LrrInvite, LrrRecipients, LrrBudget, LrrWatch, LrrAmendments, window */
+   LrrInvite, LrrRecipients, LrrBudget, LrrWatch, LrrAmendments, LrrWorkflow, LrrWorkflowStore, LrrWorkflowUI, window */
 (function () {
   "use strict";
 
@@ -26,6 +26,8 @@
     results: {},       // idempotencyKey -> {status, error, messageId}
     lastSaved: null,
   };
+
+  var workflowView = null;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -294,6 +296,7 @@
   ];
 
   function clearSharePointLinks(message) {
+    if (workflowView) { workflowView.invalidate(); }
     listLinkGeneration++;
     listLinkSpecs.forEach(function (spec) {
       var link = byId(spec.id);
@@ -336,14 +339,57 @@
   // ---------- screens ----------
 
   function show(screen) {
-    ["overview", "filings", "review", "preview", "publish", "audit"].forEach(function (s) {
-      byId("screen-" + s).hidden = s !== screen;
+    ["overview", "filings", "review", "preview", "publish", "workflow", "audit"].forEach(function (s) {
+      setProp("screen-" + s, "hidden", s !== screen);
     });
     document.querySelectorAll(".tab").forEach(function (t) {
       t.classList.toggle("active", t.getAttribute("data-screen") === screen);
     });
+    if (screen === "workflow") { prepareWorkflowView(); }
     if (screen === "preview") { prepareSharedPreview(); }
     if (screen === "publish") { renderPublishSummary(); }
+  }
+
+  function ensureWorkflowSurface() {
+    if (byId("workflowHost")) { return; }
+    var nav = document.querySelector("nav.tabs"), audit = byId("screen-audit");
+    if (!nav || !audit) { return; }
+    var tab = document.createElement("button"); tab.className = "tab"; tab.setAttribute("data-screen", "workflow"); tab.textContent = "Work queue"; nav.appendChild(tab);
+    var section = document.createElement("section"); section.id = "screen-workflow"; section.className = "screen"; section.hidden = true;
+    var host = document.createElement("div"); host.id = "workflowHost"; section.appendChild(host); audit.parentNode.insertBefore(section, audit);
+  }
+
+  var workflowModulesPromise = null;
+  async function prepareWorkflowView() {
+    if (workflowView || !byId("workflowHost")) { return; }
+    try {
+      if (!workflowModulesPromise) {
+        workflowModulesPromise = (async function () {
+          var modules = [[typeof LrrWorkflow !== "undefined", "../workflow.js?v=20261028b"],
+            [typeof LrrWorkflowStore !== "undefined", "../workflow-store.js?v=20261028b"],
+            [typeof LrrWorkflowUI !== "undefined", "../workflow-ui.js?v=20261028b"],
+            [typeof GraphData.authenticatedAccount === "function", "../graph.js?v=20261028b"]];
+          for (var i = 0; i < modules.length; i++) {
+            if (modules[i][0]) { continue; }
+            await new Promise(function (resolve, reject) {
+              var script = document.createElement("script"), timer = setTimeout(function () { script.remove(); reject(new Error("Work queue tools timed out. Click Retry.")); }, 20000);
+              script.src = new URL(modules[i][1], document.baseURI).href;
+              script.onload = function () { clearTimeout(timer); resolve(); };
+              script.onerror = function () { clearTimeout(timer); script.remove(); reject(new Error("Work queue tools could not load. Click Retry.")); };
+              document.head.appendChild(script);
+            });
+          }
+        })().catch(function (e) { workflowModulesPromise = null; throw e; });
+      }
+      await workflowModulesPromise;
+      if (!workflowView) {
+        GraphData.setCloud(val("cloud") || "commercial");
+        workflowView = LrrWorkflowUI.mount(byId("workflowHost"), { graph: GraphData, site: function () { return state.site; } });
+      }
+    } catch (e) {
+      var host = byId("workflowHost"); host.textContent = e.message;
+      var retry = document.createElement("button"); retry.textContent = "Retry work queue"; retry.addEventListener("click", prepareWorkflowView); host.appendChild(retry);
+    }
   }
 
   var SETTING_KEYS = ["sharedRecipients", "cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "responseHours", "dueTime", "holidays", "sessionEnd",
@@ -434,6 +480,7 @@
     on("findMySetup", "click", findMySetup);
     on("profileApply", "click", profileApply);
 
+    ensureWorkflowSurface();
     document.querySelectorAll(".tab").forEach(function (t) {
       t.addEventListener("click", function () { show(t.getAttribute("data-screen")); });
     });
@@ -3277,7 +3324,7 @@
       var items = await GraphData.listItems(token, state.site.siteId, state.site.auditListId, 200);
       var host = byId("auditListView");
       host.innerHTML = "";
-      items.filter(function (row) { return !/^watch-/.test((row.fields || {}).Status || ""); }).slice().reverse().slice(0, 100).forEach(function (i) {
+      items.filter(function (row) { return !/^(watch-|workflow-)/.test((row.fields || {}).Status || ""); }).slice().reverse().slice(0, 100).forEach(function (i) {
         var f = i.fields || {};
         var p = document.createElement("p");
         p.className = "audit-row " + (f.Status === "failed" ? "err" : "");

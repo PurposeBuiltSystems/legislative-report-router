@@ -24,6 +24,7 @@
     <button data-screen="review" class="tab">Review</button>
     <button data-screen="preview" class="tab">Preview</button>
     <button data-screen="publish" class="tab">Publish</button>
+    <button data-screen="workflow" class="tab">Work queue</button>
     <button data-screen="audit" class="tab">History</button>
   </nav>
 
@@ -383,6 +384,8 @@
   </section>
 
   <!-- Screen 5: Audit -->
+  <section id="screen-workflow" class="screen" hidden><div id="workflowHost"></div></section>
+
   <section id="screen-audit" class="screen" hidden>
     <h3 class="wiz-h">💰 Fiscal impact — running totals for budget requests</h3>
     <label>Session adjourned (leave blank while the session is running)
@@ -420,7 +423,7 @@
   <script src="../routing.js?v=20261027b"></script>
   <script src="../teams.js?v=20261027e"></script>
   <script src="../docx.js?v=43"></script>
-  <script src="../graph.js?v=20261028a"></script>
+  <script src="../graph.js?v=20261028b"></script>
   <script src="../presets.js?v=46"></script>
   <script src="../provision.js?v=43"></script>
   <script src="../contacts.js?v=43"></script>
@@ -438,6 +441,9 @@
   <script src="../budget-dashboard.js?v=1"></script>
   <script src="../harvest.js?v=43"></script>
   <script src="../xlsx.js?v=43"></script>
-  <script src="taskpane.js?v=20261028a"></script>
+  <script src="../workflow.js?v=20261028b"></script>
+  <script src="../workflow-store.js?v=20261028b"></script>
+  <script src="../workflow-ui.js?v=20261028b"></script>
+  <script src="taskpane.js?v=20261028b"></script>
 </body>
 </html>
