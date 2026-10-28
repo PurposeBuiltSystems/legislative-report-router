@@ -130,22 +130,24 @@
     var el = byId("setupChecklist");
     if (!el) { return; }
     var st = settings();
-    var withChannel = state.rules.filter(function (r) { return r.teamsTeamId && r.teamsChannelId; }).length;
     var withPeople = state.rules.filter(function (r) { return (r.emails || []).length; }).length;
     var distN = (typeof LrrReportGen !== "undefined") ? dailyReportRecipients(st).length : 0;
     var steps = [
-      [!!st.siteUrl, "Pick where your lists live", "use \u2460 above"],
-      [!!(state.site && state.site.routingListId), "Create & connect your lists", "use \u2461 and Connect"],
-      [withChannel > 0, "Add your divisions", state.rules.length ? withChannel + " of " + state.rules.length + " have a Teams channel" : "use \u2462"],
-      [withPeople > 0, "Put people on divisions", "quick add or paste a list"],
-      [distN > 0, "Paste the report's To: line", distN ? distN + " recipients ready" : "in \u201cLet the add-in write\u2026\u201d"],
-      [!!st.lastCheckOk, "Run \u2705 Test my setup", st.lastCheckOk ? "last passed " + new Date(st.lastCheckOk).toLocaleDateString() : "one click, checks everything"],
+      [!!state.signedIn, "Sign in and choose your legislature", "Sign in with your work account.", false],
+      [!!(state.site && state.site.routingListId), "Connect the shared lists", "Choose a SharePoint site, then connect its lists.", false],
+      [state.rules.length > 0, "Set division destinations", "Use the legislative channel, coordinator tags, and/or division email contacts.", false],
+      [withPeople > 0, "Review division email contacts", "Add contacts here or use the same list in Teams.", true],
+      [distN > 0, "Choose the daily report audience", "Use division contacts or a distribution list.", true],
+      [!!st.lastCheckOk, "Check the connection", st.lastCheckOk ? "Last check passed " + new Date(st.lastCheckOk).toLocaleDateString() + ". Recheck after setup changes." : "Run checks; live notification tests are optional.", false],
     ];
     el.innerHTML = steps.map(function (x, i) {
-      return '<p class="' + (x[0] ? "done" : "todo") + '">' + (x[0] ? "\u2705" : "\u2b55") + " " +
-        (i + 1) + ". " + x[1] + (x[0] ? "" : " \u2014 " + x[2]) + "</p>";
+      return '<button type="button" class="setup-step-link ' + (x[0] ? "done" : "todo") + '" data-setup-step="' + (i + 1) + '"><span>' + (x[0] ? "✓ " : "") + (i + 1) + ". " + esc(x[1]) + (x[3] ? " (optional)" : "") + '</span><small>' + esc(x[2]) + '</small></button>';
     }).join("");
+    el.querySelectorAll("[data-setup-step]").forEach(function (button) {
+      button.addEventListener("click", function () { setProp("settings", "open", true); wizShow(Number(button.getAttribute("data-setup-step")), true); });
+    });
   }
+
   function esc(s) { return LrrTeams._internals.esc(s); }
 
   /**
@@ -192,10 +194,10 @@
     var st = settings();
     if (!st.siteUrl) {
       el.className = "conn-banner setup";
-      el.innerHTML = "<b>First time?</b> Open \u2699\ufe0f Setup below \u2014 about 10 minutes, one time only. After that this pane is ready on every email automatically.";
+      el.innerHTML = "<b>First time?</b> Open Setup & contacts below to connect your shared lists and division destinations.";
     } else if (state.rules.length) {
       el.className = "conn-banner ok";
-      el.textContent = "\u2713 Setup saved \u2014 " + state.rules.length + " division route(s) connected. Nothing to redo: just Parse.";
+      el.textContent = "\u2713 Setup saved \u2014 " + state.rules.length + " division route(s) connected. Find new bills or read the selected report.";
     } else {
       el.className = "conn-banner";
       el.textContent = "Saved setup found \u2014 reconnecting\u2026";
@@ -415,6 +417,7 @@
   // ---------- screens ----------
 
   function show(screen) {
+    updateFlowNavigation();
     ["overview", "filings", "review", "preview", "publish", "workflow", "audit"].forEach(function (s) {
       setProp("screen-" + s, "hidden", s !== screen);
     });
@@ -443,7 +446,7 @@
         workflowModulesPromise = (async function () {
           var modules = [[typeof LrrStaffConfig !== "undefined", "../staff-config.js?v=20261028c"], [typeof LrrWorkflow !== "undefined", "../workflow.js?v=20261028c"],
             [typeof LrrWorkflowStore !== "undefined", "../workflow-store.js?v=20261028c"],
-            [typeof LrrWorkflowUI !== "undefined", "../workflow-ui.js?v=20261028c"],
+            [typeof LrrWorkflowUI !== "undefined", "../workflow-ui.js?v=20261028f"],
             [typeof GraphData.authenticatedAccount === "function", "../graph.js?v=20261028c"]];
           for (var i = 0; i < modules.length; i++) {
             if (modules[i][0]) { continue; }
@@ -483,6 +486,7 @@
     setText("authWho", who ? ("Signed in as " + who) : "Not signed in");
     setProp("signOut", "hidden", !who);
     setProp("signIn", "hidden", !!who);
+    state.signedIn = !!who; updateSetupChecklist();
   }
 
   async function doSignIn() {
@@ -499,6 +503,7 @@
   }
 
   async function doSignOut() {
+    state.signedIn = false; updateSetupChecklist();
     clearSharePointLinks("Sign in and connect to open your SharePoint lists.");
     // Respond immediately. The previous version awaited a broker handshake
     // before changing anything on screen, which certification saw as the
@@ -560,6 +565,17 @@
     document.querySelectorAll(".tab").forEach(function (t) {
       t.addEventListener("click", function () { show(t.getAttribute("data-screen")); });
     });
+    on("startFindBills", "click", function () { show("filings"); });
+    on("contactsFromSetup", "click", openContactsSetup);
+    on("reviewToPreview", "click", function () { show("preview"); });
+    on("previewToReview", "click", function () { show("review"); });
+    on("previewToPublish", "click", function () { show("publish"); });
+    on("publishToPreview", "click", function () { show("preview"); });
+    on("items", "input", resetPublicationConfirmation);
+    on("items", "change", resetPublicationConfirmation);
+    ["optTeams", "optEmail", "optOriginal", "optDailyReport"].forEach(function (id) {
+      on(id, "change", function () { resetPublicationConfirmation(); renderPublishSummary(); if (byId("screen-preview") && !byId("screen-preview").hidden) { prepareSharedPreview(); } });
+    });
     on("parse", "click", parseReport);
     on("saveDraft", "click", saveDraft);
     on("loadDraft", "click", loadDraft);
@@ -600,8 +616,8 @@
       saveSettings({ sharedRecipients: true });
       await refreshSharedRecipients();
     });
-    on("wizPrev", "click", function () { wizShow(wizStep - 1); });
-    on("wizNext", "click", function () { wizShow(wizStep + 1); });
+    on("wizPrev", "click", function () { wizShow(wizStep - 1, true); });
+    on("wizNext", "click", advanceSetup);
     on("wizSignIn", "click", async function () {
       setProp("wizSignIn", "disabled", true);
       try {
@@ -622,7 +638,7 @@
       }).catch(function () { setStatus("error", "Copy failed \u2014 use the download link instead."); });
     });
     on("siteSearch", "input", filterSiteList);
-    wizShow(1);
+    wizShow(Number(s.setupStep) || 1);
     on("runChecks", "click", runChecks);
     on("copyChecks", "click", copyChecks);
     on("distList", "input", function () { resetPublicationConfirmation(); updateDistInfo(); });
@@ -636,7 +652,7 @@
     on("lookupTags", "click", lookupTags);
     on("bulkApply", "click", bulkApply);
     on("confirmBox", "change", function () {
-      setProp("publishGo", "disabled", !isChecked("confirmBox"));
+      setProp("publishGo", "disabled", !isChecked("confirmBox") || !hasDeliveryChoice());
     });
     on("publishGo", "click", function () { publish(false); });
     on("retryFailed", "click", function () { publish(true); });
@@ -811,6 +827,7 @@
   }
 
   function refreshStats() {
+    resetPublicationConfirmation(); updateFlowNavigation();
     var summary = LrrRouting.routeAll(state.items, state.rules);
     byId("stBills").textContent = summary.totalItems;
     byId("stMatched").textContent = summary.matchedItems;
@@ -1067,30 +1084,47 @@
   var wizStep = 1;
   var WIZ_MAX = 6;
 
-  function wizShow(n) {
+  function wizShow(n, persist) {
     wizStep = Math.max(1, Math.min(WIZ_MAX, n));
     document.querySelectorAll(".wiz-step").forEach(function (el) {
       el.hidden = Number(el.getAttribute("data-wiz")) !== wizStep;
     });
     byId("wizPos").textContent = "Step " + wizStep + " of " + WIZ_MAX;
     byId("wizPrev").disabled = wizStep === 1;
-    byId("wizNext").textContent = wizStep === WIZ_MAX ? "Done \u2713" : "Next \u2192";
+    byId("wizNext").textContent = wizStep === WIZ_MAX ? "Finish setup" : "Next →";
+    if (persist) { saveSettings({ setupStep: wizStep }); }
     if (wizStep === 2) { loadSitesPicker(); loadTeamSitePicker(); }
     if (wizStep === 3) { loadTeamsPicker(); renderRoutesSummary(); }
     if (wizStep === 4 || wizStep === 6) { /* dropdowns already refreshed on connect */ }
-    if (wizStep === WIZ_MAX && byId("wizNext").textContent === "Done \u2713") {
-      byId("wizNext").onclick = null;
-    }
   }
+
+  function advanceSetup() {
+    if (wizStep < WIZ_MAX) { wizShow(wizStep + 1, true); return; }
+    setProp("settings", "open", false);
+    setStatus("info", state.site ? "Setup closed. Find bills or read the selected Outlook report, then Review → Preview → Publish." : "Setup closed. You can read a report now; connect your shared lists before publishing.");
+    var start = byId("startFindBills") || byId("parse"); if (start) { start.focus(); }
+  }
+
+  function openContactsSetup() {
+    ensureContactsListGuide(); setProp("sharePointLists", "open", true); setProp("contactsTeamsGuide", "open", true);
+    var host = byId("contactsTeamsGuide"); if (host && host.scrollIntoView) { host.scrollIntoView({ block: "start" }); }
+  }
+
+  function updateFlowNavigation() {
+    var empty = !included().length;
+    setProp("reviewToPreview", "disabled", empty); setProp("previewToPublish", "disabled", empty);
+  }
+
+  function hasDeliveryChoice() { return ["optTeams", "optEmail", "optOriginal", "optDailyReport"].some(isChecked); }
 
   function renderRoutesSummary() {
     var el = byId("routesSummary");
     if (!el) { return; }
     if (!state.rules.length) { el.innerHTML = "No divisions yet \u2014 add your first below."; return; }
     el.innerHTML = state.rules.map(function (r) {
-      var chan = r.teamsChannelId ? (r.teamsChannelName || "channel set") : "\u26a0 no channel";
-      var tag = r.teamsTagId ? "\ud83c\udff7 " + (r.teamsTagName || "tag set") : "\u26a0 no tag";
-      return "<b>" + r.divisionCode + "</b> \u2192 " + chan + " \u00b7 " + tag;
+      var chan = r.teamsChannelId ? (r.teamsChannelName || "channel set") : ((r.emails || []).length ? "email only" : "\u26a0 no destination");
+      var tag = r.teamsTagId ? "\ud83c\udff7 " + (r.teamsTagName || "tag set") : "no notification tag (optional)";
+      return "<b>" + esc(r.divisionCode) + "</b> → " + esc(chan) + " · " + esc(tag);
     }).join("<br>");
   }
 
@@ -2622,7 +2656,7 @@
       host.appendChild(recipients);
     }
     var opts = { template: { commentWindow: byId("commentWindow").value }, deadlineLabel: currentDeadline().label };
-    included().forEach(function (it) {
+    if (isChecked("optTeams")) { included().forEach(function (it) {
       channelGroups(it).forEach(function (g) {
         var payload = LrrTeams.buildChannelMessage(it, g.rules, opts);
         var box = document.createElement("div");
@@ -2636,8 +2670,8 @@
         box.appendChild(meta); box.appendChild(body);
         host.appendChild(box);
       });
-    });
-    divisionEmailGroups(included()).forEach(function (g) {
+    }); }
+    if (isChecked("optEmail")) { divisionEmailGroups(included()).forEach(function (g) {
       if (!(g.rule.emails || []).length) { return; }
       var mail = LrrTeams.buildDivisionEmail(g.rule, g.items, { template: { commentWindow: byId("commentWindow").value }, deadlineLabel: currentDeadline().label });
       var box = document.createElement("div");
@@ -2645,7 +2679,8 @@
       box.innerHTML = '<p class="hint">✉ ' + esc(mail.subject) + " → " + esc(mail.to.join(", ")) + "</p>" +
         '<div class="preview-body">' + mail.html + "</div>";
       host.appendChild(box);
-    });
+    }); }
+    if (isChecked("optDailyReport")) { var draft = document.createElement("p"); draft.className = "hint"; draft.textContent = "An Outlook report draft will be created for " + dailyReportRecipients().length + " recipient(s). Review and send it from Outlook separately."; host.appendChild(draft); }
     if (!host.children.length) {
       host.innerHTML = '<p class="hint">Nothing to preview — parse a report and connect routing rules first.</p>';
     }
@@ -2665,15 +2700,12 @@
     divisionEmailGroups(items).forEach(function (g) {
       (g.rule.emails || []).forEach(function (e) { recipients[e] = 1; });
     });
-    byId("publishSummary").innerHTML =
-      "<strong>" + posts + "</strong> Teams post(s) will be created.<br>" +
-      "<strong>" + Object.keys(tags).length + "</strong> division tag(s) will be mentioned.<br>" +
-      "<strong>" + Object.keys(recipients).length + "</strong> recipient(s) will receive targeted email." +
-      (byId("optOriginal").checked ? "<br>The original Outlook message will be sent." : "") +
-      (byId("optDailyReport").checked
-        ? "<br>The <strong>Daily Bill Report draft</strong> will be created for <strong>" +
-          dailyReportRecipients().length + "</strong> recipients (review in Drafts, then send)."
-        : "");
+    var lines = [];
+    if (isChecked("optTeams")) { lines.push("<strong>" + posts + "</strong> Teams post(s); <strong>" + Object.keys(tags).length + "</strong> notification tag(s)."); }
+    if (isChecked("optEmail")) { lines.push("<strong>" + Object.keys(recipients).length + "</strong> targeted email recipient(s)."); }
+    if (isChecked("optOriginal")) { lines.push("The selected Outlook message will be sent."); }
+    if (isChecked("optDailyReport")) { lines.push("An Outlook report draft will be created for <strong>" + dailyReportRecipients().length + "</strong> recipient(s). It is not sent by this action."); }
+    byId("publishSummary").innerHTML = lines.length ? lines.join("<br>") : "Choose at least one delivery option.";
   }
 
   function logLine(text, kind) {
@@ -3227,6 +3259,7 @@
     if (settings().sharedRecipients && (!sharedRecipientsReady || sharedRecipientsPending)) {
       setStatus("error", "Open Preview to refresh and review shared Teams/email recipients before publishing."); return;
     }
+    if (!hasDeliveryChoice()) { setStatus("error", "Choose at least one delivery option before publishing."); return; }
     if (!isChecked("confirmBox")) { setStatus("error", "Confirm the reviewed distribution before publishing."); return; }
     if (!state.site) { setStatus("error", "Connect the SharePoint routing/audit lists in Settings first."); return; }
     var doTeams = byId("optTeams").checked;

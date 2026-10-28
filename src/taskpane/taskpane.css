@@ -266,3 +266,15 @@ button:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, v
 button.linkish { background: none; border: none; padding: 2px 4px; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; }
 button.linkish:hover { opacity: .8; }
 button.linkish:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+/* Setup and daily-work navigation share one visible sequence. */
+.workflow-start { margin:14px 0; padding:12px; border-left:3px solid var(--accent); background:var(--bg-soft); border-radius:var(--radius-s); }
+.workflow-start p { margin:5px 0 10px; }
+.setup-progress > summary { cursor:pointer; padding:8px 0; color:var(--muted); }
+.setup-step-link { display:block; width:100%; text-align:left; background:transparent; border:0; border-radius:var(--radius-s); padding:7px; margin:2px 0; }
+.setup-step-link span, .setup-step-link small { display:block; }
+.setup-step-link small { color:var(--muted); font-size:11px; margin-top:3px; }
+.setup-step-link.done span { color:var(--ok-fg); }
+.screen-title { font-size:16px; margin:12px 0 6px; }
+.flow-actions { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; padding-top:12px; border-top:1px solid var(--line); }
+.flow-actions .primary { flex:1; }

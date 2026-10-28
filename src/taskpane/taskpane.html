@@ -10,12 +10,12 @@
   <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
-  <link rel="stylesheet" href="taskpane.css?v=43" />
+  <link rel="stylesheet" href="taskpane.css?v=20261028f" />
 </head>
 <body>
   <header class="app-head">
     <h1>Legislative Report Router</h1>
-    <p class="sub">From bill report to the right people&mdash;without manual routing.</p>
+    <p class="sub">Find bills, review recipients, then publish when you are ready.</p>
   </header>
 
   <nav class="tabs">
@@ -25,11 +25,11 @@
     <button data-screen="preview" class="tab">Preview</button>
     <button data-screen="publish" class="tab">Publish</button>
     <button data-screen="workflow" class="tab">Work queue</button>
-    <button data-screen="audit" class="tab">History</button>
+    <button data-screen="audit" class="tab">Budget &amp; history</button>
   </nav>
 
-  <aside id="sharePointLists" class="options" aria-label="Connected SharePoint lists">
-    <strong>Open your SharePoint lists</strong>
+  <details id="sharePointLists" class="options" aria-label="Connected SharePoint lists">
+    <summary>Open your SharePoint lists</summary>
     <div class="actions-row">
       <a id="openRoutingList" target="_blank" rel="noopener noreferrer" hidden>Division routes &amp; contacts</a>
       <a id="openTrackerList" target="_blank" rel="noopener noreferrer" hidden>Bill tracker / budget inputs</a>
@@ -37,7 +37,7 @@
       <button id="refreshListLinks" type="button" class="linkish" disabled>Refresh links</button>
     </div>
     <p id="sharePointLinksInfo" class="hint" aria-live="polite">Connect your SharePoint lists in Setup to open them here.</p>
-  </aside>
+  </details>
 
   <!-- Screen 1: Overview -->
   <section id="screen-overview" class="screen">
@@ -50,37 +50,10 @@
       <button id="signIn" class="linkish" type="button">Sign in</button>
       <button id="signOut" class="linkish" type="button" hidden>Sign out</button>
     </div>
-    <div class="stat-grid">
-      <div class="stat"><span id="stSubject" class="stat-big">—</span><span>Subject</span></div>
-      <div class="stat"><span id="stBills" class="stat-big">0</span><span>Bills detected</span></div>
-      <div class="stat"><span id="stMatched" class="stat-big">0</span><span>Matched</span></div>
-      <div class="stat"><span id="stUnmatched" class="stat-big stat-warn">0</span><span>Unmatched</span></div>
-      <div class="stat"><span id="stWarnings" class="stat-big stat-warn">0</span><span>With warnings</span></div>
-      <div class="stat"><span id="stSaved" class="stat-big">never</span><span>Last saved</span></div>
-    </div>
-
-    <label>Source
-      <select id="source">
-        <option value="body">Email body</option>
-        <option value="docx">DOCX attachment</option>
-        <option value="both">Email body + DOCX</option>
-      </select>
-    </label>
-
-    <p class="hint" style="margin:4px 0 8px">New here?
-      <a href="https://purposebuiltsystems.github.io/legislative-report-router/quickstart.html" target="_blank" rel="noopener">Coordinator quick start</a> ·
-      <a href="https://purposebuiltsystems.github.io/legislative-report-router/reviewers.html" target="_blank" rel="noopener">Guide for your division reviewers</a>
-    </p>
-    <div class="actions-row">
-      <button id="parse" class="primary">Read this report</button>
-      <button id="loadDraft">Load Saved Draft</button>
-      <button id="saveDraft">Save Draft Distribution</button>
-    </div>
-
     <details id="settings" class="options">
-      <summary>⚙️ Setup (one-time, guided)</summary>
-      <p class="hint"><b>Everything here is saved to your account</b> — walk through it once and the add-in reconnects automatically on every email, on every device.</p>
-      <div id="setupChecklist"></div>
+      <summary>Setup &amp; contacts</summary>
+      <p class="hint">Connect the shared lists, set each division’s destination, and add email contacts. Return here when people or routing rules change. Settings are saved to your account.</p>
+      <details class="setup-progress"><summary>Setup progress — jump to a step</summary><div id="setupChecklist"></div></details>
 
       <div class="wiz-nav">
         <button id="wizPrev">← Back</button>
@@ -100,7 +73,7 @@
           </label>
         </div>
         <button id="wizSignIn" class="primary">Sign in to Microsoft 365</button>
-        <p id="wizSignInInfo" class="hint">One popup, one time. The add-in only ever acts as you.</p>
+        <p id="wizSignInInfo" class="hint">Sign in with your work account. Microsoft may ask you to sign in again when your session expires.</p>
       </div>
 
       <!-- Step 2: site + lists -->
@@ -108,8 +81,8 @@
         <h3 class="wiz-h">2 · Where should your lists live?</h3>
         <p class="hint">The add-in keeps three lists: your <b>division routes</b> (channels, tags, and
         each division's <b>contact emails</b>), the <b>audit trail</b>, and the <b>bill tracker</b>.
-        Pick a site your review team can access — or, if it's just you, use your OneDrive.</p>
-        <label><b>Recommended:</b> use your legislative Team's own site — everyone on the team automatically has access
+        Choose a SharePoint team site that your reviewers can access. OneDrive personal storage cannot hold these lists.</p>
+        <label><b>Recommended:</b> use your legislative Team's SharePoint site; confirm that reviewers have the access they need
           <select id="teamSitePick"><option value="">Pick your Team…</option></select>
         </label>
         <label>Or another SharePoint site
@@ -142,8 +115,8 @@
 
       <!-- Step 3: divisions, channels, tags -->
       <div class="wiz-step" data-wiz="3" hidden>
-        <h3 class="wiz-h">3 · Route each division to your channel and tag</h3>
-        <p class="hint">One or many channels: add a division again with a second channel and bills post to both. <b>Every division should have a tag</b> — that's what makes the right people get notified. No tag yet? Create one right here.</p>
+        <h3 class="wiz-h">3 · Set division destinations</h3>
+        <p class="hint">Use the same legislative channel for multiple divisions. Each division’s notification tag should contain the coordinator(s) who receive the initial request. Keep broad email contacts in Step 4. Email-only routes can leave the channel and tag blank.</p>
         <div id="routesSummary" class="hint"></div>
         <div class="row2">
           <label>Division code <input id="rbCode" type="text" placeholder="MVD" /></label>
@@ -154,10 +127,10 @@
         </label>
         <div class="row2">
           <label>Posting channel (the same legislative channel can serve every division) <select id="rbChannel"><option value="">Pick a team first</option></select></label>
-          <label>Tag <select id="rbTag"><option value="">Pick a team first</option></select></label>
+          <label>Coordinator notification tag <select id="rbTag"><option value="">Pick a team first</option></select></label>
         </div>
-        <button id="tagCreate">➕ Create the tag for this division</button>
-        <label>Notification emails (semicolon separated, optional)
+        <button id="tagCreate">Create a notification tag (optional)</button>
+        <label>Division email contacts (optional; also editable in Step 4)
           <input id="rbEmails" type="text" placeholder="mvd-leg@agency.gov" />
         </label>
         <div class="row2">
@@ -174,11 +147,9 @@
 
       <!-- Step 4: people -->
       <div class="wiz-step" data-wiz="4" hidden>
-        <h3 class="wiz-h">4 · Division contacts for Teams and email</h3>
-        <p class="hint">Add people in Teams tags, the routing list's Emails column, or paste contacts below. Shared contacts combines them for division emails and Teams notifications in your selected channel.</p>
-        <label><input id="sharedRecipients" type="checkbox" /> Use shared contacts for Teams and email</label>
-        <button id="recipientSync" type="button">Refresh shared contacts</button>
-        <p id="recipientSyncInfo" class="hint" aria-live="polite">Connect a division route first. Match tag members to email addresses below—no new permission is needed. Confirmed contacts outside the division tag get direct @mentions. Unmatched contacts stay email-only. Refresh adds tag emails to the list; it never removes contacts or changes Team/tag membership. Shared contacts refresh again before Preview.</p>
+        <h3 class="wiz-h">4 · Manage division email contacts</h3>
+        <p class="hint">These addresses receive division emails. Add one person, paste rows from Excel, or edit the same SharePoint list in Teams. Adding an email here does not join a Team or change a notification tag.</p>
+        <button id="contactsFromSetup" type="button">Open the shared contact list / Teams setup</button>
         <div class="row2">
           <label>Quick add one person
             <input id="quickEmail" type="text" placeholder="jane.doe@iowadot.us" />
@@ -197,8 +168,12 @@
           <button id="contactApply" class="primary" disabled>Apply</button>
         </div>
         <div id="contactPlan" class="hint"></div>
-        <details class="options" open>
-          <summary>Match Teams people to emails — no extra permission</summary>
+        <details class="options" id="legacySharedContacts">
+          <summary>Optional: also notify matched email contacts in Teams</summary>
+          <p class="hint">Leave this off to keep coordinator notifications separate from the broad email roster. This older mode adds tag contacts to the email list and can directly mention matched email contacts. It does not provide two-way tag synchronization.</p>
+          <label><input id="sharedRecipients" type="checkbox" /> Also use shared contacts for Teams notifications</label>
+          <button id="recipientSync" type="button">Refresh matched contacts</button>
+          <p id="recipientSyncInfo" class="hint" aria-live="polite">Only confirmed identity matches are used. Unmatched contacts remain email-only. Refresh adds contacts; it does not remove people or edit Team/tag membership.</p>
           <p class="hint">Choose the division in the dropdown above. Paste Name, Email, Division rows to suggest matches, or enter emails here. A name suggestion only takes effect after you confirm it. People must already be visible in this Team's tags; add missing people in Teams first.</p>
           <button id="recipientMatchesLoad" type="button">Load people and saved matches</button>
           <p id="recipientMatchInfo" class="hint" aria-live="polite"></p>
@@ -210,7 +185,7 @@
 
       <!-- Step 5: the daily report -->
       <div class="wiz-step" data-wiz="5" hidden>
-        <h3 class="wiz-h">5 · Let it write the Daily Bill Report</h3>
+        <h3 class="wiz-h">5 · Choose the daily report audience (optional)</h3>
         <label>Session name (report header)
           <input id="sessionName" type="text" placeholder="Leave blank to use the current legislative session" />
         </label>
@@ -229,20 +204,23 @@
             <input id="autoDailyTime" type="time" value="07:30" />
           </label>
         </div>
-        <p class="hint">Runs while this pane is open (📌 pin the pane to keep it open all day). It drafts and assigns — you still review, publish, and press Send.</p>
+        <p class="hint">Runs while this pane is open (📌 pin the pane to keep it open all day). It creates an Outlook draft. You review and send that draft yourself; Teams publication is a separate action.</p>
       </div>
 
       <!-- Step 6: test everything -->
       <div class="wiz-step" data-wiz="6" hidden>
-        <h3 class="wiz-h">6 · Prove it all works</h3>
-        <button id="runChecks" class="primary">Run all checks</button>
+        <h3 class="wiz-h">6 · Check the connection</h3>
+        <button id="runChecks" class="primary">Check my setup</button>
         <div id="checkResults" class="publog"></div>
+        <details class="options"><summary>Optional live tests — can send notifications</summary>
+        <p class="hint">Leave these off for a check without messages or email.</p>
         <div class="modes" style="margin-top:8px">
           <label><input id="optTestPost" type="checkbox" /> Also send a TEST POST to a channel:</label>
           <select id="testPostRoute"><option value="">(connect rules first)</option></select>
           <label><input id="optTestMention" type="checkbox" /> Include the tag mention in the test post (notifies the tag's members!)</label>
           <label><input id="optTestEmail" type="checkbox" /> Also email a test message to me (only to my own address)</label>
         </div>
+        </details>
         <button id="copyChecks" hidden>Copy results</button>
       </div>
 
@@ -323,6 +301,36 @@
       </details>
     </details>
 
+    </details>
+
+    <div class="workflow-start"><strong>Daily workflow</strong><p>Find new bills or read the selected Outlook report, then <b>Review → Preview → Publish</b>.</p><button id="startFindBills" type="button" class="primary">Find bills and amendments</button></div>
+    <div class="stat-grid">
+      <div class="stat"><span id="stSubject" class="stat-big">—</span><span>Subject</span></div>
+      <div class="stat"><span id="stBills" class="stat-big">0</span><span>Bills detected</span></div>
+      <div class="stat"><span id="stMatched" class="stat-big">0</span><span>Matched</span></div>
+      <div class="stat"><span id="stUnmatched" class="stat-big stat-warn">0</span><span>Unmatched</span></div>
+      <div class="stat"><span id="stWarnings" class="stat-big stat-warn">0</span><span>With warnings</span></div>
+      <div class="stat"><span id="stSaved" class="stat-big">never</span><span>Last saved</span></div>
+    </div>
+
+    <label>Selected Outlook report — read from
+      <select id="source">
+        <option value="body">Email body</option>
+        <option value="docx">DOCX attachment</option>
+        <option value="both">Email body + DOCX</option>
+      </select>
+    </label>
+
+    <p class="hint" style="margin:4px 0 8px">New here?
+      <a href="https://purposebuiltsystems.github.io/legislative-report-router/quickstart.html" target="_blank" rel="noopener">Coordinator quick start</a> ·
+      <a href="https://purposebuiltsystems.github.io/legislative-report-router/reviewers.html" target="_blank" rel="noopener">Guide for your division reviewers</a>
+    </p>
+    <div class="actions-row">
+      <button id="parse" class="primary">Read selected report</button>
+      <button id="loadDraft">Load saved routing draft</button>
+      <button id="saveDraft">Save routing draft</button>
+    </div>
+
     <div id="parserWarnings" class="warnbox" hidden></div>
   </section>
 
@@ -351,6 +359,7 @@
 
   <!-- Screen 2: Review -->
   <section id="screen-review" class="screen" hidden>
+    <h2 class="screen-title">Review bills and divisions</h2><p class="hint">Edit the brief, check each division, and exclude anything you do not want to publish. Outlook draft edits are not imported automatically; re-read the final selected report before publishing if it changed.</p>
     <label class="modes" style="margin:4px 0"><input id="onlyUnassigned" type="checkbox" /> Show only bills that still need a division</label>
     <div class="bulk-row">
       <label>Send every checked bill to
@@ -359,22 +368,28 @@
       <button id="bulkApply">Assign</button>
     </div>
     <div id="items"></div>
+    <div class="flow-actions"><button id="reviewToPreview" class="primary" type="button">Next: preview recipients and messages →</button></div>
   </section>
 
   <!-- Screen 3: Preview -->
   <section id="screen-preview" class="screen" hidden>
-    <div id="previewList"></div>
-  </section>
-
-  <!-- Screen 4: Publish -->
-  <section id="screen-publish" class="screen" hidden>
-    <div id="publishSummary" class="confirmbox"></div>
+    <h2 class="screen-title">Choose delivery and preview</h2><p class="hint">Check names, email addresses and message text. Nothing is sent from this screen.</p>
     <div class="modes">
       <label><input id="optTeams" type="checkbox" checked /> Post to Teams</label>
       <label><input id="optEmail" type="checkbox" checked /> Send targeted division emails</label>
       <label><input id="optOriginal" type="checkbox" /> Send the original Outlook message</label>
       <label><input id="optDailyReport" type="checkbox" /> Draft the Daily Bill Report email to the distribution list</label>
     </div>
+    <div id="previewList"></div>
+    <div class="flow-actions"><button id="previewToReview" type="button">← Back to review</button><button id="previewToPublish" class="primary" type="button">Next: confirm publication →</button></div>
+  </section>
+
+  <!-- Screen 4: Publish -->
+  <section id="screen-publish" class="screen" hidden>
+    <h2 class="screen-title">Confirm and publish</h2><p class="hint">Teams posts and division emails are sent when you publish. A daily report draft is saved to Outlook for you to review and send separately.</p>
+    <div id="publishSummary" class="confirmbox" aria-live="polite"></div>
+    <p class="hint">Review the selected delivery below. Return to Preview to change options or inspect messages.</p>
+    <button id="publishToPreview" type="button">← Back to delivery options and preview</button>
     <label class="confirm-check"><input id="confirmBox" type="checkbox" /> I reviewed the distribution and confirm publication.</label>
     <div class="actions-row">
       <button id="publishGo" class="primary" disabled>Publish</button>
@@ -384,7 +399,7 @@
   </section>
 
   <!-- Screen 5: Audit -->
-  <section id="screen-workflow" class="screen" hidden><div id="workflowHost"></div></section>
+  <section id="screen-workflow" class="screen" hidden><p class="hint">Track division responses here after intake. Publishing a bill does not automatically create a work request; select New request to start its comment or fiscal review.</p><div id="workflowHost"></div></section>
 
   <section id="screen-audit" class="screen" hidden>
     <h3 class="wiz-h">💰 Fiscal impact — running totals for budget requests</h3>
@@ -444,7 +459,7 @@
   <script src="../staff-config.js?v=20261028c"></script>
   <script src="../workflow.js?v=20261028c"></script>
   <script src="../workflow-store.js?v=20261028c"></script>
-  <script src="../workflow-ui.js?v=20261028c"></script>
-  <script src="taskpane.js?v=20261028e"></script>
+  <script src="../workflow-ui.js?v=20261028f"></script>
+  <script src="taskpane.js?v=20261028f"></script>
 </body>
 </html>
