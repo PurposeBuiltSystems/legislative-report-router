@@ -538,6 +538,7 @@
     getListCreateToken: getListCreateToken,
     resolveSite: resolveSite,
     trackerWebUrl: trackerWebUrl,
+    listWebUrl: trackerWebUrl,
     publishBudgetPage: publishBudgetPage,
     findList: findList,
     listItems: listItems,

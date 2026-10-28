@@ -27,6 +27,17 @@
     <button data-screen="audit" class="tab">History</button>
   </nav>
 
+  <aside id="sharePointLists" class="options" aria-label="Connected SharePoint lists">
+    <strong>Open your SharePoint lists</strong>
+    <div class="actions-row">
+      <a id="openRoutingList" target="_blank" rel="noopener noreferrer" hidden>Division routes &amp; contacts</a>
+      <a id="openTrackerList" target="_blank" rel="noopener noreferrer" hidden>Bill tracker / budget inputs</a>
+      <a id="openAuditList" target="_blank" rel="noopener noreferrer" hidden>Audit &amp; review history</a>
+      <button id="refreshListLinks" type="button" class="linkish" disabled>Refresh links</button>
+    </div>
+    <p id="sharePointLinksInfo" class="hint" aria-live="polite">Connect your SharePoint lists in Setup to open them here.</p>
+  </aside>
+
   <!-- Screen 1: Overview -->
   <section id="screen-overview" class="screen">
     <div id="connBanner" class="conn-banner">Checking your saved setup…</div>
@@ -409,7 +420,7 @@
   <script src="../routing.js?v=20261027b"></script>
   <script src="../teams.js?v=20261027e"></script>
   <script src="../docx.js?v=43"></script>
-  <script src="../graph.js?v=20261027c"></script>
+  <script src="../graph.js?v=20261028a"></script>
   <script src="../presets.js?v=46"></script>
   <script src="../provision.js?v=43"></script>
   <script src="../contacts.js?v=43"></script>
@@ -427,6 +438,6 @@
   <script src="../budget-dashboard.js?v=1"></script>
   <script src="../harvest.js?v=43"></script>
   <script src="../xlsx.js?v=43"></script>
-  <script src="taskpane.js?v=20261027f"></script>
+  <script src="taskpane.js?v=20261028a"></script>
 </body>
 </html>

@@ -286,6 +286,53 @@
     parseReport();
   }
 
+  var listLinkGeneration = 0;
+  var listLinkSpecs = [
+    { id: "openRoutingList", field: "routingListId" },
+    { id: "openTrackerList", field: "trackerListId" },
+    { id: "openAuditList", field: "auditListId" },
+  ];
+
+  function clearSharePointLinks(message) {
+    listLinkGeneration++;
+    listLinkSpecs.forEach(function (spec) {
+      var link = byId(spec.id);
+      if (link) { link.hidden = true; link.removeAttribute("href"); }
+    });
+    setText("sharePointLinksInfo", message || "Connect your SharePoint lists in Setup to open them here.");
+    setProp("refreshListLinks", "disabled", !state.site);
+  }
+
+  async function refreshSharePointLinks(token) {
+    if (!byId("sharePointLists")) { return; } // compatible with cached older HTML
+    clearSharePointLinks();
+    var site = state.site, generation = listLinkGeneration;
+    if (!site) { return; }
+    setText("sharePointLinksInfo", "Loading your connected list links…");
+    setProp("refreshListLinks", "disabled", true);
+    try {
+      token = token || await GraphData.getToken();
+      var specs = listLinkSpecs.filter(function (spec) { return site[spec.field]; });
+      var results = await Promise.allSettled(specs.map(async function (spec) {
+        var raw = await GraphData.listWebUrl(token, site.siteId, site[spec.field]);
+        var url = new URL(raw);
+        if (url.protocol !== "https:" || url.username || url.password) { throw new Error("Invalid SharePoint list link."); }
+        if (generation !== listLinkGeneration || state.site !== site) { return; }
+        var link = byId(spec.id);
+        if (link) { link.href = url.href; link.hidden = false; }
+      }));
+      if (generation !== listLinkGeneration || state.site !== site) { return; }
+      var failed = results.filter(function (r) { return r.status === "rejected"; }).length;
+      setText("sharePointLinksInfo", !specs.length ? "Connect your list IDs in Setup first." : failed
+        ? "Some list links couldn't load. Select Refresh links to try again."
+        : "Open these lists in SharePoint to edit them. After changes, reconnect or refresh contacts in the router.");
+    } catch (e) {
+      if (generation === listLinkGeneration) { setText("sharePointLinksInfo", "List links couldn't load. Sign in and select Refresh links to try again."); }
+    } finally {
+      if (generation === listLinkGeneration) { setProp("refreshListLinks", "disabled", false); }
+    }
+  }
+
   // ---------- screens ----------
 
   function show(screen) {
@@ -330,6 +377,7 @@
   }
 
   async function doSignOut() {
+    clearSharePointLinks("Sign in and connect to open your SharePoint lists.");
     // Respond immediately. The previous version awaited a broker handshake
     // before changing anything on screen, which certification saw as the
     // button doing nothing at all.
@@ -393,6 +441,7 @@
     on("saveDraft", "click", saveDraft);
     on("loadDraft", "click", loadDraft);
     on("connectRules", "click", function () { connectRules(false).catch(function () {}); });
+    on("refreshListLinks", "click", function () { refreshSharePointLinks(); });
     on("createLists", "click", createLists);
     on("siteSearchGo", "click", siteSearch);
     on("siteResults", "change", function () {
@@ -400,7 +449,7 @@
       if (picked) {
         setVal("siteUrl", picked);
         saveSettings({ siteUrl: picked });
-        state.site = null;
+        state.site = null; clearSharePointLinks();
       }
     });
 
@@ -489,8 +538,8 @@
         if (k === "distFromDivisions" || k === "distList") {
           resetPublicationConfirmation(); updateDistInfo(); updateSetupChecklist();
         }
-        if (k === "cloud") { GraphData.setCloud(el.value); state.site = null; }
-        if (k === "siteUrl" || k === "routingList" || k === "auditList" || k === "trackerList") { state.site = null; }
+        if (k === "cloud") { GraphData.setCloud(el.value); state.site = null; clearSharePointLinks(); }
+        if (k === "siteUrl" || k === "routingList" || k === "auditList" || k === "trackerList") { state.site = null; clearSharePointLinks(); }
       });
     });
 
@@ -1053,7 +1102,7 @@
         else { el.value = patch[k]; }
       });
       if (patch.cloud) { GraphData.setCloud(patch.cloud); }
-      state.site = null;
+      state.site = null; clearSharePointLinks();
       setStatus("info", "Profile applied — click \"Connect & load routing rules\" to finish.");
     } catch (e) {
       setStatus("error", "That doesn't look like a valid profile code.");
@@ -1444,7 +1493,7 @@
       var site = await GraphData.teamSite(token, groupId);
       byId("siteUrl").value = site.webUrl;
       saveSettings({ siteUrl: site.webUrl });
-      state.site = null;
+      state.site = null; clearSharePointLinks();
       setStatus("info", 'Using the \u201c' + site.name + '\u201d team site \u2014 every member of that team automatically has access to the lists. Now click \u201cCreate my lists.\u201d');
       updateSetupChecklist();
     } catch (e) {
@@ -1711,6 +1760,8 @@
    *  the parameter had gone missing, so every successful connect threw a
    *  ReferenceError on the last line under "use strict". */
   async function connectRules(quiet) {
+    clearSharePointLinks("Connecting your SharePoint lists…");
+    var linkContextVersion = listLinkGeneration;
     invalidateWatchCheck();
     resetPublicationConfirmation();
     byId("connectRules").disabled = true;
@@ -1727,10 +1778,12 @@
         catch (e) { setStatus("error", 'Tracker list "' + trackerName + '" not found — status tracking disabled until it exists.'); }
       }
       var raw = await GraphData.listItems(token, site.siteId, routingListId);
+      if (linkContextVersion !== listLinkGeneration) { throw new Error("The list connection changed. Connect again."); }
       state.rules = raw.map(function (r) { return LrrRouting.ruleFromSharePoint(r.fields || {}, r.id); })
         .filter(function (r) { return r.divisionCode; });
       state._auditCache = null;
       state.site = { siteId: site.siteId, routingListId: routingListId, auditListId: auditListId, trackerListId: trackerListId };
+      refreshSharePointLinks(token);
       byId("rulesInfo").textContent = state.rules.length + " routing rule(s) loaded from " + site.name +
         " (" + state.rules.filter(function (r) { return r.teamsTagId; }).length + " with Teams tags).";
       var qSel = byId("quickDivision");
@@ -1830,7 +1883,7 @@
       var t = String(st.autoDailyTime || byId("autoDailyTime").value || "07:30");
       var parts = t.split(":");
       var now = new Date();
-      var due = new Date(now.getFullYear(), now.getMonth(), now.getDate(), +parts[0] || 7, +parts[1] || 30);
+      var due = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(parts[0]), Number(parts[1]));
       if (now < due) { return; } // not time yet
       if (!useDivisionDistribution(st) && !dailyReportRecipients(st).length) { return; } // not configured
       if (!state.rules.length || useDivisionDistribution(st)) {
