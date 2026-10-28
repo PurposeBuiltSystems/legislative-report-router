@@ -10,10 +10,12 @@ The deployed staff queue requires only the already-used delegated Sites.ReadWrit
 SEPARATE DESIGN/PERMISSION REVIEW: FULL TWO-WAY CONTACT SYNC
 This feature is NOT deployed or enabled. The delegated-only approach is insufficient: Microsoft Graph documents adding a member to an existing tag as application-only.
 
-Proposed requirements:
+Proposed requirements for a custom Graph backend:
 - Delegated TeamMember.Read.All for current-Team email/identity matching.
 - A protected backend service identity with admin-approved APPLICATION TeamworkTag.ReadWrite.All for tag membership additions. Delegated TeamworkTag.ReadWrite alone does not support the required operation.
 - Approved backend hosting, server-held identity/credentials, authenticated API access, explicit coordinator authorization and Team/tag allowlists. Backend app registration/API scope details are not finalized, so there is not yet a complete backend deployment manifest.
+
+Alternative for IT: the Microsoft Teams Power Automate connector has AddMemberToTag and DeleteTagMember actions. An approved, authenticated flow may avoid a custom app-only service. Availability, licensing/DLP, connections and the full sync/approval logic need tenant configuration and validation; no flow has been built.
 
 The permission-request.json is for architecture/permission review, NOT a replacement Entra manifest and NOT an instruction to grant application permissions to the browser-only public client. Preserve existing permissions. Do not include a client secret or app-only token in Teams/Outlook scripts or the ZIP.
 

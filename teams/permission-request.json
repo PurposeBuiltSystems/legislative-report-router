@@ -24,7 +24,16 @@
       "Coordinator authorization and Team/tag allowlists",
       "Administrator consent and live tenant verification"
     ],
-    "correction": "Delegated TeamworkTag.ReadWrite alone cannot add a member to an existing tag."
+    "correction": "Delegated TeamworkTag.ReadWrite alone cannot add a member to an existing tag.",
+    "managedAutomationAlternative": {
+      "connector": "Microsoft Teams Power Automate connector",
+      "operations": [
+        "AddMemberToTag",
+        "DeleteTagMember"
+      ],
+      "status": "Alternative for IT review; not implemented or tenant-validated. May avoid a custom app-only service; depends on tenant connections, licensing/DLP and authenticated approval flow.",
+      "source": "https://learn.microsoft.com/en-us/connectors/teams/"
+    }
   },
   "preserveExistingPermissions": true,
   "source": "https://learn.microsoft.com/en-us/graph/api/teamworktagmember-post?view=graph-rest-1.0"

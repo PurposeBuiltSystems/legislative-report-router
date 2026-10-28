@@ -12,9 +12,9 @@ The Teams ZIP contains its own manifest.json and required icons. It reuses the e
 
 The current permission-free matching/additive refresh is not full two-way tag membership synchronization. Microsoft Graph documents **adding a member to an existing Teams tag as unsupported with delegated work/school permissions**. That operation requires the **TeamworkTag.ReadWrite.All application permission**. Delegated TeamworkTag.ReadWrite supports other tag operations, including documented removal, but does not by itself enable the required additions.
 
-Therefore a revised Outlook manifest, an additional delegated-consent checkbox, or the Teams ZIP alone cannot enable full synchronization. There is no client credential in the browser package, and no application permission or tenant policy has been changed.
+Therefore a revised Outlook manifest, an additional delegated-consent checkbox, or the Teams ZIP alone cannot enable full synchronization through the custom browser-only Graph implementation. There is no client credential in the browser package, and no application permission or tenant policy has been changed.
 
-The full-sync design needs the following separate review before implementation/deployment:
+The custom Graph backend design needs the following separate review before implementation/deployment:
 
 | Component | Required change |
 | --- | --- |
@@ -26,6 +26,10 @@ The full-sync design needs the following separate review before implementation/d
 Microsoft Graph resource app ID is `00000003-0000-0000-c000-000000000000`. Preserve all existing permissions; the accompanying permission-request.json is a **review request**, not a replacement Entra manifest and not an authorization to grant application access. The publisher/registration owner handles registration changes as needed; the organization's authorized administrator approves tenant access. Do not grant an application permission to a browser-only SPA and assume it can then perform app-only operations.
 
 The membership-comparison and preview prototype is preserved privately, but it is **not deployed or enabled**. No live tenant membership or consent tests have been performed. The production router retains its existing matching/additive refresh; the staff queue remains usable independently of full sync.
+
+## Managed automation alternative for IT review
+
+Microsoft's [Teams Power Automate connector](https://learn.microsoft.com/en-us/connectors/teams/) exposes **Add a member to a team tag (AddMemberToTag)** and **Delete a member from a team tag (DeleteTagMember)**. An approved flow using that connector is another implementation route and may avoid creating a custom Graph app-only service. Its availability, connections, licensing/DLP rules, coordinator authorization and full comparison/approval flow still need to be configured and tested in the tenant. No such flow has been created, so this is an option for review rather than a working replacement.
 
 ## Intended full-sync behavior for review
 
