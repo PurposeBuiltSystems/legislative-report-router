@@ -28,4 +28,10 @@ def build():
         for name in ['manifest.json','color.png','outline.png']:
             info=zipfile.ZipInfo(name,date_time=(2026,10,28,0,0,0));info.compress_type=zipfile.ZIP_DEFLATED;info.external_attr=0o100644<<16;archive.writestr(info,(folder/name).read_bytes())
     print(package)
+    handoff=folder/'Legislative-Router-Admin-Handoff.zip'
+    with zipfile.ZipFile(handoff,'w',compression=zipfile.ZIP_DEFLATED) as archive:
+        entries={'README.txt':folder/'admin-request.txt','permission-request.json':folder/'permission-request.json','Legislative-Work-Queue.zip':package,'Contact-sync-requirements.md':ROOT/'docs/contact-sync-admin.md'}
+        for name,source in entries.items():
+            info=zipfile.ZipInfo(name,date_time=(2026,10,28,0,0,0));info.compress_type=zipfile.ZIP_DEFLATED;info.external_attr=0o100644<<16;archive.writestr(info,source.read_bytes())
+    print(handoff)
 if __name__=='__main__':build()

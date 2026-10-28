@@ -1,0 +1,31 @@
+{
+  "status": "Architecture/permission review only. Full two-way sync is NOT deployed or enabled. This is not a replacement Entra or Teams manifest.",
+  "existingPublicClientId": "0860a653-ddbd-4455-8bff-affda2a8879f",
+  "deployedStaffQueue": {
+    "additionalPermissions": [],
+    "existingDelegatedScope": "Sites.ReadWrite.All"
+  },
+  "proposedContactSync": {
+    "graphResourceAppId": "00000003-0000-0000-c000-000000000000",
+    "clientIdentityMatching": {
+      "permissionType": "Delegated",
+      "scope": "TeamMember.Read.All",
+      "id": "2497278c-d82d-46a2-b1ce-39d4cdde5570"
+    },
+    "backendTagMembershipWrites": {
+      "permissionType": "Application",
+      "role": "TeamworkTag.ReadWrite.All",
+      "id": "a3371ca5-911d-46d6-901c-42c8c7a937d8",
+      "targetIdentity": "Protected backend service identity; hosting, app registration and authenticated API scope not finalized. Do not grant this to a browser-only SPA and assume app-only requests can run there."
+    },
+    "unresolvedDeploymentRequirements": [
+      "Secure backend hosting and identity",
+      "Authenticated API scope/registration",
+      "Coordinator authorization and Team/tag allowlists",
+      "Administrator consent and live tenant verification"
+    ],
+    "correction": "Delegated TeamworkTag.ReadWrite alone cannot add a member to an existing tag."
+  },
+  "preserveExistingPermissions": true,
+  "source": "https://learn.microsoft.com/en-us/graph/api/teamworktagmember-post?view=graph-rest-1.0"
+}
