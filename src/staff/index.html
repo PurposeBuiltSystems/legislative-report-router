@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Legislative work queue</title>
+  <link rel="stylesheet" href="../taskpane/taskpane.css?v=20261028c" />
+  <link rel="stylesheet" href="staff.css?v=20261028c" />
+  <script src="https://res.cdn.office.net/teams-js/2.35.0/js/MicrosoftTeams.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js"></script>
+</head>
+<body>
+  <header class="staff-head"><div><span class="staff-eyebrow">LEGISLATIVE SESSION</span><h1>Division work queue</h1><p>Comments, fiscal requests and reviews in one place.</p></div><button id="staffSignOut" type="button" hidden>Sign out</button></header>
+  <main>
+    <p id="staffStatus" role="status" aria-live="polite">Connecting to Microsoft Teams…</p>
+    <aside id="staffDemo" class="options" hidden><strong>Practice workspace — sample data only</strong><p>Changes stay in this page and disappear when it is reloaded. No sign-in, messages, mentions or email.</p></aside>
+    <section id="staffSetup" class="options" hidden>
+      <h2>Connect this channel's queue</h2>
+      <p>In the Outlook router, connect SharePoint and open Work queue → Teams setup. Copy its connection code here once for this tab.</p>
+      <label>Connection code <textarea id="staffCode" rows="4" spellcheck="false"></textarea></label>
+      <label>Tab name <input id="staffTabName" value="Legislative work" maxlength="128" /></label>
+      <label>Default session <input id="staffSession" placeholder="e.g. 2026" maxlength="120" /></label>
+      <label>Default division (optional) <input id="staffDivision" placeholder="All divisions" maxlength="30" /></label>
+      <p id="staffSetupStatus" role="status">Paste a connection code to enable the Teams Save button.</p>
+    </section>
+    <section id="staffQueue" hidden><div id="staffWorkflowHost"></div></section>
+    <section id="staffInstall" class="options" hidden><h2>Add the queue to Teams</h2><p>Install the Legislative Work Queue app package and add it as a tab in your legislative channel. Your organization may require its Teams administrator to allow custom apps.</p><p><a href="../../teams/Legislative-Work-Queue.zip" download>Download Teams app package</a> · <a href="../../teams-install.html">Installation instructions</a> · <a href="?demo=1">Try the practice workspace</a></p></section>
+  </main>
+  <script src="../staff-config.js?v=20261028c"></script>
+  <script src="../workflow.js?v=20261028c"></script>
+  <script src="../workflow-store.js?v=20261028c"></script>
+  <script src="../workflow-ui.js?v=20261028c"></script>
+  <script src="../graph.js?v=20261028c"></script>
+  <script src="demo.js?v=20261028c"></script>
+  <script src="staff.js?v=20261028c"></script>
+</body>
+</html>

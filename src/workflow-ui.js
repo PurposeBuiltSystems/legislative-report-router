@@ -1,12 +1,12 @@
 /* Work queue UI. All writes are explicit; no Teams/email publication is performed here. */
-/* global LrrWorkflow, LrrWorkflowStore, document */
+/* global LrrWorkflow, LrrWorkflowStore, LrrStaffConfig, document */
 (function(root){
   "use strict";
   function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
   function uid(){return crypto.randomUUID();}
   function mount(host,context){
-    var events=[], selected="", loadedSite=null, actor="", busy=false, writable=false, epoch=0;
-    host.innerHTML='<h3>Division work queue</h3><p>Track comments and fiscal requests separately. Approvals apply to the registered response version. Changes here do not send messages or submit documents to LSA.</p><div class="actions-row"><button id="wfLoad" type="button" class="primary">Load shared work</button><button id="wfNew" type="button" disabled>New request</button></div><p id="wfInfo" role="status" aria-live="polite">Connect SharePoint in Setup, then load the queue.</p><div class="actions-row"><label>Division <select id="wfDivision"><option value="">All divisions</option></select></label><label>Request type <select id="wfType"><option value="">All types</option><option>Comment</option><option>Fiscal data</option></select></label><label>Stage <select id="wfStage"><option value="">All stages</option><option>Division work pending</option><option>Assigned</option><option>Drafting</option><option>Review requested</option><option>Changes requested</option><option>Director review</option><option>Division approved</option><option>Division review complete</option><option>CFO review</option><option>CFO approved</option><option>Submitted to LSA</option></select></label><label>Due <select id="wfDue"><option value="">Any deadline</option><option value="soon">Due within 2 days / overdue</option><option value="missing">Needs confirmation</option></select></label></div><div id="wfQueue"></div><div id="wfDetail"></div>';
+    var events=[], selected="", loadedSite=null, actor="", busy=false, writable=false, epoch=0, defaultsUsed=false, editing=false;
+    host.innerHTML='<h3>Division work queue</h3><p>Track comments and fiscal requests separately. Approvals apply to the registered response version. Changes here do not send messages or submit documents to LSA.</p><div class="actions-row"><button id="wfLoad" type="button" class="primary">Load shared work</button><button id="wfNew" type="button" disabled>New request</button><button id="wfDiscard" type="button" hidden>Discard edits</button></div><p id="wfInfo" role="status" aria-live="polite">Connect SharePoint in Setup, then load the queue.</p><div class="actions-row"><label>Session <select id="wfSessionFilter"><option value="">All sessions</option></select></label><label>Division <select id="wfDivision"><option value="">All divisions</option></select></label><label>Request type <select id="wfType"><option value="">All types</option><option>Comment</option><option>Fiscal data</option></select></label><label>Stage <select id="wfStage"><option value="">All stages</option><option>Division work pending</option><option>Assigned</option><option>Drafting</option><option>Review requested</option><option>Changes requested</option><option>Director review</option><option>Division approved</option><option>Division review complete</option><option>CFO review</option><option>CFO approved</option><option>Submitted to LSA</option></select></label><label>Due <select id="wfDue"><option value="">Any deadline</option><option value="soon">Due within 2 days / overdue</option><option value="missing">Needs confirmation</option></select></label></div><label><input type="checkbox" id="wfMine" /> My assigned work</label><div id="wfTeamsSetup"></div><div id="wfQueue"></div><div id="wfDetail"></div>';
     function el(id){return host.querySelector('#'+id);}
     function val(id){var n=el(id);return n?n.value:"";}
     function info(message){el('wfInfo').textContent=message;}
@@ -23,18 +23,20 @@
     function busyState(v){busy=v;host.querySelectorAll('button').forEach(function(b){b.disabled=v;});el('wfNew').disabled=v||!writable;}
     function validSite(){if(!writable||loadedSite!==context.site()){throw new Error("Connection changed or queue is stale. Load shared work again.");}return loadedSite;}
     async function load(){
-      if(busy){return;}var generation=++epoch;busyState(true);writable=false;el('wfDetail').innerHTML='';
+      if(busy){return;}if(editing){info("Save or discard your edits before refreshing shared work.");return;}var generation=++epoch;busyState(true);writable=false;el('wfDetail').innerHTML='';
       try{var s=site(), token=await context.graph.getToken(), a=identity(token), result=await LrrWorkflowStore.client(context.graph,s).read(token);
         if(generation!==epoch||s!==context.site()||identity(token)!==a){throw new Error("Connection or account changed while loading. Load again.");}
         LrrWorkflowStore.requests(result);events=result;loadedSite=s;actor=a;writable=true;
-        var previous=val('wfDivision'), divisions=Array.from(new Set(all().flatMap(function(r){return r.config.divisions.map(function(d){return d.code;});}))).sort();
+        var previous=val('wfDivision'), previousSession=val('wfSessionFilter'), divisions=Array.from(new Set(all().flatMap(function(r){return r.config.divisions.map(function(d){return d.code;});}))).sort();
         el('wfDivision').innerHTML='<option value="">All divisions</option>'+divisions.map(function(d){return '<option>'+esc(d)+'</option>';}).join('');el('wfDivision').value=previous;
-        info('Loaded '+all().length+' request(s). Signed in as '+actor+'. Due-date reminders below use the confirmed calendar date.');render();
+        var sessions=Array.from(new Set(all().map(function(r){return r.config.session;}))).sort();el('wfSessionFilter').innerHTML='<option value="">All sessions</option>'+sessions.map(function(name){return '<option>'+esc(name)+'</option>';}).join('');el('wfSessionFilter').value=previousSession;
+        if(!defaultsUsed){var defaults=context.defaults||{};if(divisions.indexOf(defaults.division)>=0){el('wfDivision').value=defaults.division;}if(sessions.indexOf(defaults.session)>=0){el('wfSessionFilter').value=defaults.session;}defaultsUsed=true;}
+        info('Loaded '+all().length+' request(s) at '+new Date().toLocaleTimeString()+'. Signed in as '+actor+'. Due-date reminders below use the confirmed calendar date.');render();
       }catch(e){writable=false;el('wfQueue').textContent='Shared queue unavailable. No workflow changes can be saved.';info(e.message);}finally{busyState(false);}
     }
     async function save(kind,input){
       if(busy){return;}var s;try{s=validSite();}catch(e){info(e.message);return;}
-      var generation=epoch;
+      var generation=epoch, committing=false;
       var old=current(), expected=old?old.revision:'', request=old?old.id:uid();input.revision=expected;
       busyState(true);
       try{var token=await context.graph.getToken(), a=identity(token);if(a!==actor||s!==context.site()){throw new Error("Account or site changed. Load shared work again.");}
@@ -42,18 +44,18 @@
         if(LrrWorkflow.revision(related)!==expected){throw new Error("Shared work changed. Load again and review the latest version.");}
         var event=LrrWorkflow.plan(related,kind,input,a,{id:uid(),request:request,at:new Date().toISOString()});
         var guarded={listItems:async function(t,siteId,listId,top){if(generation!==epoch||s!==context.site()||identity(t)!==a){throw new Error('Connection or account changed. Reload shared work.');}return context.graph.listItems(t,siteId,listId,top);},addListItem:async function(t,siteId,listId,fields){if(generation!==epoch||s!==context.site()||identity(t)!==a){throw new Error('Connection or account changed. Reload shared work.');}return context.graph.addListItem(t,siteId,listId,fields);}};
-        var result=await LrrWorkflowStore.client(guarded,s).append(token,event);
+        committing=true;var result=await LrrWorkflowStore.client(guarded,s).append(token,event);
         if(generation!==epoch||s!==context.site()){throw new Error("Connection changed. The save may have completed on the previous site; reload that site to check.");}
         events=result;selected=request;render();info('Saved '+kind+'. No Teams messages or emails were sent.');
-      }catch(e){writable=false;info(e.message+' Load shared work before retrying; check history if the save result was uncertain.');}finally{busyState(false);}
+      }catch(e){if(committing){writable=false;}info(e.message+' Load shared work before retrying; check history if the save result was uncertain.');}finally{busyState(false);}
     }
-    function render(){
-      var rows=all(), div=val('wfDivision'), type=val('wfType'), stage=val('wfStage'), due=val('wfDue'), now=today();
-      rows=rows.filter(function(s){var day=s.config.due?Math.round((Date.parse(s.config.due+'T00:00:00Z')-Date.parse(now+'T00:00:00Z'))/86400000):null;return (!div||s.config.divisions.some(function(r){return r.code===div;}))&&(!type||s.config.type===type)&&(!stage||s.stage===stage||s.config.divisions.some(function(r){return (!div||r.code===div)&&s.divisions[r.code].stage===stage;}))&&(!due||(due==='missing'&&!s.config.due)||(due==='soon'&&day!==null&&day<=2&&!s.submitted));});
+    function render(preserveDetail){
+      var rows=all(), div=val('wfDivision'), type=val('wfType'), stage=val('wfStage'), due=val('wfDue'), session=val('wfSessionFilter'), mine=el('wfMine').checked, now=today();
+      rows=rows.filter(function(s){var day=s.config.due?Math.round((Date.parse(s.config.due+'T00:00:00Z')-Date.parse(now+'T00:00:00Z'))/86400000):null;return (!session||s.config.session===session)&&(!mine||s.config.cfo===actor||s.config.submitter===actor||s.config.divisions.some(function(r){return r.coordinator===actor||r.director===actor||r.reviewers.indexOf(actor)>=0;}))&&(!div||s.config.divisions.some(function(r){return r.code===div;}))&&(!type||s.config.type===type)&&(!stage||s.stage===stage||s.config.divisions.some(function(r){return (!div||r.code===div)&&s.divisions[r.code].stage===stage;}))&&(!due||(due==='missing'&&!s.config.due)||(due==='soon'&&day!==null&&day<=2&&!s.submitted));});
       rows.sort(function(a,b){return (a.config.due||'9999').localeCompare(b.config.due||'9999');});
       el('wfQueue').innerHTML=rows.length?rows.map(function(s,i){return '<article class="options"><strong>'+esc(s.config.bill)+' · '+esc(s.config.type)+' · '+esc(s.config.label)+'</strong><p>'+esc(s.config.divisions.map(function(d){return d.code;}).join(', '))+' · '+esc(s.stage)+' · '+esc(LrrWorkflow.due(s,now))+' · Legislative: '+esc(s.legislative)+'</p><button type="button" data-work="'+i+'">Open request</button></article>';}).join(''):'<p>No requests match this view. Create a separate request for each comment or fiscal-data cycle.</p>';
-      host.querySelectorAll('[data-work]').forEach(function(b){b.addEventListener('click',function(){selected=rows[Number(b.getAttribute('data-work'))].id;detail();});});
-      if(selected&&current()){detail();}else{el('wfDetail').innerHTML='';}
+      host.querySelectorAll('[data-work]').forEach(function(b){b.addEventListener('click',function(){if(editing){info('Save or discard your edits before opening another request.');return;}selected=rows[Number(b.getAttribute('data-work'))].id;detail();});});
+      if(!preserveDetail){if(selected&&current()){detail();}else{el('wfDetail').innerHTML='';}}
     }
     function configForm(s){
       var c=s?s.config:{bill:'',assembly:'91',session:'',label:'',type:'Comment',due:'',dueSource:'',source:'',thread:'',related:'',cfo:'',submitter:actor,divisions:[]};
@@ -61,9 +63,9 @@
     }
     function configInput(){return {bill:val('wfBill'),assembly:val('wfAssembly'),session:val('wfSession'),label:val('wfLabel'),type:val('wfKind'),due:val('wfDeadline'),dueSource:val('wfDeadlineSource'),source:val('wfSource'),thread:val('wfThread'),related:val('wfRelated'),cfo:val('wfCfo'),submitter:val('wfSubmitter'),divisions:val('wfAssignments').split(/\r?\n/).filter(function(x){return x.trim();}).map(function(line){var a=line.split('|').map(function(x){return x.trim();});if(a.length!==4){throw new Error('Each assignment line needs four fields separated by |.');}return {code:a[0],coordinator:a[1],director:a[2],reviewers:a[3]?a[3].split(',').map(function(x){return x.trim();}):[]};})};}
     function bindConfig(s){bind('wfSaveConfig',function(){try{save(s?'config':'create',{config:configInput()});}catch(e){info(e.message);}});}
-    function newRequest(){if(busy||!writable){return;}selected='';el('wfDetail').innerHTML=configForm(null);bindConfig(null);}
+    function newRequest(){if(busy||!writable){return;}if(editing){info('Save or discard your edits before creating another request.');return;}selected='';el('wfDetail').innerHTML=configForm(null);bindConfig(null);}
     function detail(){
-      var s=current();if(!s){return;}var c=s.config;
+      var s=current();if(!s){return;}editing=false;el('wfDiscard').hidden=true;var c=s.config;
       var html='<hr><h3>'+esc(c.bill)+' — '+esc(c.label)+'</h3><p>'+esc(c.assembly)+' / '+esc(c.session)+' · '+esc(s.stage)+' · '+esc(LrrWorkflow.due(s,today()))+'</p><p>'+link(c.source,'Original request')+' '+link(c.thread,'Open bill conversation in Teams')+'</p>';
       html+='<p>Legislative progress: '+esc(s.legislative)+' (separate from this request).</p>';
       if(c.related){html+='<p>Related bills: '+esc(c.related)+'</p>';}
@@ -77,7 +79,7 @@
       html+='<h4>Record a workflow action</h4><label>Division <select id="wfActionDivision">'+c.divisions.map(function(r){return '<option>'+esc(r.code)+'</option>';}).join('')+'</select></label><label>Action <select id="wfAction"><option value="artifact">Register draft / revised response version</option><option value="start">Start drafting</option><option value="review">Request review of registered response</option><option value="changes">Request changes</option><option value="coordinator">Coordinator: consolidate response</option><option value="director">Director: approve current response</option>'+(c.type==='Fiscal data'?'<option value="cfo">CFO: approve all division responses</option><option value="submitted">Record completed LSA submission</option>':'')+'<option value="note">Add FYI / consultation note</option><option value="legislation">Record legislative progress</option></select></label><div id="wfActionFields"></div><label><input type="checkbox" id="wfConfirm" /> I reviewed this action and the current document version(s).</label>'+button('wfSaveAction','Save action')+'<h4>History</h4><p>Intent notes and filename labels do not constitute assignment or approval.</p><div id="wfEvents"></div>';
       el('wfDetail').innerHTML=html;if(s.owner===actor){bindConfig(s);}
       el('wfEvents').innerHTML=s.events.slice().reverse().map(function(e){return '<details><summary>'+esc(e.at)+' · '+esc(e.kind)+(s.ignoredIds.indexOf(e.id)>=0?' [not applied: concurrent edit]':'')+' · '+esc(e.division)+' · '+esc(e.actor)+'</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(JSON.stringify(e.data,null,2))+'</pre></details>';}).join('');
-      el('wfAction').addEventListener('change',actionFields);el('wfActionDivision').addEventListener('change',actionFields);actionFields();
+      var actionKind=val('wfAction'),actionDivision=val('wfActionDivision');function changeAction(){if(editing){el('wfAction').value=actionKind;el('wfActionDivision').value=actionDivision;info('Save or discard your response edits before changing actions.');return;}actionKind=val('wfAction');actionDivision=val('wfActionDivision');actionFields();}el('wfAction').addEventListener('change',changeAction);el('wfActionDivision').addEventListener('change',changeAction);actionFields();
       bind('wfSaveAction',function(){try{if(!el('wfConfirm').checked){info('Review and confirm this action first.');return;}save(val('wfAction'),{division:val('wfActionDivision'),version:val('wfVersion'),links:val('wfDocs'),note:val('wfNote'),financialText:val('wfFinance'),narrative:{summary:val('wfSummary'),background:val('wfBackground'),assumptions:val('wfAssumptions'),impact:val('wfImpact'),sources:val('wfSources')},intent:val('wfIntent'),evidence:val('wfEvidence'),submittedAt:val('wfSubmittedAt')?new Date(val('wfSubmittedAt')).toISOString():'',status:val('wfLegislative'),date:val('wfEventDate')});}catch(e){info(e.message);}});
     }
     function actionFields(){
@@ -92,8 +94,14 @@
       else {html='<p>Current response: '+esc(v.artifact?v.artifact.data.version:'No registered response')+'. '+(kind==='cfo'?'Requires current director approvals for every required division.':kind==='director'?'Requires coordinator consolidation of this exact version.':'')+'</p>';}
       el('wfActionFields').innerHTML=html;
     }
-    bind('wfLoad',load);bind('wfNew',newRequest);['wfDivision','wfType','wfStage','wfDue'].forEach(function(id){el(id).addEventListener('change',render);});
-    return {load:load,invalidate:function(){epoch++;writable=false;loadedSite=null;events=[];selected='';actor='';el('wfQueue').innerHTML='';el('wfDetail').innerHTML='';el('wfNew').disabled=true;info('Connection changed. Load shared work again.');}};
+    if(!context.staff){
+      el('wfTeamsSetup').innerHTML='<details><summary>Teams setup</summary><p>Add the staff queue as a Teams channel tab. Copy this connection code into the tab setup once.</p>'+button('wfTeamsCode','Show Teams connection code')+'<textarea id="wfTeamsCodeValue" rows="3" readonly hidden aria-label="Teams connection code"></textarea><p><a href="../../teams/Legislative-Work-Queue.zip" download>Download Teams app package</a> · <a href="../../teams-install.html" target="_blank" rel="noopener noreferrer">Installation instructions</a></p></details>';
+      bind('wfTeamsCode',function(){try{var s=site();if(typeof LrrStaffConfig==='undefined'){throw new Error('Reload the router to load Teams setup tools.');}el('wfTeamsCodeValue').value=LrrStaffConfig.encode({cloud:context.cloud?context.cloud():'commercial',siteId:s.siteId,auditListId:s.auditListId,session:val('wfSessionFilter'),division:val('wfDivision')});el('wfTeamsCodeValue').hidden=false;el('wfTeamsCodeValue').select();}catch(e){info(e.message);}});
+    }
+    host.addEventListener('input',function(event){if(el('wfDetail').contains(event.target)&&['wfAction','wfActionDivision','wfConfirm'].indexOf(event.target.id)<0){editing=true;el('wfDiscard').hidden=false;if(el('wfConfirm')){el('wfConfirm').checked=false;}}});
+    bind('wfDiscard',function(){editing=false;el('wfDiscard').hidden=true;if(current()){detail();}else{newRequest();}info('Edits discarded. Load shared work to refresh the saved record.');});
+    bind('wfLoad',load);bind('wfNew',newRequest);['wfSessionFilter','wfDivision','wfType','wfStage','wfDue','wfMine'].forEach(function(id){el(id).addEventListener('change',function(){render(true);});});
+    return {load:load,invalidate:function(){epoch++;editing=false;el('wfDiscard').hidden=true;writable=false;loadedSite=null;events=[];selected='';actor='';el('wfQueue').innerHTML='';el('wfDetail').innerHTML='';el('wfNew').disabled=true;if(el('wfTeamsCodeValue')){el('wfTeamsCodeValue').value='';el('wfTeamsCodeValue').hidden=true;}info('Connection changed. Load shared work again.');}};
   }
   root.LrrWorkflowUI={mount:mount};
 })(typeof self!=="undefined"?self:this);

@@ -9,7 +9,7 @@
 /* global Office, GraphData, document,
    LrrScreening, LrrParser, LrrRouting, LrrTeams, LrrDocx, LrrXlsx, LrrPresets, LrrProvision,
    LrrChapters, LrrContacts, LrrFeed, LrrReportGen, LrrDeadline, LrrFiscal, LrrBillStatus, LrrHarvest,
-   LrrInvite, LrrRecipients, LrrBudget, LrrWatch, LrrAmendments, LrrWorkflow, LrrWorkflowStore, LrrWorkflowUI, window */
+   LrrInvite, LrrRecipients, LrrBudget, LrrWatch, LrrAmendments, LrrWorkflow, LrrWorkflowStore, LrrWorkflowUI, LrrStaffConfig, window */
 (function () {
   "use strict";
 
@@ -365,10 +365,10 @@
     try {
       if (!workflowModulesPromise) {
         workflowModulesPromise = (async function () {
-          var modules = [[typeof LrrWorkflow !== "undefined", "../workflow.js?v=20261028b"],
-            [typeof LrrWorkflowStore !== "undefined", "../workflow-store.js?v=20261028b"],
-            [typeof LrrWorkflowUI !== "undefined", "../workflow-ui.js?v=20261028b"],
-            [typeof GraphData.authenticatedAccount === "function", "../graph.js?v=20261028b"]];
+          var modules = [[typeof LrrStaffConfig !== "undefined", "../staff-config.js?v=20261028c"], [typeof LrrWorkflow !== "undefined", "../workflow.js?v=20261028c"],
+            [typeof LrrWorkflowStore !== "undefined", "../workflow-store.js?v=20261028c"],
+            [typeof LrrWorkflowUI !== "undefined", "../workflow-ui.js?v=20261028c"],
+            [typeof GraphData.authenticatedAccount === "function", "../graph.js?v=20261028c"]];
           for (var i = 0; i < modules.length; i++) {
             if (modules[i][0]) { continue; }
             await new Promise(function (resolve, reject) {
@@ -384,7 +384,7 @@
       await workflowModulesPromise;
       if (!workflowView) {
         GraphData.setCloud(val("cloud") || "commercial");
-        workflowView = LrrWorkflowUI.mount(byId("workflowHost"), { graph: GraphData, site: function () { return state.site; } });
+        workflowView = LrrWorkflowUI.mount(byId("workflowHost"), { graph: GraphData, site: function () { return state.site; }, cloud: function () { return val("cloud") || "commercial"; } });
       }
     } catch (e) {
       var host = byId("workflowHost"); host.textContent = e.message;

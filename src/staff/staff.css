@@ -1,0 +1,26 @@
+body { margin: 0 auto; padding: 0 28px 36px; max-width: 1440px; font-size: 15px; }
+.staff-head { display:flex; justify-content:space-between; align-items:center; gap:24px; border-bottom:1px solid var(--line); padding:28px 0 20px; margin-bottom:20px; }
+.staff-head h1 { font-size:28px; letter-spacing:-.02em; margin:6px 0; }
+.staff-head p { margin:4px 0; color:var(--muted); }
+.staff-eyebrow { color:var(--accent); font-size:11px; font-weight:700; letter-spacing:.12em; }
+#staffSignOut { flex-shrink:0; }
+#staffWorkflowHost > h3, #staffWorkflowHost > h3 + p { display:none; }
+#wfQueue { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; margin:20px 0; }
+#wfQueue .options { margin:0; display:flex; flex-direction:column; align-items:flex-start; padding:20px; }
+#wfQueue .options strong { font-size:16px; }
+#wfQueue .options button { margin-top:auto; }
+#wfDetail { border-top:1px solid var(--line); padding-top:20px; }
+#wfDetail > article { display:inline-block; vertical-align:top; width:calc(50% - 18px); margin-right:14px; }
+.actions-row { gap:12px; flex-wrap:wrap; }
+.actions-row label { min-width:150px; flex:1; }
+input, select, textarea { font-size:14px; }
+label { margin:12px 0; }
+textarea { width:100%; }
+#staffSetup { max-width:700px; }
+#staffDemo { border-left:4px solid var(--warn); }
+#staffDemo p { margin-bottom:0; }
+@media(max-width:640px) { body{padding:0 16px 28px;} .staff-head{align-items:flex-start;} .staff-head h1{font-size:23px;} #wfDetail > article{width:100%;margin-right:0;} #wfQueue{grid-template-columns:1fr;} }
+html[data-theme="dark"] { color-scheme:dark; --fg:#f3f2f1; --muted:#b9b7b5; --accent:#70b5ff; --line:#454545; --bg:#1f1f1f; --card:#292929; --bg-soft:#292929; }
+html[data-theme="contrast"] { color-scheme:dark; --fg:#fff; --muted:#fff; --accent:#ffff00; --line:#fff; --bg:#000; --card:#000; --bg-soft:#000; }
+
+html[data-theme="default"] { color-scheme:light; --fg:#242424; --muted:#616161; --accent:#0f6cbd; --line:#e3e1df; --bg:#fff; --card:#fff; --bg-soft:#f6f5f4; }

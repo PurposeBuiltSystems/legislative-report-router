@@ -1,0 +1,44 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.22/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.22",
+  "version": "1.0.0",
+  "id": "74e709b9-702e-56ce-b201-71d4d8c0e696",
+  "developer": {
+    "name": "PurposeBuilt Systems LLC",
+    "websiteUrl": "https://purposebuiltsystems.github.io/legislative-report-router/",
+    "privacyUrl": "https://purposebuiltsystems.github.io/legislative-report-router/privacy-policy.html",
+    "termsOfUseUrl": "https://purposebuiltsystems.github.io/legislative-report-router/terms.html"
+  },
+  "name": {
+    "short": "Legislative Work Queue",
+    "full": "Legislative Report Router \u2014 Division Work Queue"
+  },
+  "description": {
+    "short": "Review comments and fiscal requests by division, stage and deadline.",
+    "full": "A shared legislative work queue for Teams channel members. Filter by session, division, comment or fiscal request, review stage, deadline and your assignments. Register response versions and record coordinator, director and CFO review using the same SharePoint audit list as the Outlook Legislative Report Router. A coordinator configures the channel tab once with a connection code from the router. No Outlook add-in is required for staff. Uses the existing Microsoft Entra app registration and SharePoint permission. Does not send Teams notifications, email or submit to LSA."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#0F6CBD",
+  "configurableTabs": [
+    {
+      "configurationUrl": "https://purposebuiltsystems.github.io/legislative-report-router/src/staff/index.html?configure=1",
+      "canUpdateConfiguration": true,
+      "scopes": [
+        "team"
+      ],
+      "context": [
+        "channelTab"
+      ]
+    }
+  ],
+  "validDomains": [
+    "purposebuiltsystems.github.io"
+  ],
+  "webApplicationInfo": {
+    "id": "0860a653-ddbd-4455-8bff-affda2a8879f"
+  },
+  "defaultInstallScope": "team"
+}

@@ -42,6 +42,7 @@
   var cloudKey = "commercial";
   var pcaPromise = null;
   var workflowSession = null;
+  var workflowEpoch = 0;
   function rememberSession(result) {
     workflowSession = result.account && result.account.username ? { token: result.accessToken, username: result.account.username } : null;
     return result.accessToken;
@@ -49,7 +50,7 @@
   function authenticatedAccount(token) { return !signedOut && workflowSession && workflowSession.token === token ? workflowSession.username : null; }
 
   function setCloud(key) {
-    if (CLOUDS[key] && key !== cloudKey) { cloudKey = key; pcaPromise = null; workflowSession = null; }
+    if (CLOUDS[key] && key !== cloudKey) { cloudKey = key; pcaPromise = null; workflowSession = null; workflowEpoch++; }
   }
 
   function graphBase() { return CLOUDS[cloudKey].graph + "/v1.0"; }
@@ -99,6 +100,25 @@
     }
   }
 
+  /** Staff Teams tab: same app registration, only the existing SharePoint scope. */
+  async function getWorkflowToken() {
+    var epoch = workflowEpoch;
+    function check() { if (epoch !== workflowEpoch) { throw new Error("Sign-in cancelled because the connection changed."); } }
+    var pca = await withTimeout(getPca(), 20000, "Sign-in did not start. Reload this Teams tab and try again.");
+    check();
+    var result;
+    try {
+      if (signedOut) { throw new Error("Signed out"); }
+      result = await withTimeout(pca.acquireTokenSilent({ scopes: ["Sites.ReadWrite.All"] }), 20000, "Silent sign-in timed out.");
+    } catch (e) {
+      check();
+      result = await withTimeout(pca.acquireTokenPopup({ scopes: ["Sites.ReadWrite.All"] }), 120000, "Sign-in did not finish. Complete the Microsoft sign-in window, then try again.");
+    }
+    check();
+    setSignedOut(false);
+    return rememberSession(result);
+  }
+
   // --- add-in sign-out state -------------------------------------------
   //
   // Certification round 2 rejected the first attempt: "after clicking sign-out
@@ -146,6 +166,7 @@
   function signOut() {
     setSignedOut(true);
     workflowSession = null;
+    workflowEpoch++;
     var pending = pcaPromise;      // only clear what already exists; never start a handshake here
     pcaPromise = null;
     if (!pending) { return Promise.resolve(true); }
@@ -545,6 +566,7 @@
     getListCreateToken: getListCreateToken,
     resolveSite: resolveSite,
     authenticatedAccount: authenticatedAccount,
+    getWorkflowToken: getWorkflowToken,
     trackerWebUrl: trackerWebUrl,
     listWebUrl: trackerWebUrl,
     publishBudgetPage: publishBudgetPage,

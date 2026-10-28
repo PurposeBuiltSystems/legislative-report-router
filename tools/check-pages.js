@@ -43,6 +43,7 @@ const CDN_GLOBALS = [
   [/office\.js/i, ["Office", "OfficeRuntime", "OfficeExtension"]],
   [/msal-browser/i, ["msal"]],
   [/jszip/i, ["JSZip"]],
+  [/teams-js\//i, ["microsoftTeams"]],
 ];
 
 function walk(dir, out) {

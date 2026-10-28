@@ -103,3 +103,10 @@ Hide unchanged filing versions marked reviewed uses these shared fingerprints in
 Amendments carry separate parent-bill context from the same assembly's bill feed or a bounded mirrored text excerpt. Parent text may be fetched even if the parent was filed before the amendment's watch window. Context and source links appear in Filings, Review, Teams posts, targeted emails and generated reports. Missing context is labeled; an introduced-bill excerpt is not presented as a summary of amendment changes. No new manifest, permission or list schema is required.
 
 When a changed filing is already in Review, routing it refreshes its source text/context without creating another bill row. A coordinator-edited brief is preserved, the latest feed summary is shown separately, and a new review confirmation is required. Watch records are excluded from the Publish history display. Legacy bill-number/draft history does not suppress a new version; establish exact-version checkpoints by marking the previously reviewed selections once.
+
+
+## Staff work queue in Teams
+
+The staff channel tab shares the router's append-only workflow records in the existing audit list. It uses the same Entra registration and broker domain, and requests only the existing Sites.ReadWrite.All delegated scope. It requests no mail, channel-message or directory scopes, no application permission and no client secret. The separate Teams app package declares a configurable channel tab and the existing webApplicationInfo client ID; it does not replace the Outlook XML manifest. Tenant custom-app policies and existing Entra consent and SharePoint access still apply. See [installation](../teams-install.html).
+
+The connection code contains site/list IDs and default session/division filters. No access tokens, credentials or workflow records are included. Configuration itself does not read tenant data. Sign-in and queue reads start only when a user chooses Load shared work. TeamsJS initializes before MSAL. Practice mode uses only in-memory fictional data and never invokes Graph.
