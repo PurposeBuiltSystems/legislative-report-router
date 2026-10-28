@@ -295,8 +295,81 @@
     { id: "openAuditList", field: "auditListId" },
   ];
 
+  var contactsListUrl = "", contactsChannels = [], contactsChannelGeneration = 0;
+
+  function ensureContactsListGuide() {
+    var host = byId("sharePointLists");
+    if (!host || byId("contactsTeamsGuide")) { return; }
+    host.insertAdjacentHTML("beforeend", '<details id="contactsTeamsGuide"><summary>Set up the same contact list in Teams</summary><p>Use one contact list in Teams and the router. You’ll finish setup with Microsoft’s built-in Lists app in Teams; our custom Teams package is not required.</p><label>SharePoint contact-list link<input id="contactsListUrl" type="text" readonly /></label><button id="copyContactsListUrl" type="button" disabled>Copy contact-list link</button><label>Existing legislative channel<select id="contactsTeamsChannel"><option value="">Connect routing rules first</option></select></label><p><a id="openContactsTeamsChannel" target="_blank" rel="noopener noreferrer" hidden>Open selected channel in Teams</a></p><ol><li>Copy the contact-list link above.</li><li>Open your selected channel, then choose <b>+ → Lists → Add an existing list</b>.</li><li>Paste the link and name the tab <b>Division Contacts</b>.</li></ol><p class="hint">The final Add/Save step is in Teams. Existing SharePoint edit access still applies. This shares the contact roster; it does not synchronize native Teams tag membership. After edits, reconnect the router to read the latest list. For list-only roster management, leave “Use shared contacts for Teams and email” off in Setup; that legacy option adds contacts from tags.</p><p id="contactsTeamsInfo" class="hint" aria-live="polite">Connect SharePoint and routing rules first.</p></details>');
+    on("copyContactsListUrl", "click", async function () {
+      if (!contactsListUrl || !state.site) { return; }
+      var url = contactsListUrl, generation = contactsChannelGeneration;
+      try {
+        if (!navigator.clipboard || !navigator.clipboard.writeText) { throw new Error("Clipboard unavailable"); }
+        await navigator.clipboard.writeText(url);
+        if (generation === contactsChannelGeneration) { setText("contactsTeamsInfo", "Contact-list link copied. Open the channel and add the existing list in Teams."); }
+      } catch (e) {
+        if (generation === contactsChannelGeneration && byId("contactsListUrl")) {
+          byId("contactsListUrl").focus(); byId("contactsListUrl").select();
+          setText("contactsTeamsInfo", "The link is selected. Press Ctrl+C or Cmd+C to copy it, then add the existing list in Teams.");
+        }
+      }
+    });
+    on("contactsTeamsChannel", "change", function () { loadContactsChannelLink(); });
+  }
+
+  function resetContactsListGuide() {
+    contactsChannelGeneration++; contactsListUrl = ""; contactsChannels = [];
+    setVal("contactsListUrl", ""); setProp("copyContactsListUrl", "disabled", true);
+    var select = byId("contactsTeamsChannel");
+    if (select) { select.innerHTML = '<option value="">Connect routing rules first</option>'; }
+    var link = byId("openContactsTeamsChannel");
+    if (link) { link.hidden = true; link.removeAttribute("href"); }
+    setText("contactsTeamsInfo", "Connect SharePoint and routing rules first.");
+  }
+
+  function renderContactsListGuide(token) {
+    var select = byId("contactsTeamsChannel");
+    if (!select || !contactsListUrl || !state.site) { return; }
+    var groups = {};
+    state.rules.forEach(function (rule) {
+      if (!rule.teamsTeamId || !rule.teamsChannelId || rule.isActive === false) { return; }
+      var key = rule.teamsTeamId + "/" + rule.teamsChannelId;
+      if (!groups[key]) { groups[key] = { teamId: rule.teamsTeamId, channelId: rule.teamsChannelId, name: rule.teamsChannelName || rule.teamsChannelId, divisions: [] }; }
+      if (groups[key].divisions.indexOf(rule.divisionCode) < 0) { groups[key].divisions.push(rule.divisionCode); }
+    });
+    contactsChannels = Object.keys(groups).map(function (key) { return groups[key]; });
+    select.innerHTML = '<option value="">Choose the legislative channel</option>';
+    contactsChannels.forEach(function (channel, index) {
+      var option = document.createElement("option"); option.value = String(index);
+      option.textContent = channel.name + " (" + channel.divisions.join(", ") + ")"; select.appendChild(option);
+    });
+    setText("contactsTeamsInfo", contactsChannels.length ? "Copy the link and choose the channel where you want the contact list." : "The list link is ready. No routing channel is configured; open the legislative channel in Teams manually.");
+    if (contactsChannels.length === 1) { select.value = "0"; loadContactsChannelLink(token); }
+  }
+
+  async function loadContactsChannelLink(token) {
+    var link = byId("openContactsTeamsChannel"), chosen = val("contactsTeamsChannel"), channel = chosen === "" ? null : contactsChannels[Number(chosen)];
+    if (link) { link.hidden = true; link.removeAttribute("href"); }
+    var generation = ++contactsChannelGeneration, site = state.site;
+    if (!link || !channel || !site) { return; }
+    setText("contactsTeamsInfo", "Loading the selected channel link…");
+    try {
+      token = token || await GraphData.getToken();
+      if (typeof GraphData.channelWebUrl !== "function") { throw new Error("Reload the router to load channel shortcuts."); }
+      var raw = await GraphData.channelWebUrl(token, channel.teamId, channel.channelId), url = new URL(raw);
+      if (url.protocol !== "https:" || url.username || url.password || !/^(?:(?:[a-z0-9-]+\.)*teams\.microsoft\.(?:com|us)|teams\.cloud\.microsoft)$/i.test(url.hostname)) { throw new Error("Microsoft returned an unrecognized Teams channel link."); }
+      if (generation !== contactsChannelGeneration || site !== state.site || chosen !== val("contactsTeamsChannel")) { return; }
+      link.href = url.href; link.hidden = false;
+      setText("contactsTeamsInfo", "Channel ready. Copy the list link, open Teams, then choose + → Lists → Add an existing list.");
+    } catch (e) {
+      if (generation === contactsChannelGeneration && site === state.site) { setText("contactsTeamsInfo", "The contact-list link is ready, but the channel shortcut could not load. Open that channel in Teams manually. " + e.message); }
+    }
+  }
+
   function clearSharePointLinks(message) {
     if (workflowView) { workflowView.invalidate(); }
+    resetContactsListGuide();
     listLinkGeneration++;
     listLinkSpecs.forEach(function (spec) {
       var link = byId(spec.id);
@@ -307,6 +380,7 @@
   }
 
   async function refreshSharePointLinks(token) {
+    ensureContactsListGuide();
     if (!byId("sharePointLists")) { return; } // compatible with cached older HTML
     clearSharePointLinks();
     var site = state.site, generation = listLinkGeneration;
@@ -323,8 +397,10 @@
         if (generation !== listLinkGeneration || state.site !== site) { return; }
         var link = byId(spec.id);
         if (link) { link.href = url.href; link.hidden = false; }
+        if (spec.field === "routingListId") { contactsListUrl = url.href; setVal("contactsListUrl", url.href); setProp("copyContactsListUrl", "disabled", false); }
       }));
       if (generation !== listLinkGeneration || state.site !== site) { return; }
+      renderContactsListGuide(token);
       var failed = results.filter(function (r) { return r.status === "rejected"; }).length;
       setText("sharePointLinksInfo", !specs.length ? "Connect your list IDs in Setup first." : failed
         ? "Some list links couldn't load. Select Refresh links to try again."
@@ -488,6 +564,7 @@
     on("saveDraft", "click", saveDraft);
     on("loadDraft", "click", loadDraft);
     on("connectRules", "click", function () { connectRules(false).catch(function () {}); });
+    ensureContactsListGuide();
     on("refreshListLinks", "click", function () { refreshSharePointLinks(); });
     on("createLists", "click", createLists);
     on("siteSearchGo", "click", siteSearch);

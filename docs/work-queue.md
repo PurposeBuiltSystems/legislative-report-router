@@ -40,3 +40,12 @@ The Teams app package is separate from the Outlook XML manifest. It reuses the e
 [Practice mode](../src/staff/index.html?demo=1) supplies fictional requests, roles and dates in page memory; no Graph calls, sign-in, messages or notifications. It is clearly labeled and resets on reload. No sample records are inserted into the shared audit list.
 
 The live queue is loaded/refreshed explicitly and shows its load time. Filter changes retain open response edits, and refreshing/navigating while editing requires saving or discarding the edits. It does not provide automatic reminders, automatic approval extraction from old conversations or automatic Teams parent-thread publication. Existing Teams document/conversation links remain available. No live tenant messages or email are used by the automated tests.
+
+
+## Share the contact list through the built-in Teams Lists app
+
+The router's **Open your SharePoint lists → Set up the same contact list in Teams** guide provides the connected routing/contact list's canonical SharePoint URL, a Copy button with a selectable-text fallback, and a chooser for existing routing channels. Division routes sharing a channel are grouped. The router retrieves the selected channel's canonical Teams link using existing Channel.ReadBasic.All access; it does not create a tab, post a message or install an app.
+
+Copy the list URL, open the selected channel, and complete **+ → Lists → Add an existing list** in Teams. This uses the same list the router reads, with existing SharePoint access, without the custom Teams package or additional Graph permissions. It does not synchronize native tag membership. For list-only roster management, turn off the legacy shared-contacts option that adds contacts from tags. Reconnect the router after edits to load the current list.
+
+The final Add/Save action remains in Teams. Microsoft Graph tab creation needs extra permission, and Microsoft documents SharePoint page/list tab configuration as unsupported through Graph. Source: https://learn.microsoft.com/en-us/graph/teams-configuring-builtin-tabs .

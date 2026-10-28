@@ -384,6 +384,10 @@
     return channels.sort(function (a, b) { return a.displayName.localeCompare(b.displayName); });
   }
 
+  async function channelWebUrl(token, teamId, channelId) {
+    return (await graphJson(token, "GET", "/teams/" + encodeURIComponent(teamId) + "/channels/" + encodeURIComponent(channelId) + "?$select=webUrl")).webUrl;
+  }
+
   async function followedSites(token) {
     try {
       var res = await graphJson(token, "GET", "/me/followedSites?$select=id,displayName,webUrl");
@@ -580,6 +584,7 @@
     deleteListItem: deleteListItem,
     joinedTeams: joinedTeams,
     listChannels: listChannels,
+    channelWebUrl: channelWebUrl,
     searchSites: searchSites,
     followedSites: followedSites,
     allSites: allSites,
