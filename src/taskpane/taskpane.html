@@ -72,6 +72,11 @@
             <input id="identifiers" type="text" value="HF, SF, HSB, SSB, HJR, SJR, HCR, SCR, HR, SR" />
           </label>
         </div>
+        <label>Known official feeds for this legislature
+          <select id="officialFeedChoice"><option value="">Built-in source</option><option value="custom">Enter my own URL</option></select>
+        </label>
+        <p id="officialFeedCoverage" class="hint" aria-live="polite">Choose a legislature to see verified feed options. Selecting a feed does not change division routing.</p>
+        <a id="officialFeedSource" target="_blank" rel="noopener noreferrer" hidden>Official feed information</a>
         <label>Custom legislative RSS / Atom feed URL (optional)
           <input id="customFeedUrl" type="url" placeholder="https://legislature.example.gov/bills/rss" />
         </label>
@@ -451,7 +456,7 @@
   <script src="../recipients.js?v=2"></script>
   <script src="../reportgen.js?v=20261027e"></script>
   <script src="../chapters.js?v=43"></script>
-  <script src="../feed.js?v=20261028g"></script>
+  <script src="../feed.js?v=20261028h"></script>
   <script src="../screening.js?v=46"></script>
   <script src="../amendments.js?v=1"></script>
   <script src="../watch-window.js?v=20261028g"></script>
@@ -466,6 +471,6 @@
   <script src="../workflow.js?v=20261028c"></script>
   <script src="../workflow-store.js?v=20261028c"></script>
   <script src="../workflow-ui.js?v=20261028f"></script>
-  <script src="taskpane.js?v=20261028g"></script>
+  <script src="taskpane.js?v=20261028h"></script>
 </body>
 </html>

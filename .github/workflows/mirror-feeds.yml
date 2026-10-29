@@ -43,6 +43,8 @@ jobs:
           PY
           mv /tmp/IowaBills.xml feeds/IowaBills.xml
           mv /tmp/Amendments.xml feeds/Amendments.xml
+      - name: Mirror verified official state RSS sources
+        run: python3 tools/mirror-official-feeds.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

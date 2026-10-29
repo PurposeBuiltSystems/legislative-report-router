@@ -85,9 +85,10 @@
     function children(node, name) { return Array.from(node.children).filter(function(c){return c.localName.toLowerCase()===name;}); }
     function text(node,name) { var c=children(node,name)[0];return c?c.textContent.trim():""; }
     function plain(value) { return value.replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim(); }
-    var nodes=Array.from(doc.getElementsByTagNameNS("*",type==="feed"?"entry":"item")), entries=[], skipped=0;
+    var nodes=Array.from(doc.getElementsByTagNameNS("*",type==="feed"?"entry":"item")), entries=[], skipped=0, emptyNotices=0;
     nodes.forEach(function(node){
       var title=plain(text(node,"title")), links=children(node,"link"), rawLink="";
+      if ((opts.emptyTitles || []).indexOf(title) >= 0) { emptyNotices++; return; }
       links.some(function(l){if(type!=="feed"||!l.getAttribute("rel")||l.getAttribute("rel")==="alternate"){rawLink=l.getAttribute("href")||l.textContent.trim();return true;}return false;});
       var link="";try { var url=new URL(rawLink,opts.url);if(rawLink && url.protocol==="https:" && !url.username && !url.password){link=url.href;} } catch(e) { /* omit unsafe links */ }
       var match=title.match(billPattern)||link.match(billPattern);
@@ -99,7 +100,7 @@
       entries.push({bill:match[1].toUpperCase()+match[2]+match[3].toUpperCase(),description:plain(text(node,"description")||text(node,"summary")||text(node,"content")||title),link:link,pubDate:date,documentType:match[1].toUpperCase(),feedSource:opts.url||""});
     });
     entries.sort(function(a,b){return b.pubDate-a.pubDate;});
-    if(nodes.length && !entries.length){throw new Error("No usable bill entries. Check bill identifiers and feed dates; dates with a time must include a time zone.");}
+    if(nodes.length > emptyNotices && !entries.length){throw new Error("No usable bill entries. Check bill identifiers and feed dates; dates with a time must include a time zone.");}
     return {entries:entries,total:nodes.length,skipped:skipped};
   }
 

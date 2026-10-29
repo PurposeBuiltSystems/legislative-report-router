@@ -9,3 +9,13 @@ RSS 2.0, RSS/RDF and Atom XML are supported when entries identify bills using th
 Feeds must allow cross-origin browser access. Authentication-required or CORS-blocked sources need a public browser-readable feed or an administrator-managed mirror; no open proxy or credential forwarding is provided. Requests omit credentials and referrers and have a 20-second timeout. Documents larger than 4 MB and DTD/custom entities are rejected.
 
 Custom entries are summary-only. State-specific full-text extraction, amendment-parent enrichment, statutory mappings, comprehensive status tracking and fiscal deadlines are not inferred from an RSS URL. Review full source documents and configure division routing and deadlines for the jurisdiction.
+
+## Known official feed picker
+
+The Step 1 picker is populated for Wisconsin, Kansas and Texas. It shows only feeds for the selected legislature. Selecting one fills and saves the official URL; selecting Built-in source clears it. Manual entry is always available. Other states keep their existing built-in configuration until verified official sources are added.
+
+- Wisconsin: [recently introduced proposals](https://docs.legis.wisconsin.gov/feed), both chambers; currently 100 items.
+- Kansas: [new bills and resolutions](https://www.kslegislature.gov/feeds/rsshelp/), both chambers; currently 200 items.
+- Texas: [today’s filed bills](https://capitol.texas.gov/MyTLO/RSS/rssFeeds.aspx), separate House/Senate feeds. These are **today-only**, not a multi-day archive. Choose the appropriate chamber or use another source for broader coverage.
+
+These reviewed URLs are mirrored by the existing weekday feed workflow without credentials or additional API permissions. The router checks per-source success and fetch time before loading. Failed or older-than-96-hour mirrors are blocked, even if an earlier XML file remains. No arbitrary user URL is added to the server-side mirror. A recent mirror fetch does not imply recent legislative activity; feed item dates still determine the watch window. Verified on October 28, 2026. Coverage limits are shown before selection and in test results.

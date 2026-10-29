@@ -549,14 +549,17 @@
         setVal("identifiers", preset.identifiers.join(", "));
         setVal("customFeedUrl", ""); setText("customFeedInfo", "Built-in source selected. Enter a feed for this legislature to override it.");
         saveSettings({ stateName: sel.value, identifiers: val("identifiers"), customFeedUrl: "" });
+        renderOfficialFeeds();
       });
     }
     var stateForPreset = (sel && sel.value) || s.stateName || "Iowa";
     if (!s.trackedChapters) { setVal("trackedChapters", LrrChapters.DEFAULT_TRACKED.join(", ")); }
     if (!s.identifiers) { setVal("identifiers", LrrPresets.presetFor(stateForPreset).identifiers.join(", ")); }
+    renderOfficialFeeds();
+    on("officialFeedChoice", "change", chooseOfficialFeed);
     on("testCustomFeed", "click", testCustomFeed);
     if (s.customFeedUrl) { setText("customFeedInfo", "Custom source saved. Test it before checking for new bills."); }
-    on("customFeedUrl", "input", function () { invalidateWatchCheck(); setText("customFeedInfo", "Feed changed. Test it before checking for new bills."); });
+    on("customFeedUrl", "input", function () { syncOfficialFeedChoice(); invalidateWatchCheck(); setText("customFeedInfo", "Feed changed. Test it before checking for new bills."); });
     on("signIn", "click", doSignIn);
     on("signOut", "click", doSignOut);
     renderAuthState();
@@ -1264,7 +1267,7 @@
         else { el.value = patch[k]; }
       });
       if (patch.cloud) { GraphData.setCloud(patch.cloud); }
-      state.site = null; clearSharePointLinks();
+      state.site = null; clearSharePointLinks(); renderOfficialFeeds();
       setStatus("info", "Profile applied — click \"Connect & load routing rules\" to finish.");
     } catch (e) {
       setStatus("error", "That doesn't look like a valid profile code.");
@@ -1401,12 +1404,52 @@
 
 
 
+  var officialFeedCatalog = null;
+  var officialFeedCatalogPromise = null;
+  async function getOfficialFeedCatalog() {
+    if (officialFeedCatalog) { return officialFeedCatalog; }
+    if (!officialFeedCatalogPromise) {
+      officialFeedCatalogPromise = (async function () {
+        var controller=new AbortController(), timer=setTimeout(function(){controller.abort();},20000);
+        try {
+        var response=await fetch("../../feeds/official-sources.json?v=20261028h",{credentials:"omit",referrerPolicy:"no-referrer",signal:controller.signal});
+        if(!response.ok){throw new Error("Official feed directory unavailable. You can enter your own URL.");}
+        var rows=await response.json();
+        if(!Array.isArray(rows)||rows.some(function(r){return !/^[a-z-]+$/.test(r.id)||!/^official-[a-z-]+\.xml$/.test(r.file)||!/^https:\/\//.test(r.source)||LrrFeed.feedUrl(r.url)!==r.url;})){throw new Error("Official feed directory could not be validated.");}
+        officialFeedCatalog=rows;return rows;
+        } finally {clearTimeout(timer);}
+      })().catch(function(e){officialFeedCatalogPromise=null;throw e;});
+    }
+    return officialFeedCatalogPromise;
+  }
+  function syncOfficialFeedChoice() {
+    var current=val("customFeedUrl").trim(), matched=(officialFeedCatalog||[]).find(function(r){return r.state===val("stateName")&&r.url===current;});
+    setVal("officialFeedChoice",matched?matched.id:(current?"custom":""));
+    setText("officialFeedCoverage",matched?matched.coverage+" Public mirror refreshed on the existing weekday schedule; Test feed checks availability and freshness.":(current?"Custom URL. Test it to verify browser access and entry format.":"Built-in source selected. Verified official options appear above where available; other states can use a custom URL."));
+    var link=byId("officialFeedSource");if(link){link.hidden=!matched;if(matched){link.href=matched.source;}else{link.removeAttribute("href");}}
+  }
+  async function renderOfficialFeeds() {
+    var stateName=val("stateName"),select=byId("officialFeedChoice");if(!select){return;}
+    try {
+      var rows=await getOfficialFeedCatalog();if(stateName!==val("stateName")){return;}
+      select.innerHTML='<option value="">Built-in source</option><option value="custom">Enter my own URL</option>';
+      rows.filter(function(r){return r.state===stateName;}).forEach(function(r){var option=document.createElement("option");option.value=r.id;option.textContent=r.label;select.appendChild(option);});
+      syncOfficialFeedChoice();
+    }catch(e){setText("officialFeedCoverage",e.message);}
+  }
+  function chooseOfficialFeed() {
+    var choice=val("officialFeedChoice"),row=(officialFeedCatalog||[]).find(function(r){return r.id===choice&&r.state===val("stateName");});
+    if(choice==="custom"){if(byId("customFeedUrl")){byId("customFeedUrl").focus();}setText("officialFeedCoverage","Enter your own public feed URL below, then Test feed.");return;}
+    setVal("customFeedUrl",row?row.url:"");saveSettings({customFeedUrl:val("customFeedUrl")});invalidateWatchCheck();syncOfficialFeedChoice();
+    setText("customFeedInfo",row?"Official source selected. Click Test feed before checking new bills.":"Built-in source selected.");
+  }
+
   var customFeedToolsPromise = null;
   async function ensureCustomFeedTools() {
     if (typeof LrrFeed.parseCustomFeed === "function" && typeof LrrWatch !== "undefined" && LrrWatch.customFeedSources) { return; }
     if (!customFeedToolsPromise) {
       customFeedToolsPromise = (async function () {
-        for (var module of [[typeof LrrFeed.parseCustomFeed === "function", "../feed.js?v=20261028g"], [typeof LrrWatch !== "undefined" && LrrWatch.customFeedSources, "../watch-window.js?v=20261028g"]]) {
+        for (var module of [[typeof LrrFeed.parseCustomFeed === "function", "../feed.js?v=20261028h"], [typeof LrrWatch !== "undefined" && LrrWatch.customFeedSources, "../watch-window.js?v=20261028g"]]) {
           if (module[0]) { continue; }
           await new Promise(function(resolve,reject){var script=document.createElement("script"),timer=setTimeout(function(){reject(new Error("Feed tools timed out. Reload the router."));},20000);script.src=new URL(module[1],document.baseURI).href;script.onload=function(){clearTimeout(timer);resolve();};script.onerror=function(){clearTimeout(timer);reject(new Error("Feed tools could not load. Reload the router."));};document.head.appendChild(script);});
         }
@@ -1418,12 +1461,22 @@
     await ensureCustomFeedTools();
     var source=LrrFeed.feedUrl(val("customFeedUrl")), identifiers=val("identifiers"), controller=new AbortController(), timer=setTimeout(function(){controller.abort();},20000);
     try {
-      var response=await fetch(source,{credentials:"omit",referrerPolicy:"no-referrer",signal:controller.signal});
+      var catalog=[];try{catalog=await getOfficialFeedCatalog();}catch(e){/* Manual public URLs remain usable without the directory. */}
+      var known=catalog.find(function(r){return r.url===source;}), requestUrl=source, mirrorNote="";
+      if(known){
+        var metadata=await fetch("../../feeds/official-feed-status.json?ts="+Date.now(),{credentials:"omit",referrerPolicy:"no-referrer",signal:controller.signal});
+        if(!metadata.ok){throw new Error("Official mirror status is unavailable. Test again after the feed job runs.");}
+        var status=(await metadata.json())[known.id],age=status?Date.now()-Date.parse(status.fetchedAt):NaN;
+        if(!status||!status.ok||!isFinite(age)||age>96*3600000||age< -300000){throw new Error("Official mirror is unavailable or stale. The feed job must refresh it before use.");}
+        requestUrl="../../feeds/"+known.file+"?ts="+encodeURIComponent(status.fetchedAt);mirrorNote=" Mirror fetched "+new Date(status.fetchedAt).toLocaleString()+". "+known.coverage;
+      }
+      var response=await fetch(requestUrl,{credentials:"omit",referrerPolicy:"no-referrer",signal:controller.signal});
       if(!response.ok){throw new Error("Feed returned HTTP "+response.status);}
       var xml=await response.text();if(new TextEncoder().encode(xml).length>4*1024*1024){throw new Error("Feed is larger than 4 MB; use a narrower feed.");}
-      var result=LrrFeed.parseCustomFeed(xml,{url:source,identifiers:identifiers.split(",")});
+      var result=LrrFeed.parseCustomFeed(xml,{url:source,identifiers:identifiers.split(","),emptyTitles:known?known.emptyTitles:[]});
       if(source!==LrrFeed.feedUrl(val("customFeedUrl"))||identifiers!==val("identifiers")){throw new Error("Feed settings changed. Test again.");}
-      setText("customFeedInfo", result.entries.length+" usable bill entry/entries; "+result.skipped+" skipped for an unrecognized bill identifier or missing/ambiguous date. Summary-only source." + (result.entries.length ? " Examples: " + result.entries.slice(0,3).map(function(e){return e.bill;}).join(", ") + "." : ""));
+      var recentBills={};result.entries.forEach(function(entry){if(entry.pubDate.getTime()<Date.now()-watchConfig().days*864e5){return;}if(recentBills[entry.bill]&&recentBills[entry.bill]!==entry.link){throw new Error("The feed reuses a bill number across different source records. Use a session-specific feed before routing these entries.");}recentBills[entry.bill]=entry.link;});
+      setText("customFeedInfo", result.entries.length+" usable bill entry/entries; "+result.skipped+" skipped for an unrecognized bill identifier or missing/ambiguous date. Summary-only source." + (result.entries.length ? " Examples: " + result.entries.slice(0,3).map(function(e){return e.bill;}).join(", ") + "." : "") + mirrorNote);
       result.entries.feedSkipped = result.skipped;
       return result.entries;
     } catch(e) {
