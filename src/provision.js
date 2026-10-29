@@ -62,7 +62,7 @@
     };
   }
 
-  /** A starter routing rule so the list opens with visible structure. */
+  /** Inactive example for documentation/imports; never inserted during setup. */
   function sampleRoutingRule() {
     return {
       Title: "MVD",
@@ -71,9 +71,9 @@
       Aliases: "Motor Vehicle; Motor Vehicles",
       CodeChapters: "321; 321A; 322",
       RoutingKeywords: "motor vehicle; driver; license; CDL",
-      IsActive: true,
+      IsActive: false,
       Priority: 1,
-      Notes: "Sample rule created by the add-in. Fill in Teams IDs (Settings > tag lookup) and emails, or delete.",
+      Notes: "Example only (inactive). Configure a real destination and contacts before activating.",
     };
   }
 

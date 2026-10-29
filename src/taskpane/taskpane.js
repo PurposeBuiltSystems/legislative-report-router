@@ -1844,23 +1844,38 @@
       if (!state.site.routingListId) {
         state.site.routingListId = await GraphData.findList(token, state.site.siteId, byId("routingList").value.trim() || "LegislativeRoutingMatrix");
       }
+      // Read the shared list again: another setup session may have added this division.
+      var current = await GraphData.listItems(token, state.site.siteId, state.site.routingListId);
+      var candidates = current.map(function (row) {
+        return LrrRouting.ruleFromSharePoint(row.fields || {}, row.id);
+      }).filter(function (r) { return String(r.divisionCode).toLowerCase() === code.toLowerCase(); });
+      var existing = candidates.filter(function (r) {
+        return r.teamsTeamId === teamId && r.teamsChannelId === channelId;
+      })[0] || candidates.filter(function (r) { return !r.teamsTeamId && !r.teamsChannelId; })[0];
       var teamName = (teamsCache || []).filter(function (t) { return t.id === teamId; })[0];
-      await GraphData.addListItem(token, state.site.siteId, state.site.routingListId, {
+      var fields = {
         Title: code,
         DivisionCode: code,
-        DivisionName: byId("rbName").value.trim(),
-        Emails: byId("rbEmails").value.trim(),
+        DivisionName: byId("rbName").value.trim() || (existing ? existing.divisionName.replace(/\s*\(SAMPLE - edit me\)/i, "") : ""),
+        Emails: byId("rbEmails").value.trim() || (existing ? existing.emails.join("; ") : ""),
         TeamsTeamId: teamId,
         TeamsChannelId: channelId,
         TeamsChannelName: byId("rbChannel").selectedOptions[0] ? byId("rbChannel").selectedOptions[0].textContent : "",
         TeamsTagId: byId("rbTag").value,
         TeamsTagName: byId("rbTag").selectedOptions[0] && byId("rbTag").value ? byId("rbTag").selectedOptions[0].textContent : "",
-        CodeChapters: byId("rbChapters").value.trim(),
-        RoutingKeywords: byId("rbKeywords").value.trim(),
+        CodeChapters: byId("rbChapters").value.trim() || (existing ? existing.codeChapters.join("; ") : ""),
+        RoutingKeywords: byId("rbKeywords").value.trim() || (existing ? existing.keywords.join("; ") : ""),
         IsActive: true,
-        Priority: 1,
-        Notes: "Created via the add-in setup" + (teamName ? " (team: " + teamName.displayName + ")" : ""),
-      });
+        Priority: existing ? existing.priority : 1,
+        Notes: existing && !/sample|example only/i.test(existing.notes) ? existing.notes :
+          "Created via the add-in setup" + (teamName ? " (team: " + teamName.displayName + ")" : ""),
+      };
+      if (existing) {
+        await GraphData.updateListItemFields(token, state.site.siteId, state.site.routingListId, existing.id, fields);
+      } else {
+        await GraphData.addListItem(token, state.site.siteId, state.site.routingListId, fields);
+      }
+      saveSettings({ lastCheckOk: "" });
       byId("rbInfo").textContent = "Division " + code + " saved." +
         (byId("rbTag").value ? "" : " \u26a0 No tag \u2014 its posts won't notify anyone; use \u2795 Create the tag.");
       byId("rbCode").value = ""; byId("rbName").value = ""; byId("rbEmails").value = ""; byId("rbChapters").value = "";
@@ -1993,12 +2008,9 @@
         catch (e) { exists = false; }
         if (exists) { report.push(w.name + ": already exists"); continue; }
         setStatus("work", "Creating " + w.name + "\u2026");
-        var created = await GraphData.createList(token, site.siteId, w.name, w.def);
+        await GraphData.createList(token, site.siteId, w.name, w.def);
         report.push(w.name + ": created");
-        if (w.role === "routing" && created && created.id) {
-          try { await GraphData.addListItem(token, site.siteId, created.id, LrrProvision.sampleRoutingRule()); }
-          catch (e2) { /* sample row is best-effort */ }
-        }
+        // Routing starts empty. Only divisions explicitly saved in setup become live rules.
       }
       setStatus("info", report.join(" \u00b7 ") + " \u2014 connecting\u2026");
       await connectRules();

@@ -138,7 +138,7 @@ Fill-in files showing exactly what each list expects:
 - [Contacts template](../templates/contacts-template.csv) — Name / Email /
   Division rows for the add-in's paste-import (step 4 of setup).
 - [Routing matrix template](../templates/routing-matrix-template.csv) — the
-  full column set with sample rows, for bulk-building rules in Excel and
+  full column set with inactive examples and blank destinations/contacts, for bulk-building rules in Excel and
   importing via Microsoft Lists. Leave the Teams ID columns blank — the
   add-in's pickers fill those; everything else imports as-is.
 
@@ -249,3 +249,5 @@ versions or bill-history checks. No-match filings require human screening.
 Other states use the configured Open States mirror and receive the same
 broad summary screening, but do not get Iowa document enrichment or a
 separate amendment feed.
+
+New routing lists start empty. Add your real divisions in setup Step 3. Repeating a division with the same destination updates that route; an older entry without a channel is reused if there is no matching destination. Different configured channels remain separate routes. Imported examples must be configured and explicitly activated before use.
