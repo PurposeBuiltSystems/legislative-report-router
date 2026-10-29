@@ -14,26 +14,41 @@
   <h1>Privacy Policy</h1>
   <p class="muted">Add-in: <strong>Legislative Report Router</strong> · Publisher: PurposeBuilt Systems LLC · Effective: July 14, 2026</p>
 
-  <h2>The short version</h2>
-  <p><strong>We collect no data. None.</strong> Legislative Report Router has no servers, no accounts,
-     no analytics, and no trackers. Report contents never leave your
-     Microsoft 365 environment and are never seen, stored, or shared by us.</p>
+  <h2>What the app processes</h2>
+  <p>The Outlook router processes report content, public legislative feeds, routing rules and
+     recipient information in the user's browser or Outlook session. The Teams Work Queue
+     processes request details, response links, narrative and fiscal information, assignments,
+     and review/submission history. Microsoft 365 access uses the signed-in user's identity
+     and the permissions approved for the app.</p>
 
-  <h2>How it works</h2>
-  <p>Legislative Report Router runs entirely in your Outlook session. Using Microsoft Graph —
-     Microsoft 365's own service — with your signed-in identity, it:</p>
-  <ul>
-    <li>reads the bill-report message you have open, posts to Microsoft Teams channels, and sends division emails - only when you explicitly click Publish and confirm, and</li>
-    <li>appends rows to the travel planner workbook your organization shares with
-        you on SharePoint or OneDrive (delegated permission Files.ReadWrite.All —
-        it can only reach files you can already reach; it grants no new access).</li>
-  </ul>
-  <p>All parsing and routing is deterministic logic
-     in your Outlook client. No artificial intelligence, no external services, no
-     third-party data processors.</p>
+  <h2>Microsoft 365 data and storage</h2>
+  <p>Shared routing/contact information, tracker data and workflow/audit records are stored in
+     the organization's configured SharePoint lists. Response documents remain in their linked
+     storage locations; the Work Queue registers links rather than uploading the files.
+     Setup choices and saved routing drafts are stored in Outlook add-in settings. Teams tab
+     configuration contains connection identifiers and optional default filters, not access tokens.</p>
+  <p>The router can read selected Outlook report content and, after the user's confirmation,
+     send division email and post to configured Teams channels. The staff queue requests the
+     delegated SharePoint scope Sites.ReadWrite.All; its workflow actions do not send email,
+     post messages or submit documents to LSA. Existing user access and tenant policies apply.</p>
 
-  <h2>What we store</h2>
-  <p>Your setup choices (SharePoint site, list names, cloud environment) and saved draft distributions are stored in your own Outlook add-in settings. Audit records are stored in YOUR organization's SharePoint list. Nothing lives with us.</p>
+  <h2>Hosting and external connections</h2>
+  <p>The app's static interface and public legislative mirrors are hosted on GitHub Pages.
+     Microsoft and jsDelivr content delivery networks supply client libraries. Loading these
+     resources involves ordinary web requests, including network information such as the user's
+     IP address. Public feed sources may also receive requests when a custom URL is used.
+     Manual feed requests omit credentials and referrer information. Do not enter private
+     subscription keys or credentials in feed URLs.</p>
+  <p>The deployed app does not include analytics trackers or an AI service for report processing.
+     Its application code does not send private report or workflow records to a publisher-operated
+     processing backend. Microsoft 365 operations use Microsoft Graph directly from the client.
+     Hosting, identity and storage providers apply their own service policies.</p>
+
+  <h2>Review and control</h2>
+  <p>Users control publication and workflow actions. SharePoint permissions control underlying
+     data access; queue filters are organizational views, not separate security boundaries.
+     Organizations manage access, retention and deletion in their Microsoft 365 environment.
+     Practice-mode records stay in the page and disappear when it is reloaded.</p>
 
   <h2>Contact</h2>
   <p>Questions: <a href="mailto:Matthew@purposebuilt.systems">Matthew@purposebuilt.systems</a></p>
