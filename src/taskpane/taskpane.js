@@ -845,6 +845,95 @@
 
   // ---------- review ----------
 
+  /** Active divisions appear once even when they have several channel routes. */
+  function distributedToPicker(it, idx) {
+    var id = "distributed-to-" + idx;
+    var root = document.createElement("div"); root.className = "division-field"; root.id = id;
+    var title = document.createElement("span"); title.id = id + "-label"; title.textContent = "Distributed To";
+    root.appendChild(title);
+    var active = state.rules.filter(function (r) { return LrrRouting.ruleActive(r) && r.divisionCode; });
+    var choices = [];
+    active.forEach(function (r) {
+      var existing = choices.filter(function (c) { return c.code.toLowerCase() === r.divisionCode.toLowerCase(); })[0];
+      if (existing) { existing.search += " " + [r.divisionName].concat(r.aliases || []).join(" ").toLowerCase(); }
+      else { choices.push({ code: r.divisionCode, name: r.divisionName,
+        search: [r.divisionCode, r.divisionName].concat(r.aliases || []).join(" ").toLowerCase() }); }
+    });
+    choices.sort(function (a, b) { return a.code.localeCompare(b.code); });
+    function matches(value, code) {
+      return String(value).toLowerCase() === code.toLowerCase() ||
+        LrrRouting.rulesForDivision(value, active).some(function (r) { return r.divisionCode.toLowerCase() === code.toLowerCase(); });
+    }
+    function changed(focusId, keepOpen) {
+      var query = search.value;
+      LrrRouting.routeItem(it, state.rules);
+      refreshStats(); renderItems();
+      var replacement = byId(id);
+      if (!replacement) { return; }
+      var nextSearch = byId(id + "-search");
+      nextSearch.value = query;
+      var event = document.createEvent("Event"); event.initEvent("input", true, false);
+      nextSearch.dispatchEvent(event);
+      replacement.querySelector("details").open = keepOpen;
+      var focus = byId(focusId) || byId(id + "-summary");
+      focus.focus();
+    }
+    var tokens = document.createElement("div"); tokens.className = "division-tokens";
+    tokens.setAttribute("role", "group"); tokens.setAttribute("aria-labelledby", title.id);
+    it.distributedTo.forEach(function (value, selectedIndex) {
+      var known = LrrRouting.rulesForDivision(value, active).length > 0;
+      var token = document.createElement("span"); token.className = "division-token" + (known ? "" : " needs-setup");
+      var text = document.createElement("span"); text.textContent = value + (known ? "" : " · Needs setup"); token.appendChild(text);
+      var remove = document.createElement("button"); remove.type = "button"; remove.textContent = "×";
+      remove.setAttribute("aria-label", "Remove " + value + " from Distributed To for " + it.billNumber);
+      remove.addEventListener("click", function () {
+        it.distributedTo.splice(selectedIndex, 1); changed(id + "-summary", menu.open);
+      });
+      token.appendChild(remove); tokens.appendChild(token);
+    });
+    root.appendChild(tokens);
+    var menu = document.createElement("details"); menu.className = "division-picker";
+    var summary = document.createElement("summary"); summary.id = id + "-summary"; summary.textContent = "Choose divisions";
+    summary.setAttribute("aria-label", "Choose Distributed To divisions for " + it.billNumber);
+    menu.appendChild(summary);
+    var search = document.createElement("input"); search.type = "text"; search.id = id + "-search";
+    search.placeholder = "Search divisions"; search.autocomplete = "off";
+    search.setAttribute("aria-label", "Search divisions for " + it.billNumber); menu.appendChild(search);
+    var options = document.createElement("div"); options.className = "division-options";
+    options.setAttribute("role", "group"); options.setAttribute("aria-label", "Available divisions for " + it.billNumber);
+    choices.forEach(function (choice, choiceIndex) {
+      var label = document.createElement("label"); label.className = "division-option";
+      var checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.value = choice.code;
+      checkbox.id = id + "-option-" + choiceIndex;
+      checkbox.checked = it.distributedTo.some(function (value) { return matches(value, choice.code); });
+      checkbox.addEventListener("change", function () {
+        if (checkbox.checked) {
+          if (!it.distributedTo.some(function (value) { return matches(value, choice.code); })) { it.distributedTo.push(choice.code); }
+        } else {
+          it.distributedTo = it.distributedTo.filter(function (value) { return !matches(value, choice.code); });
+        }
+        changed(checkbox.id, true);
+      });
+      label.appendChild(checkbox);
+      var text = document.createElement("span");
+      text.textContent = choice.code + (choice.name && choice.name.toLowerCase() !== choice.code.toLowerCase() ? " — " + choice.name : "");
+      label.appendChild(text); options.appendChild(label); choice.label = label;
+    });
+    var empty = document.createElement("p"); empty.className = "hint"; empty.setAttribute("role", "status");
+    function filter() {
+      var query = search.value.trim().toLowerCase(); var count = 0;
+      choices.forEach(function (choice) { choice.label.hidden = choice.search.indexOf(query) === -1; if (!choice.label.hidden) { count++; } });
+      empty.hidden = count > 0;
+      empty.textContent = choices.length ? "No matching divisions." : "No active divisions. Add your divisions in Setup & contacts.";
+    }
+    search.addEventListener("input", filter); filter();
+    menu.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); menu.open = false; summary.focus(); }
+    });
+    menu.appendChild(options); menu.appendChild(empty); root.appendChild(menu);
+    return root;
+  }
+
   function renderItems() {
     var host = byId("items");
     host.innerHTML = "";
@@ -886,14 +975,6 @@
       head.appendChild(inc); head.appendChild(bill); head.appendChild(badge); head.appendChild(conf);
       card.appendChild(head);
 
-      var divs = document.createElement("input");
-      divs.value = it.distributedTo.join(", ");
-      divs.title = "Distributed To (comma/semicolon separated)";
-      divs.addEventListener("change", function () {
-        it.distributedTo = LrrParser.normalizeDivisions(divs.value);
-        LrrRouting.routeItem(it, state.rules);
-        refreshStats(); renderItems();
-      });
       var cf = document.createElement("input");
       cf.value = it.commentRequestedFrom.join(", ");
       cf.title = "Comment Requested From";
@@ -904,7 +985,7 @@
       });
       var lblRow = document.createElement("div");
       lblRow.className = "row2";
-      var l1 = document.createElement("label"); l1.textContent = "Distributed To"; l1.appendChild(divs);
+      var l1 = distributedToPicker(it, idx);
       var l2 = document.createElement("label"); l2.textContent = "Comment From"; l2.appendChild(cf);
       lblRow.appendChild(l1); lblRow.appendChild(l2);
       card.appendChild(lblRow);

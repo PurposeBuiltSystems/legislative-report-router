@@ -278,3 +278,22 @@ button.linkish:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .screen-title { font-size:16px; margin:12px 0 6px; }
 .flow-actions { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; padding-top:12px; border-top:1px solid var(--line); }
 .flow-actions .primary { flex:1; }
+
+/* Division selection in the bill review cards. */
+.row2 > .division-field { flex: 1 1 160px; min-width: 0; margin-top: 9px; font-size: 12.5px; }
+.division-tokens { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.division-token { display: inline-flex; align-items: center; gap: 3px; max-width: 100%; padding-left: 8px;
+  border-radius: 12px; background: var(--accent-soft); color: var(--accent-soft-fg); }
+.division-token > span { overflow-wrap: anywhere; }
+.division-token.needs-setup { background: var(--warn-bg); color: var(--warn-fg); }
+.division-token button { border: 0; background: transparent; color: inherit; padding: 2px 7px; min-width: 28px; min-height: 28px; box-shadow: none; }
+.division-picker { margin-top: 5px; padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius-s); background: var(--bg); }
+.division-picker > summary { padding: 7px 9px; font-weight: 500; cursor: pointer; }
+.division-picker > input[type="text"] { width: calc(100% - 12px); margin: 0 6px 5px; }
+.division-options { max-height: 190px; overflow-y: auto; padding: 0 6px 4px; }
+.division-options .division-option { display: flex; align-items: flex-start; gap: 7px; margin: 0; padding: 6px 3px; font-size: 12px; }
+.division-options .division-option[hidden] { display: none; }
+.division-option span { overflow-wrap: anywhere; }
+.division-option input { flex-shrink: 0; margin-top: 2px; }
+.division-picker > .hint { margin: 4px 8px 8px; }
+.division-token button:focus-visible, .division-picker > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
