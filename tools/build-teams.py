@@ -1,28 +1,34 @@
 #!/usr/bin/env python3
-"""Build a deterministic Teams tab package from repo-native icon geometry and manifest."""
+"""Build a deterministic Teams tab package from the Outlook logo, monochrome routing geometry and manifest (requires Pillow)."""
 from pathlib import Path
 import struct,zlib,zipfile
 ROOT=Path(__file__).resolve().parents[1]
 
-def png(size, background):
-    pixels=[list(background) for _ in range(size*size)]
-    def draw(x,y):
-        x=x/size*192;y=y/size*192
-        roof=28<=y<=68 and abs(x-96)<=(y-28)*1.5
-        columns=82<=y<=139 and any(a<=x<=a+14 for a in [48,89,130])
-        bars=(36<=x<=156 and (68<=y<=78 or 146<=y<=160))
-        return roof or columns or bars
-    for y in range(size):
-        for x in range(size):
-            if draw(x,y):pixels[y*size+x]=[255,255,255,255]
-    raw=b''.join(b'\x00'+bytes(sum(pixels[y*size:(y+1)*size],[])) for y in range(size))
-    def chunk(kind,data):return struct.pack('>I',len(data))+kind+data+struct.pack('>I',zlib.crc32(kind+data)&0xffffffff)
-    return b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',size,size,8,6,0,0,0))+chunk(b'IDAT',zlib.compress(raw,9))+chunk(b'IEND',b'')
+def icons(folder):
+    # Reuse the Outlook artwork; only adapt its size for the Teams package.
+    from PIL import Image, ImageDraw
+    with Image.open(ROOT/'assets/icon-300.png') as image:
+        image.convert('RGBA').resize((192,192),Image.Resampling.LANCZOS).save(folder/'color.png')
+    # Small monochrome counterpart: legislative document routed to three people.
+    image=Image.new('RGBA',(256,256),(255,255,255,0));draw=ImageDraw.Draw(image)
+    white=(255,255,255,255);clear=(255,255,255,0)
+    draw.rounded_rectangle((22,92,133,225),radius=12,fill=white)
+    draw.rectangle((38,145,115,154),fill=clear);draw.rectangle((38,170,115,179),fill=clear)
+    draw.polygon([(36,65),(78,30),(120,65)],fill=white)
+    draw.rectangle((32,69,124,78),fill=white)
+    for x in [43,72,101]: draw.rectangle((x,83,x+12,112),fill=white)
+    draw.line([(130,151),(154,151),(154,62),(179,62)],fill=white,width=9)
+    draw.line([(154,151),(179,151)],fill=white,width=9)
+    draw.line([(154,151),(154,222),(179,222)],fill=white,width=9)
+    for y in [62,142,222]:
+        draw.ellipse((177,y-23,223,y+23),outline=white,width=7)
+        draw.ellipse((194,y-13,206,y-1),fill=white)
+        draw.ellipse((189,y+3,211,y+17),fill=white)
+    image.resize((32,32),Image.Resampling.LANCZOS).save(folder/'outline.png')
 
 def build():
     folder=ROOT/'teams';folder.mkdir(exist_ok=True)
-    (folder/'color.png').write_bytes(png(192,[15,108,189,255]))
-    (folder/'outline.png').write_bytes(png(32,[0,0,0,0]))
+    icons(folder)
     package=folder/'Legislative-Work-Queue.zip'
     with zipfile.ZipFile(package,'w',compression=zipfile.ZIP_DEFLATED) as archive:
         for name in ['manifest.json','color.png','outline.png']:

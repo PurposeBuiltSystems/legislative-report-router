@@ -472,7 +472,7 @@
   }
 
   var SETTING_KEYS = ["sharedRecipients", "cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "responseHours", "dueTime", "holidays", "sessionEnd",
-    "obsMlk", "obsPresidents", "obsJuneteenth", "obsColumbus", "obsVeterans", "obsDayAfterThanksgiving", "watchTerms", "watchDays", "stateName", "identifiers", "trackedChapters", "sessionName", "distFromDivisions", "distList", "autoDaily", "autoDailyTime"];
+    "obsMlk", "obsPresidents", "obsJuneteenth", "obsColumbus", "obsVeterans", "obsDayAfterThanksgiving", "watchTerms", "watchDays", "stateName", "customFeedUrl", "identifiers", "trackedChapters", "sessionName", "distFromDivisions", "distList", "autoDaily", "autoDailyTime"];
   var PROFILE_KEYS = SETTING_KEYS.concat([]);
 
   /**
@@ -547,12 +547,16 @@
       sel.addEventListener("change", function () {
         var preset = LrrPresets.presetFor(sel.value);
         setVal("identifiers", preset.identifiers.join(", "));
-        saveSettings({ stateName: sel.value, identifiers: val("identifiers") });
+        setVal("customFeedUrl", ""); setText("customFeedInfo", "Built-in source selected. Enter a feed for this legislature to override it.");
+        saveSettings({ stateName: sel.value, identifiers: val("identifiers"), customFeedUrl: "" });
       });
     }
     var stateForPreset = (sel && sel.value) || s.stateName || "Iowa";
     if (!s.trackedChapters) { setVal("trackedChapters", LrrChapters.DEFAULT_TRACKED.join(", ")); }
     if (!s.identifiers) { setVal("identifiers", LrrPresets.presetFor(stateForPreset).identifiers.join(", ")); }
+    on("testCustomFeed", "click", testCustomFeed);
+    if (s.customFeedUrl) { setText("customFeedInfo", "Custom source saved. Test it before checking for new bills."); }
+    on("customFeedUrl", "input", function () { invalidateWatchCheck(); setText("customFeedInfo", "Feed changed. Test it before checking for new bills."); });
     on("signIn", "click", doSignIn);
     on("signOut", "click", doSignOut);
     renderAuthState();
@@ -667,7 +671,7 @@
     on("harvestApply", "click", applyHarvest);
     on("loadFilings", "click", loadFilings);
     on("markWatchReviewed", "click", markWatchReviewed);
-    ["watchDays", "watchTerms", "watchChapters", "trackedChapters", "stateName", "hideReported", "siteUrl", "routingList", "auditList", "cloud"].forEach(function (id) { on(id, "change", invalidateWatchCheck); });
+    ["watchDays", "watchTerms", "watchChapters", "trackedChapters", "stateName", "customFeedUrl", "identifiers", "hideReported", "siteUrl", "routingList", "auditList", "cloud"].forEach(function (id) { on(id, "change", invalidateWatchCheck); });
     renderWatchWindow();
     on("routeFilings", "click", routeFilings);
     SETTING_KEYS.forEach(function (k) {
@@ -1299,6 +1303,7 @@
 
   function watchConfig() {
     return { stateName: val("stateName") || "Iowa", days: Math.max(1, Math.min(730, Number(val("watchDays")) || 3)),
+      feedUrl: val("customFeedUrl").trim(), identifiers: val("identifiers").split(","),
       terms: val("watchTerms").split(","), tracked: trackedList(), matchChapters: isChecked("watchChapters") };
   }
   function renderWatchWindow(snapshot) {
@@ -1309,6 +1314,7 @@
     var text = "Last successful feed check: " + new Date(snapshot.checkedAt).toLocaleString() + " · " + snapshot.stateName +
       ". Searched window: " + new Date(snapshot.from).toLocaleString() + " through " + new Date(snapshot.to).toLocaleString() + " (" + snapshot.days + " day(s)). " +
       snapshot.total + " filing version(s); " + snapshot.hidden + " unchanged reviewed version(s) hidden.";
+    if (snapshot.feedUrl) { text += " Source: " + snapshot.feedUrl + "."; }
     if (snapshot.historyError) { text += " Review history unavailable; versions were not hidden: " + snapshot.historyError; }
     if (snapshot.lastReviewed) { text += " Last shared review: " + new Date(snapshot.lastReviewed.reviewedAt).toLocaleString() +
       " · " + snapshot.lastReviewed.count + " selected filing(s)" + (snapshot.lastReviewed.complete ? "; all versions found in that check were reviewed." : "; other filings may still need review."); }
@@ -1334,7 +1340,7 @@
     return snapshot;
   }
   function rememberWatchCheck(snapshot) {
-    var record = { scope: snapshot.scope, stateName: snapshot.stateName, days: snapshot.days, from: snapshot.from, to: snapshot.to,
+    var record = { scope: snapshot.scope, feedUrl: snapshot.feedUrl || "", stateName: snapshot.stateName, days: snapshot.days, from: snapshot.from, to: snapshot.to,
       checkedAt: snapshot.checkedAt, total: snapshot.total, hidden: snapshot.hidden, historyError: snapshot.historyError, lastReviewed: snapshot.lastReviewed };
     try { Office.context.roamingSettings.set(WATCH_KEY, JSON.stringify(record)); persistSettings("the last watch window"); } catch (e) { /* shared review history remains authoritative */ }
     renderWatchWindow(record);
@@ -1395,8 +1401,46 @@
 
 
 
+  var customFeedToolsPromise = null;
+  async function ensureCustomFeedTools() {
+    if (typeof LrrFeed.parseCustomFeed === "function" && typeof LrrWatch !== "undefined" && LrrWatch.customFeedSources) { return; }
+    if (!customFeedToolsPromise) {
+      customFeedToolsPromise = (async function () {
+        for (var module of [[typeof LrrFeed.parseCustomFeed === "function", "../feed.js?v=20261028g"], [typeof LrrWatch !== "undefined" && LrrWatch.customFeedSources, "../watch-window.js?v=20261028g"]]) {
+          if (module[0]) { continue; }
+          await new Promise(function(resolve,reject){var script=document.createElement("script"),timer=setTimeout(function(){reject(new Error("Feed tools timed out. Reload the router."));},20000);script.src=new URL(module[1],document.baseURI).href;script.onload=function(){clearTimeout(timer);resolve();};script.onerror=function(){clearTimeout(timer);reject(new Error("Feed tools could not load. Reload the router."));};document.head.appendChild(script);});
+        }
+      })().catch(function(e){customFeedToolsPromise=null;throw e;});
+    }
+    return customFeedToolsPromise;
+  }
+  async function loadCustomFeed() {
+    await ensureCustomFeedTools();
+    var source=LrrFeed.feedUrl(val("customFeedUrl")), identifiers=val("identifiers"), controller=new AbortController(), timer=setTimeout(function(){controller.abort();},20000);
+    try {
+      var response=await fetch(source,{credentials:"omit",referrerPolicy:"no-referrer",signal:controller.signal});
+      if(!response.ok){throw new Error("Feed returned HTTP "+response.status);}
+      var xml=await response.text();if(new TextEncoder().encode(xml).length>4*1024*1024){throw new Error("Feed is larger than 4 MB; use a narrower feed.");}
+      var result=LrrFeed.parseCustomFeed(xml,{url:source,identifiers:identifiers.split(",")});
+      if(source!==LrrFeed.feedUrl(val("customFeedUrl"))||identifiers!==val("identifiers")){throw new Error("Feed settings changed. Test again.");}
+      setText("customFeedInfo", result.entries.length+" usable bill entry/entries; "+result.skipped+" skipped for an unrecognized bill identifier or missing/ambiguous date. Summary-only source." + (result.entries.length ? " Examples: " + result.entries.slice(0,3).map(function(e){return e.bill;}).join(", ") + "." : ""));
+      result.entries.feedSkipped = result.skipped;
+      return result.entries;
+    } catch(e) {
+      var message=e.name==="AbortError"?"Feed request timed out.":String(e.message||e);
+      if(e instanceof TypeError){message="The feed could not be fetched. It may block browser access (CORS), be offline, or require sign-in. Use a public CORS-enabled feed or an administrator-managed mirror.";}
+      setText("customFeedInfo",message);throw new Error(message);
+    } finally {clearTimeout(timer);}
+  }
+  async function testCustomFeed() {
+    if(!val("customFeedUrl").trim()){setText("customFeedInfo","No custom URL: the built-in source will be used.");return;}
+    setProp("testCustomFeed","disabled",true);setText("customFeedInfo","Testing feed…");
+    try{await loadCustomFeed();}catch(e){setText("customFeedInfo",e.message);}finally{setProp("testCustomFeed","disabled",false);}
+  }
+
   async function loadScreeningEntries() {
     await ensureWatchModules();
+    if (val("customFeedUrl").trim()) { return loadCustomFeed(); }
     var preset = LrrPresets.presetFor(byId("stateName").value || "Iowa");
     if (preset.feed !== "iowa-rss") {
       var other = await fetch("../../feeds/openstates-" + preset.slug + ".json?ts=" + Date.now());
@@ -1458,6 +1502,7 @@
       var days = config.days;
       var allHits = screenFilings(entries, days, started, config);
       var snapshot = await prepareWatchCheck(allHits, started, config);
+      if (entries.feedSkipped) { snapshot.historyError = "Custom feed skipped " + entries.feedSkipped + " unsupported entries. Review those at the source; this check cannot certify complete coverage."; snapshot.visible = snapshot.entries; snapshot.hidden = 0; }
       if (JSON.stringify(config) !== JSON.stringify(watchConfig())) { throw new Error("Watch filters changed during the check. Run it again."); }
       var hits = snapshot.visible.map(function (e) { return e.entry; });
       feedSelection = snapshot.visible.map(function (e) { return { entry: e.entry, key: e.key, checked: true }; });
@@ -1502,8 +1547,8 @@
       setStatus(snapshot.historyError ? "error" : "info", (snapshot.historyError ? snapshot.historyError + " Showing all versions. " : "") + (hits.length
         ? hits.length + " filing(s) screened in the last " + days + " day(s), including " +
           hits.filter(function (e) { return e.screening.status === "needs-screening"; }).length + " needing manual screening. Select and route."
-        : "No new or changed unreviewed filing versions in the window. (Feed mirror updates every 30 minutes on weekdays. " +
-          "Out of session? Raise the watch window — e.g. 400 days replays the whole past session.)"));
+        : "No new or changed unreviewed filing versions in the window. (" + (config.feedUrl ? "Custom source fetched when checked. " : "Feed mirror updates every 30 minutes on weekdays. ") +
+          "Out of session? Raise the watch window — e.g. 400 days replays the whole past session.)") + (config.feedUrl ? " Custom feed: " + (byId("customFeedInfo") ? byId("customFeedInfo").textContent : "Summary only.") : ""));
     } catch (e) {
       setStatus("error", "Feed check failed: " + friendly(e));
     } finally {
@@ -2221,6 +2266,9 @@
 
       // 6. feed mirror
       try {
+        if (val("customFeedUrl").trim()) {
+          var custom = await loadCustomFeed(); logCheck(custom.feedSkipped ? "warn" : true, "Custom legislative feed", custom.length + " usable bill entries. " + (byId("customFeedInfo") ? byId("customFeedInfo").textContent : ""));
+        } else {
         var preset = LrrPresets.presetFor(byId("stateName").value || "Iowa");
         var feedUrl = preset.feed === "iowa-rss" ? "../../feeds/IowaBills.xml" : "../../feeds/openstates-" + preset.slug + ".json";
         var fr = await fetch(feedUrl + "?ts=" + Date.now());
@@ -2229,7 +2277,8 @@
           var n = preset.feed === "iowa-rss" ? (body.match(/<item>/g) || []).length : (LrrFeed.parseOpenStates(body) || []).length;
           logCheck(true, "New-filings feed", n + " bills in the mirror");
         } else { logCheck("warn", "New-filings feed", "mirror not available (" + fr.status + ") \u2014 Filings tab won't load, everything else works"); }
-      } catch (e) { logCheck("warn", "New-filings feed", "unreachable \u2014 Filings tab won't load, everything else works"); }
+        }
+      } catch (e) { logCheck("warn", "New-filings feed", "Feed unavailable: " + String(e.message || e).slice(0,200)); }
 
       // 7. tracker write test (add + delete a row)
       if (state.site && state.site.trackerListId) {
@@ -3036,10 +3085,11 @@
 
   /** The feed, whichever source is configured. Shared with the New-bills tab. */
   async function loadFeedEntries() {
+    if (val("customFeedUrl").trim()) { return loadCustomFeed(); }
     var preset = LrrPresets.presetFor(val("stateName") || "Iowa");
     var tries = [];
-    if (preset && preset.slug) { tries.push("../../feeds/openstates-" + preset.slug + ".json"); }
-    tries.push("../../feeds/IowaBills.xml");
+    if (preset.feed === "iowa-rss") { tries.push("../../feeds/IowaBills.xml"); }
+    else if (preset.slug) { tries.push("../../feeds/openstates-" + preset.slug + ".json"); }
     for (var i = 0; i < tries.length; i++) {
       try {
         var res = await fetch(tries[i] + "?ts=" + Date.now());

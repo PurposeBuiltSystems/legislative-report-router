@@ -2,7 +2,7 @@ Legislative Report Router — administrator handoff
 Prepared October 28, 2026
 
 READY: STAFF QUEUE IN TEAMS
-Upload the inner Legislative-Work-Queue.zip (not this outer handoff ZIP) to the organization's Teams app catalog and make it available to the intended Team/users. It contains manifest.json and both icons. Publishing centrally is an alternative to enabling custom-app uploads for the coordinator.
+Upload the inner Legislative-Work-Queue.zip (not this outer handoff ZIP) to the organization's Teams app catalog and make it available to the intended Team/users. Version 1.0.2 contains manifest.json and matching Legislative Report Router icons. Publishing centrally is an alternative to enabling custom-app uploads for the coordinator.
 
 Existing Entra client ID: 0860a653-ddbd-4455-8bff-affda2a8879f
 The deployed staff queue requires only the already-used delegated Sites.ReadWrite.All permission. The Outlook XML manifest remains unchanged. A missing custom-app upload option is governed by Teams policy, not the Outlook manifest.

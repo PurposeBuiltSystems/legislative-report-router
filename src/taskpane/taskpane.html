@@ -72,6 +72,12 @@
             <input id="identifiers" type="text" value="HF, SF, HSB, SSB, HJR, SJR, HCR, SCR, HR, SR" />
           </label>
         </div>
+        <label>Custom legislative RSS / Atom feed URL (optional)
+          <input id="customFeedUrl" type="url" placeholder="https://legislature.example.gov/bills/rss" />
+        </label>
+        <p class="hint">Leave blank to use the built-in source. Enter a public feed for the selected legislature, check its bill identifiers above, then test. The feed must permit browser access. Custom feeds use summaries; full bill text and parent-amendment context may need manual review.</p>
+        <button id="testCustomFeed" type="button">Test feed</button>
+        <p id="customFeedInfo" class="hint" aria-live="polite">No custom feed selected.</p>
         <button id="wizSignIn" class="primary">Sign in to Microsoft 365</button>
         <p id="wizSignInInfo" class="hint">Sign in with your work account. Microsoft may ask you to sign in again when your session expires.</p>
       </div>
@@ -445,10 +451,10 @@
   <script src="../recipients.js?v=2"></script>
   <script src="../reportgen.js?v=20261027e"></script>
   <script src="../chapters.js?v=43"></script>
-  <script src="../feed.js?v=20261027e"></script>
+  <script src="../feed.js?v=20261028g"></script>
   <script src="../screening.js?v=46"></script>
   <script src="../amendments.js?v=1"></script>
-  <script src="../watch-window.js?v=1"></script>
+  <script src="../watch-window.js?v=20261028g"></script>
   <script src="../invite.js?v=43"></script>
   <script src="../deadline.js?v=43"></script>
   <script src="../billstatus.js?v=42"></script>
@@ -460,6 +466,6 @@
   <script src="../workflow.js?v=20261028c"></script>
   <script src="../workflow-store.js?v=20261028c"></script>
   <script src="../workflow-ui.js?v=20261028f"></script>
-  <script src="taskpane.js?v=20261028f"></script>
+  <script src="taskpane.js?v=20261028g"></script>
 </body>
 </html>

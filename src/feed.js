@@ -65,6 +65,44 @@
     return out;
   }
 
+  // Public custom RSS/Atom feeds: use configured bill identifiers, never Iowa time assumptions.
+  function feedUrl(value) {
+    var u;
+    try { u = new URL(String(value || "").trim()); } catch (e) { throw new Error("Enter a complete HTTPS feed URL."); }
+    if (u.protocol !== "https:" || u.username || u.password || u.hash) { throw new Error("Use a public HTTPS feed URL without a username, password or fragment."); }
+    return u.href;
+  }
+  function parseCustomFeed(xml, opts, Parser) {
+    opts = opts || {}; Parser = Parser || DOMParser;
+    if (/<!DOCTYPE|<!ENTITY/i.test(xml)) { throw new Error("Feed documents with DTDs or custom entities are not supported."); }
+    var doc = new Parser().parseFromString(String(xml), "application/xml");
+    var type = doc.documentElement && doc.documentElement.localName.toLowerCase();
+    if (doc.getElementsByTagName("parsererror").length || ["rss", "rdf", "feed"].indexOf(type) < 0) { throw new Error("The URL must return valid RSS or Atom XML, not a web page."); }
+    if (type === "rss" && !doc.getElementsByTagName("channel").length) { throw new Error("RSS must contain a channel element."); }
+    var prefixes = (opts.identifiers || []).map(function (v) { return String(v).trim().toUpperCase(); }).filter(function(v){return /^[A-Z]{1,6}$/.test(v);}).sort(function(a,b){return b.length-a.length;});
+    if (!prefixes.length) { throw new Error("Set the bill identifiers for this legislature first (for example HB, SB). "); }
+    var billPattern = new RegExp("(?:^|[^A-Z0-9])(" + prefixes.join("|") + ")[\\s._/-]*(\\d+)[\\s]*([A-Z]?)(?=$|[^A-Z0-9])", "i");
+    function children(node, name) { return Array.from(node.children).filter(function(c){return c.localName.toLowerCase()===name;}); }
+    function text(node,name) { var c=children(node,name)[0];return c?c.textContent.trim():""; }
+    function plain(value) { return value.replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim(); }
+    var nodes=Array.from(doc.getElementsByTagNameNS("*",type==="feed"?"entry":"item")), entries=[], skipped=0;
+    nodes.forEach(function(node){
+      var title=plain(text(node,"title")), links=children(node,"link"), rawLink="";
+      links.some(function(l){if(type!=="feed"||!l.getAttribute("rel")||l.getAttribute("rel")==="alternate"){rawLink=l.getAttribute("href")||l.textContent.trim();return true;}return false;});
+      var link="";try { var url=new URL(rawLink,opts.url);if(rawLink && url.protocol==="https:" && !url.username && !url.password){link=url.href;} } catch(e) { /* omit unsafe links */ }
+      var match=title.match(billPattern)||link.match(billPattern);
+      var dateText=text(node,"pubdate")||text(node,"published")||text(node,"updated")||text(node,"date");
+      // A date-only value is unambiguous. Times must include their zone.
+      var dated=/^\d{4}-\d{2}-\d{2}$/.test(dateText)||/(?:Z|[+-]\d{2}:?\d{2}|GMT|UTC|[ECMP][SD]T)$/i.test(dateText);
+      var date=dated?new Date(dateText):new Date(NaN);
+      if(!match||isNaN(date.getTime())){skipped++;return;}
+      entries.push({bill:match[1].toUpperCase()+match[2]+match[3].toUpperCase(),description:plain(text(node,"description")||text(node,"summary")||text(node,"content")||title),link:link,pubDate:date,documentType:match[1].toUpperCase(),feedSource:opts.url||""});
+    });
+    entries.sort(function(a,b){return b.pubDate-a.pubDate;});
+    if(nodes.length && !entries.length){throw new Error("No usable bill entries. Check bill identifiers and feed dates; dates with a time must include a time zone.");}
+    return {entries:entries,total:nodes.length,skipped:skipped};
+  }
+
   /**
    * Filter feed entries to the watch window and watch terms.
    * terms: array of lowercase substrings; empty array = everything.
@@ -149,6 +187,8 @@
 
   var api = {
     parseFeed: parseFeed,
+    feedUrl: feedUrl,
+    parseCustomFeed: parseCustomFeed,
     parseOpenStates: parseOpenStates,
     watchFilter: watchFilter,
     toLegislativeItem: toLegislativeItem,

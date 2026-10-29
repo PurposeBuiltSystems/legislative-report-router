@@ -8,7 +8,9 @@
   }
   function normalized(values) { return Array.from(new Set((values || []).map(function (v) { return String(v).trim().toLowerCase(); }).filter(Boolean))).sort(); }
   async function scope(config) {
-    return hash({ state: config.stateName, terms: normalized(config.terms), tracked: normalized(config.tracked), matchChapters: config.matchChapters !== false });
+    var source = { state: config.stateName, terms: normalized(config.terms), tracked: normalized(config.tracked), matchChapters: config.matchChapters !== false };
+    if (config.feedUrl) { source.feedUrl = config.feedUrl; source.identifiers = normalized(config.identifiers); }
+    return hash(source);
   }
   async function fingerprint(entry) {
     return hash({ bill: entry.bill, relatedBill: entry.relatedBill || "", link: entry.link || "",
@@ -36,10 +38,10 @@
       return { entry: entry, key: "watch:" + key + ":" + await fingerprint(entry) };
     }));
     var prior = history(rows, key);
-    return { scope: key, days: config.days, from: new Date(end.getTime() - config.days * 864e5).toISOString(), to: end.toISOString(),
+    return { scope: key, feedUrl: config.feedUrl || "", days: config.days, from: new Date(end.getTime() - config.days * 864e5).toISOString(), to: end.toISOString(),
       checkedAt: end.toISOString(), stateName: config.stateName, entries: output, reviewed: prior.reviewed, lastReviewed: prior.last };
   }
-  var api = { scope: scope, fingerprint: fingerprint, history: history, prepare: prepare };
+  var api = { customFeedSources: true, scope: scope, fingerprint: fingerprint, history: history, prepare: prepare };
   if (typeof module !== "undefined" && module.exports) { module.exports = api; }
   else { root.LrrWatch = api; }
 })(typeof self !== "undefined" ? self : this);
