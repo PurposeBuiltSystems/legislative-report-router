@@ -159,6 +159,25 @@
   var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+  /** Read the visible final-report deadline. Never let hidden metadata override an Outlook edit. */
+  function fromReport(html, anchor) {
+    var text = String(html || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;|&#160;/gi, " ").replace(/\s+/g, " ");
+    var m = /Comments due by\s+(?:(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\w*,?\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+(\d{1,2})(?:,?\s+(20\d{2}))?,?\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i.exec(text);
+    if (!m) { return null; }
+    var reportDate = /\b(20\d{2})-\d{2}-\d{2}\b/.exec(text);
+    var base = new Date(anchor || Date.now());
+    var year = Number(m[4] || (reportDate && reportDate[1]) || base.getFullYear());
+    var month = MONTHS.map(function (s) { return s.toLowerCase(); }).indexOf(m[2].toLowerCase());
+    var hour = Number(m[5]), minute = Number(m[6]), day = Number(m[3]);
+    if (hour < 1 || hour > 12 || minute > 59) { return null; }
+    hour = hour % 12 + (m[7].toUpperCase() === "PM" ? 12 : 0);
+    var d = new Date(year, month, day, hour, minute);
+    // Handle a December report with a January due date without silently moving other dates.
+    if (!m[4] && base.getMonth() === 11 && month === 0) { d.setFullYear(year + 1); }
+    if (d.getMonth() !== month || d.getDate() !== day || (m[1] && DAYS[d.getDay()].toLowerCase() !== m[1].toLowerCase())) { return null; }
+    return { iso: d.toISOString(), source: "Final Outlook report", label: formatDeadline(d) };
+  }
+
   /** "Tue, Aug 4, 3:00 PM" — fixed format, no locale surprises. */
   function formatDeadline(d) {
     var h = d.getHours();
@@ -181,6 +200,7 @@
     isBusinessDay: isBusinessDay,
     addBusinessHours: addBusinessHours,
     formatDeadline: formatDeadline,
+    fromReport: fromReport,
   };
   if (typeof module !== "undefined" && module.exports) { module.exports = api; }
   else { root.LrrDeadline = api; }

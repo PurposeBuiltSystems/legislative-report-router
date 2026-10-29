@@ -6,7 +6,7 @@
   function uid(){return crypto.randomUUID();}
   function mount(host,context){
     var events=[], selected="", loadedSite=null, actor="", busy=false, writable=false, epoch=0, defaultsUsed=false, editing=false;
-    host.innerHTML='<h3>Division work queue</h3><p>Track comments and fiscal requests separately. Approvals apply to the registered response version. Changes here do not send messages or submit documents to LSA.</p><div class="actions-row"><button id="wfLoad" type="button" class="primary">Load shared work</button><button id="wfNew" type="button" disabled>New request</button><button id="wfDiscard" type="button" hidden>Discard edits</button></div><p id="wfInfo" role="status" aria-live="polite">Connect SharePoint in Setup, then load the queue.</p><div class="actions-row"><label>Session <select id="wfSessionFilter"><option value="">All sessions</option></select></label><label>Division <select id="wfDivision"><option value="">All divisions</option></select></label><label>Request type <select id="wfType"><option value="">All types</option><option>Comment</option><option>Fiscal data</option></select></label><label>Stage <select id="wfStage"><option value="">All stages</option><option>Division work pending</option><option>Assigned</option><option>Drafting</option><option>Review requested</option><option>Changes requested</option><option>Director review</option><option>Division approved</option><option>Division review complete</option><option>CFO review</option><option>CFO approved</option><option>Submitted to LSA</option></select></label><label>Due <select id="wfDue"><option value="">Any deadline</option><option value="soon">Due within 2 days / overdue</option><option value="missing">Needs confirmation</option></select></label></div><label><input type="checkbox" id="wfMine" /> My assigned work</label><div id="wfTeamsSetup"></div><div id="wfQueue"></div><div id="wfDetail"></div>';
+    host.innerHTML='<h3>Division work queue</h3><p>Track comments and fiscal requests separately. Approvals apply to the registered response version. Changes here do not send messages or submit documents to LSA.</p><div class="actions-row"><button id="wfLoad" type="button" class="primary">Load shared work</button><button id="wfNew" type="button" disabled>New request</button><button id="wfReminders" type="button" disabled>Draft due-date reminders</button><button id="wfDiscard" type="button" hidden>Discard edits</button></div><p id="wfInfo" role="status" aria-live="polite">Connect SharePoint in Setup, then load the queue.</p><div class="actions-row"><label>Session <select id="wfSessionFilter"><option value="">All sessions</option></select></label><label>Division <select id="wfDivision"><option value="">All divisions</option></select></label><label>Request type <select id="wfType"><option value="">All types</option><option>Comment</option><option>Fiscal data</option></select></label><label>Stage <select id="wfStage"><option value="">All stages</option><option>Division work pending</option><option>Assigned</option><option>Drafting</option><option>Review requested</option><option>Changes requested</option><option>Director review</option><option>Division approved</option><option>Division review complete</option><option>CFO review</option><option>CFO approved</option><option>Submitted to LSA</option></select></label><label>Due <select id="wfDue"><option value="">Any deadline</option><option value="soon">Due within 2 days / overdue</option><option value="missing">Needs confirmation</option></select></label></div><label><input type="checkbox" id="wfMine" /> My assigned work</label><div id="wfTeamsSetup"></div><div id="wfQueue"></div><div id="wfDetail"></div>';
     function el(id){return host.querySelector('#'+id);}
     function val(id){var n=el(id);return n?n.value:"";}
     function info(message){el('wfInfo').textContent=message;}
@@ -20,8 +20,25 @@
     function field(id,label,value,type){return '<label>'+esc(label)+'<input id="'+id+'" type="'+(type||'text')+'" value="'+esc(value)+'" /></label>';}
     function area(id,label,value){return '<label>'+esc(label)+'<textarea id="'+id+'" rows="3">'+esc(value)+'</textarea></label>';}
     function bind(id,fn){var n=el(id);if(n){n.addEventListener('click',fn);}}
-    function busyState(v){busy=v;host.querySelectorAll('button').forEach(function(b){b.disabled=v;});el('wfNew').disabled=v||!writable;}
+    function busyState(v){busy=v;host.querySelectorAll('button').forEach(function(b){b.disabled=v;});el('wfNew').disabled=v||!writable;el('wfReminders').disabled=v||!writable;}
     function validSite(){if(!writable||loadedSite!==context.site()){throw new Error("Connection changed or queue is stale. Load shared work again.");}return loadedSite;}
+    async function draftReminders(){
+      if(busy||!writable){return;}busyState(true);
+      try{
+        var s=validSite(),token=await context.graph.getToken(),a=identity(token);
+        if(a!==actor){throw new Error("Account changed. Reload shared work.");}
+        var fresh=await LrrWorkflowStore.client(context.graph,s).read(token);
+        var groups=LrrWorkflow.reminders(LrrWorkflowStore.requests(fresh),actor,today());
+        for(var i=0;i<groups.length;i++){
+          if(s!==context.site()||identity(token)!==actor){throw new Error("Connection changed. Review existing Drafts before continuing.");}
+          var group=groups[i],html='<p>A gentle reminder about assigned legislative work due within two calendar days or overdue. Please review the current response and confirmed deadline.</p>';
+          group.items.forEach(function(item){html+='<h3>'+esc(item.bill)+' — '+esc(item.label)+'</h3><p>'+esc(item.division+' / '+item.type+' / due '+item.due)+'</p><p>'+esc(item.task)+'</p>'+link(item.thread||item.source,'Open the bill conversation or source request');});
+          await context.graph.createDraftMessage(token,[group.to],'Legislative work reminder — '+group.items.length+' request(s)',html);
+        }
+        info(groups.length+' reminder draft(s) saved in Outlook. Review before sending. This button does not schedule unattended reminders.');
+      }catch(e){info('Reminder drafting stopped: '+e.message+' Check Outlook Drafts before retrying.');}
+      finally{busyState(false);}
+    }
     async function load(){
       if(busy){return;}if(editing){info("Save or discard your edits before refreshing shared work.");return;}var generation=++epoch;busyState(true);writable=false;el('wfDetail').innerHTML='';
       try{var s=site(), token=await context.graph.getToken(), a=identity(token), result=await LrrWorkflowStore.client(context.graph,s).read(token);
@@ -133,7 +150,7 @@
     }
     host.addEventListener('input',function(event){if(el('wfDetail').contains(event.target)&&['wfAction','wfActionDivision','wfConfirm'].indexOf(event.target.id)<0){editing=true;el('wfDiscard').hidden=false;if(el('wfConfirm')){el('wfConfirm').checked=false;}}});
     bind('wfDiscard',function(){editing=false;el('wfDiscard').hidden=true;if(current()){detail();}else{newRequest();}info('Edits discarded. Load shared work to refresh the saved record.');});
-    bind('wfLoad',load);bind('wfNew',newRequest);['wfSessionFilter','wfDivision','wfType','wfStage','wfDue','wfMine'].forEach(function(id){el(id).addEventListener('change',function(){render(true);});});
+    bind('wfLoad',load);bind('wfNew',newRequest);bind('wfReminders',draftReminders);['wfSessionFilter','wfDivision','wfType','wfStage','wfDue','wfMine'].forEach(function(id){el(id).addEventListener('change',function(){render(true);});});
     return {load:load,invalidate:function(){epoch++;editing=false;el('wfDiscard').hidden=true;writable=false;loadedSite=null;events=[];selected='';actor='';el('wfQueue').innerHTML='';el('wfDetail').innerHTML='';el('wfNew').disabled=true;if(el('wfTeamsCodeValue')){el('wfTeamsCodeValue').value='';el('wfTeamsCodeValue').hidden=true;}info('Connection changed. Load shared work again.');}};
   }
   root.LrrWorkflowUI={mount:mount};

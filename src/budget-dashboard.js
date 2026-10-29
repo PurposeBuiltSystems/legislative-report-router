@@ -63,7 +63,7 @@
     return out;
   }
   function page(rows, options) {
-    var content = html(rows, { asOf: options.asOf });
+    var content = options.contentHtml || html(rows, { asOf: options.asOf });
     if (options.trackerUrl && /^https:\/\//i.test(options.trackerUrl)) { content += '<p><a href="' + esc(options.trackerUrl) + '">Open live BillTracker to edit estimates and review statuses</a></p>'; }
     return { "@odata.type": "#microsoft.graph.sitePage", name: "lrr-budget-" + String(options.trackerId).replace(/[^a-zA-Z0-9]/g, "") + ".aspx",
       title: "Legislative budget dashboard", description: "LRR_BUDGET_V1:" + options.trackerId,

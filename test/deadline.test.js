@@ -64,7 +64,7 @@ var rule = { divisionCode: "MVD", divisionName: "Motor Vehicle Division", teamsT
 
 var post = Teams.buildChannelMessage(item, [rule], { deadlineLabel: "Tue, Aug 4, 3:00 PM" });
 check("post subject carries deadline", post.subject, "HF 437 — comments due Tue, Aug 4, 3:00 PM");
-check("post marked high importance", post.importance, "high");
+check("routine post uses normal importance", post.importance, "normal");
 check("post body shows deadline line", post.body.content.indexOf("Comments due by Tue, Aug 4, 3:00 PM") !== -1, true);
 check("mention still present", post.mentions.length, 1);
 

@@ -1,0 +1,45 @@
+"use strict";
+const assert=require('node:assert/strict'),fs=require('node:fs'),{JSDOM}=require('jsdom');
+const DL=require('../src/deadline'),WB=require('../src/workflow-budget');
+const original='<p>2026-10-29 · 1 bill</p><p>Comments due by <strong>Mon, Nov 2, 5:00 PM</strong></p>';
+assert.equal(DL.fromReport(original,new Date(2026,9,29)).label,'Mon, Nov 2, 5:00 PM');
+assert.equal(DL.fromReport(original,new Date(2027,5,10)).label,'Mon, Nov 2, 5:00 PM','report year survives a later import');
+assert.equal(DL.fromReport('Comments due by Tue, Nov 2, 2026, 5:00 PM'),null,'contradictory weekday is never silently repaired');
+assert.equal(DL.fromReport('Comments due by Nov 31, 2026, 5:00 PM'),null);
+const req={id:'r',config:{bill:'HF1',label:'Fiscal response',type:'Fiscal data',session:'2026',divisions:[{code:'MVD'}]},divisions:{MVD:{artifact:{data:{version:'v2',links:['https://example.test/v2'],finance:[{fy:'FY2027',kind:'Expenditure',direction:'Increase',amount:12000,fund:'Road',frequency:'Ongoing'}]}},director:null}},conflicts:[],cfo:null};
+assert.doesNotMatch(WB.html(WB.rows([req]),{approved:true}),/\$12,000/,'revised pending version excluded from CFO totals');
+req.divisions.MVD.director={};req.cfo={};assert.match(WB.html(WB.rows([req]),{approved:true}),/\$12,000/);
+req.conflicts=['concurrent'];assert.doesNotMatch(WB.html(WB.rows([req]),{approved:true}),/\$12,000/,'conflicts remove approval eligibility');
+const WF=require('../src/workflow');
+const reminderRequest={id:'reminder',owner:'owner@example.test',config:{bill:'HF1',label:'Comment review',type:'Comment',due:'2026-11-02',thread:'https://teams.microsoft.com/test',divisions:[{code:'MVD',coordinator:'coordinator@example.test',director:'director@example.test'}]},divisions:{MVD:{stage:'Director review',director:null}},conflicts:[],ready:false};
+assert.equal(WF.reminders([reminderRequest],'owner@example.test','2026-11-01')[0].to,'director@example.test');
+assert.equal(WF.reminders([reminderRequest],'unassigned@example.test','2026-11-01').length,0,'unassigned actors cannot prepare reminders for others');
+reminderRequest.divisions.MVD.director={};assert.equal(WF.reminders([reminderRequest],'owner@example.test','2026-11-01').length,0,'current approvals suppress reminders');
+const dom=new JSDOM(fs.readFileSync('src/taskpane/taskpane.html','utf8'),{runScripts:'outside-only',url:'https://router.test/'}),w=dom.window;
+Object.defineProperty(w,'crypto',{value:require('node:crypto').webcrypto});w.TextEncoder=TextEncoder;
+for(const name of ['teams','routing','deadline','workflow','workflow-store'])w.eval(fs.readFileSync('src/'+name+'.js','utf8'));
+const audits=[],posts=[],replies=[],emails=[],drafts=[],files=[];let failFiles=false,seq=0;
+w.Office={onReady(){},AsyncResultStatus:{Succeeded:'succeeded'},context:{mailbox:{userProfile:{emailAddress:'me@example.test'}},roamingSettings:{set(){},get(){return '{}';},saveAsync(cb){cb({status:'succeeded'});}}}};
+w.GraphData={getToken:async()=> 'token',authenticatedAccount:()=> 'me@example.test',listItems:async()=>structuredClone(audits),addListItem:async(t,s,l,f)=>{audits.push({id:String(++seq),fields:structuredClone(f)});},
+ getAttachments:async()=>[{id:'inline',name:'logo.png',isInline:true},{id:'doc',name:'Request.docx',size:100},{id:'xlsx',name:'Data.xlsx',size:200}],getAttachmentBytes:async()=> 'aGk=',saveReportAttachment:async(t,s,k,f)=>{if(failFiles)throw Error('copy denied');files.push(f.name);return {href:'https://tenant.sharepoint.com/'+f.name,text:f.name};},
+ postChannelMessage:async(t,team,channel,p)=>{posts.push({team,channel,p});return {id:'root'+posts.length};},replyChannelMessage:async(t,team,channel,root,p)=>{replies.push({root,p});return {id:'reply'+replies.length};},sendMail:async(t,to,subject,html)=>emails.push({to,subject,html}),createDraftMessage:async(t,to,subject,html)=>drafts.push({to,subject,html})};
+let raw=fs.readFileSync('src/taskpane/taskpane.js','utf8'),at=raw.lastIndexOf('})();');
+w.eval(raw.slice(0,at)+`\n settings=function(){return {sessionName:'SIMULATION 2026',stateName:'Iowa'};}; setStatus=function(kind,text){self.lastStatus=text;};
+ self.api={state,publish,currentDeadline,renderPreview,draftHarvestEmail,renderHarvest,createCommentRequests,restoreTeamsLinks};\n`+raw.slice(at));
+const a=w.api,el=id=>w.document.getElementById(id),rule={id:'mvd',divisionCode:'MVD',emails:['me@example.test'],teamsTeamId:'team',teamsChannelId:'channel'};
+a.state.site={siteId:'site',auditListId:'audit'};a.state.subject='SIMULATION ONLY';a.state.reportKey='report1';a.state.sourceMessageId='mail1';
+a.state.commentDeadline=DL.fromReport(original,new Date(2026,9,29));a.state.items=[{billNumber:'HF1',brief:'Test',routes:[rule],distributedTo:['MVD'],commentRequestedFrom:['MVD']}];
+el('confirmBox').checked=true;
+(async()=>{
+ a.renderPreview();assert.match(el('previewList').textContent,/Final Outlook report/);const date=a.currentDeadline().date.toISOString();assert.equal(a.currentDeadline().date.toISOString(),date);
+ await a.publish(false);assert.equal(posts.length,1);assert.equal(files.length,2,'inline signature excluded');assert.match(emails[0].html,/root1/);assert.match(emails[0].html,/Request.docx/);assert.match(posts[0].p.body.content,/Data.xlsx/);assert.match(emails[0].html,/Mon, Nov 2, 5:00 PM/);
+ await a.publish(false);assert.equal(posts.length,1);assert.equal(emails.length,1,'same report cannot send again');
+ a.state.reportKey='report2';a.state.results={};a.state.items=[{billNumber:'S-9998',relatedBill:'HF1',brief:'Amendment',routes:[rule],distributedTo:['MVD']}];
+ await a.publish(false);assert.equal(posts.length,1,'parent thread reused across reports');assert.equal(replies[0].root,'root1');assert.match(emails[1].html,/reply1/);assert.match(emails[1].html,/parentMessageId=root1/);
+ a.state.items[0].teamsLinks=[];a.state.publicationRows=null;await a.restoreTeamsLinks('token');assert.match(a.state.items[0].teamsLinks[0].href,/reply1/,'durable exact update links survive retry/reopen');
+ await a.draftHarvestEmail({bill:'HF1',division:'MVD',evidence:'Estimate needs review',commentLink:'https://teams.microsoft.com/l/message/channel/exact-reply?parentMessageId=root1'});assert.match(drafts[0].html,/exact-reply/);assert.match(drafts[0].html,/does not record approval/);
+ a.state.reportKey='report3';a.state.results={};a.state.documents=[];failFiles=true;await a.publish(false);assert.equal(replies.length,1,'attachment failure stops delivery rather than silently dropping files');assert.match(w.lastStatus,/copy denied/);
+ failFiles=false;a.state.items=[{billNumber:'HF2',routes:[rule]}];a.state.queueRoles={MVD:{code:'MVD',coordinator:'me@example.test',director:'director@example.test',reviewers:['reviewer@example.test']}};
+ await a.createCommentRequests('token','me@example.test');await a.createCommentRequests('token','me@example.test');const events=await w.LrrWorkflowStore.decode(audits);assert.equal(events.filter(e=>e.kind==='create').length,1,'request creation is durable and idempotent');assert.equal(events[0].data.due,'2026-11-02');assert.equal(events[0].data.divisions[0].director,'director@example.test');
+ console.log('Delivery regressions passed: preserved deadlines, linked attachments, durable parent threads/exact email links, comment-email drafts, copy failure guard, assigned queue creation, approval-aware budget.');dom.window.close();
+})().catch(e=>{console.error(e);process.exitCode=1;dom.window.close();});

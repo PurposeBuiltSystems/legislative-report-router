@@ -424,6 +424,38 @@
     return graphJson(token, "POST", "/teams/" + teamId + "/channels/" + channelId + "/messages", payload);
   }
 
+  async function replyChannelMessage(token, teamId, channelId, rootId, payload) {
+    var reply = { body: payload.body, mentions: payload.mentions || [] };
+    return graphJson(token, "POST", "/teams/" + encodeURIComponent(teamId) + "/channels/" + encodeURIComponent(channelId) + "/messages/" + encodeURIComponent(rootId) + "/replies", reply);
+  }
+
+  /** Copy a bounded source file to the already-connected site's document library. */
+  async function saveReportAttachment(token, siteId, folderName, attachment, base64) {
+    if (!base64 || attachment.size > 20 * 1024 * 1024) { throw new Error("Source attachment is unavailable or exceeds the 20 MB routing limit: " + attachment.name); }
+    var drive = await graphJson(token, "GET", "/sites/" + encodeURIComponent(siteId) + "/drive?$select=id");
+    var base = "/drives/" + encodeURIComponent(drive.id);
+    async function folder(parent, name) {
+      var path = base + "/items/" + encodeURIComponent(parent) + ":/" + encodeURIComponent(name);
+      try { return await graphJson(token, "GET", path); }
+      catch (e) { if (!/-> 404\b/.test(e.message)) { throw e; } }
+      try { return await graphJson(token, "POST", base + "/items/" + encodeURIComponent(parent) + "/children", { name: name, folder: {}, "@microsoft.graph.conflictBehavior": "fail" }); }
+      catch (e) { if (!/-> 409\b/.test(e.message)) { throw e; } return graphJson(token, "GET", path); }
+    }
+    var rootItem = await graphJson(token, "GET", base + "/root?$select=id");
+    var reports = await folder(rootItem.id, "Legislative Router Reports");
+    var report = await folder(reports.id, folderName);
+    var binary = atob(base64), bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) { bytes[i] = binary.charCodeAt(i); }
+    var name = String(attachment.name || "attachment").replace(/[\\/:*?"<>|#%]/g, "_");
+    var res = await fetch(graphBase() + base + "/items/" + encodeURIComponent(report.id) + ":/" + encodeURIComponent(name) + ":/content", {
+      method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/octet-stream" }, body: bytes
+    });
+    if (!res.ok) { throw new Error("Attachment copy failed: " + attachment.name + " (" + res.status + ")"); }
+    var file = await res.json();
+    if (!file.webUrl) { throw new Error("The copied attachment has no SharePoint link."); }
+    return { href: file.webUrl, text: attachment.name };
+  }
+
   function oidFromToken(token) {
     try {
       var payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
@@ -494,7 +526,7 @@
 
   async function getAttachments(token, messageId) {
     return collection(token, "/me/messages/" + encodeURIComponent(messageId) +
-      "/attachments?$select=id,name,contentType,size");
+      "/attachments?$select=id,name,contentType,size,isInline");
   }
 
   /** All replies to a channel message (fiscal harvest), capped paging. */
@@ -591,6 +623,8 @@
     myPersonalSite: myPersonalSite,
     teamSite: teamSite,
     postChannelMessage: postChannelMessage,
+    replyChannelMessage: replyChannelMessage,
+    saveReportAttachment: saveReportAttachment,
     listTeamTags: listTeamTags,
     listTeamTagMembers: listTeamTagMembers,
     createTeamTag: createTeamTag,

@@ -34,6 +34,17 @@
 
   function nl2br(s) { return esc(s).replace(/\n/g, "<br>"); }
 
+  function linksHtml(links, label) {
+    return (links || []).filter(function (l) { return l && /^https:\/\/[^\s]+$/i.test(l.href || ""); }).map(function (l) {
+      return '<p><a href="' + esc(l.href) + '">' + esc(l.text || label) + '</a></p>';
+    }).join("");
+  }
+
+  function commentLink(teamId, channelId, messageId, rootId, cloud) {
+    var host = cloud === "gcchigh" ? "https://gov.teams.microsoft.us" : cloud === "dod" ? "https://dod.teams.microsoft.us" : "https://teams.microsoft.com";
+    return host + "/l/message/" + encodeURIComponent(channelId) + "/" + encodeURIComponent(messageId) + "?groupId=" + encodeURIComponent(teamId) + "&parentMessageId=" + encodeURIComponent(rootId || messageId);
+  }
+
   /** Default per-bill Teams post template. Placeholders are functions of (item, rule). */
   var DEFAULT_TEMPLATE = {
     commentWindow: "Review comments requested within 48 business hours.",
@@ -101,7 +112,7 @@
       "<br><br><strong>Brief:</strong><br>" + nl2br(item.brief || "(none)") +
       (item.parentBill ? "<br><br>" + esc(parentContext(item.parentBill)) : "") +
       (t.commentWindow ? "<br><br>" + esc(t.commentWindow) : "") +
-      linkHtml;
+      linkHtml + linksHtml(opts.documents, "Open source attachment");
 
     var payload = {
       body: { contentType: "html", content: content },
@@ -111,7 +122,7 @@
       // The subject shows in the channel list view — the deadline is visible
       // before the post is even opened; importance = the red ! marker.
       payload.subject = item.billNumber + " — comments due " + opts.deadlineLabel;
-      payload.importance = "high";
+      payload.importance = "normal";
     }
     return payload;
   }
@@ -125,7 +136,7 @@
         "<p style=\"margin:2px 0;color:#616161\">Distributed To: " + esc((it.distributedTo || []).join(", ")) +
         " · Comment Requested From: " + esc((it.commentRequestedFrom || []).join(", ")) + "</p>" +
         "<p style=\"margin:4px 0\">" + nl2br(it.brief || "") + "</p>" +
-        (it.parentBill ? parentHtml(it.parentBill) : "");
+        (it.parentBill ? parentHtml(it.parentBill) : "") + linksHtml(it.teamsLinks, "Open bill conversation in Teams");
     }).join("");
     return {
       subject: (opts.subjectPrefix || "Legislative bills for review") + " — " +
@@ -138,7 +149,7 @@
           ? '<p style="background:#fde7e9;border-radius:6px;padding:8px 12px">⏰ <strong>Comments due by ' +
             esc(opts.deadlineLabel) + "</strong></p>"
           : "") +
-        rows +
+        rows + linksHtml(opts.documents, "Open source attachment") +
         (t.commentWindow ? "<p><strong>" + esc(t.commentWindow) + "</strong></p>" : "") +
         "</div>",
       to: rule.emails || [],
@@ -158,6 +169,7 @@
 
   var api = {
     buildMentions: buildMentions,
+    commentLink: commentLink,
     buildChannelMessage: buildChannelMessage,
     buildDivisionEmail: buildDivisionEmail,
     idempotencyKey: idempotencyKey,

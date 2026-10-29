@@ -391,9 +391,11 @@
     <div class="modes">
       <label><input id="optTeams" type="checkbox" checked /> Post to Teams</label>
       <label><input id="optEmail" type="checkbox" checked /> Send targeted division emails</label>
+      <label><input id="optQueue" type="checkbox" /> Create assigned comment requests in the work queue</label>
       <label><input id="optOriginal" type="checkbox" /> Send the original Outlook message</label>
       <label><input id="optDailyReport" type="checkbox" /> Draft the Daily Bill Report email to the distribution list</label>
     </div>
+    <div id="queueAssignments"></div>
     <div id="previewList"></div>
     <div class="flow-actions"><button id="previewToReview" type="button">← Back to review</button><button id="previewToPublish" class="primary" type="button">Next: confirm publication →</button></div>
   </section>
@@ -413,7 +415,7 @@
   </section>
 
   <!-- Screen 5: Audit -->
-  <section id="screen-workflow" class="screen" hidden><p class="hint">Track division responses here after intake. Publishing a bill does not automatically create a work request; select New request to start its comment or fiscal review.</p><div id="workflowHost"></div></section>
+  <section id="screen-workflow" class="screen" hidden><p class="hint">Track division responses here after intake. In Preview, choose Create assigned comment requests to start comment work during publication. Use New request for a separate fiscal-data request with its actual confirmed deadline.</p><div id="workflowHost"></div></section>
 
   <section id="screen-audit" class="screen" hidden>
     <h3 class="wiz-h">💰 Fiscal impact — running totals for budget requests</h3>
@@ -432,6 +434,7 @@
     <div id="harvestView"></div>
     <button id="harvestApply" class="primary" hidden>Apply checked to tracker</button>
     <h3 class="wiz-h">Budget dashboard</h3>
+    <label>Budget source <select id="budgetSource"><option value="tracker">Tracked estimates (manual / harvested)</option><option value="approved">CFO-approved fiscal responses</option><option value="workflow">Current fiscal responses — all stages</option></select></label>
     <div class="row2">
       <label>Fiscal year <select id="budgetFy"><option value="">All fiscal years</option></select></label>
       <label>Division <select id="budgetDivision"><option value="">All divisions</option></select></label>
@@ -450,9 +453,9 @@
 
   <script src="../parser.js?v=20261029simulation"></script>
   <script src="../routing.js?v=20261029picker"></script>
-  <script src="../teams.js?v=20261027e"></script>
+  <script src="../teams.js?v=20261029delivery"></script>
   <script src="../docx.js?v=43"></script>
-  <script src="../graph.js?v=20261028e"></script>
+  <script src="../graph.js?v=20261029delivery"></script>
   <script src="../presets.js?v=46"></script>
   <script src="../provision.js?v=20261029picker"></script>
   <script src="../contacts.js?v=43"></script>
@@ -464,16 +467,17 @@
   <script src="../amendments.js?v=1"></script>
   <script src="../watch-window.js?v=20261028g"></script>
   <script src="../invite.js?v=43"></script>
-  <script src="../deadline.js?v=43"></script>
+  <script src="../deadline.js?v=20261029delivery"></script>
   <script src="../billstatus.js?v=42"></script>
   <script src="../fiscal.js?v=44"></script>
-  <script src="../budget-dashboard.js?v=1"></script>
+  <script src="../budget-dashboard.js?v=20261029delivery"></script>
   <script src="../harvest.js?v=43"></script>
   <script src="../xlsx.js?v=43"></script>
   <script src="../staff-config.js?v=20261028c"></script>
-  <script src="../workflow.js?v=20261028c"></script>
+  <script src="../workflow.js?v=20261029delivery"></script>
   <script src="../workflow-store.js?v=20261028c"></script>
-  <script src="../workflow-ui.js?v=20261029simulation"></script>
-  <script src="taskpane.js?v=20261029simulation"></script>
+  <script src="../workflow-budget.js?v=20261029delivery"></script>
+  <script src="../workflow-ui.js?v=20261029delivery"></script>
+  <script src="taskpane.js?v=20261029delivery"></script>
 </body>
 </html>

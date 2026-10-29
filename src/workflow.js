@@ -109,6 +109,25 @@
     return { id:meta.id, request:s ? s.id : meta.request, kind:kind, division:division, actor:actor, at:meta.at, base:s ? s.revision : "", data:d };
   }
   function due(s, today) { if (!s.config.due) { return "Deadline needs confirmation"; } if (s.submitted) { return "Submitted " + s.submitted.data.at; } var n=Math.round((Date.parse(s.config.due+"T00:00:00Z")-Date.parse(today+"T00:00:00Z"))/86400000); return n<0 ? Math.abs(n)+" day(s) overdue" : n===0 ? "Due today" : "Due in "+n+" day(s)"; }
-  var api={config:config, finance:finance, artifact:artifact, project:project, plan:plan, revision:revision, due:due, email:email, financialSummary:financialSummary};
+  function reminders(requests, actor, today) {
+    var groups=Object.create(null);
+    function add(to,s,code,task){
+      if(!to){return;}var key=email(to);if(!groups[key]){groups[key]={to:key,items:[]};}
+      groups[key].items.push({bill:s.config.bill,label:s.config.label,division:code,due:s.config.due,type:s.config.type,task:task,thread:s.config.thread,source:s.config.source,revision:s.revision});
+    }
+    requests.forEach(function(s){
+      if(s.conflicts.length||s.submitted||!s.config.due){return;}
+      var days=Math.round((Date.parse(s.config.due+"T00:00:00Z")-Date.parse(today+"T00:00:00Z"))/86400000);
+      if(days>2){return;}
+      if(s.config.type==="Fiscal data"&&s.ready){if(actor===s.owner||actor===s.config.cfo){add(s.cfo?s.config.submitter:s.config.cfo,s,"All divisions",s.cfo?"Record completed LSA submission when actually submitted":"Review current division responses for CFO approval");}return;}
+      s.config.divisions.forEach(function(r){
+        var v=s.divisions[r.code];if(v.director||!(actor===s.owner||actor===r.coordinator)){return;}
+        var to=v.stage==="Director review"?r.director:r.coordinator;
+        add(to,s,r.code,v.stage==="Director review"?"Review the current consolidated response":"Coordinate the current division response");
+      });
+    });
+    return Object.keys(groups).sort().map(function(k){return groups[k];});
+  }
+  var api={reminders:reminders,config:config, finance:finance, artifact:artifact, project:project, plan:plan, revision:revision, due:due, email:email, financialSummary:financialSummary};
   if (typeof module!=="undefined" && module.exports) { module.exports=api; } else { root.LrrWorkflow=api; }
 })(typeof self!=="undefined" ? self : this);
