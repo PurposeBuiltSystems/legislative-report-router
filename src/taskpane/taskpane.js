@@ -3256,8 +3256,8 @@
     if (!candidate.commentLink || !/^https:\/\/[^\s]+$/i.test(candidate.commentLink)) { setStatus("error", "This candidate has no Teams comment link."); return; }
     try {
       var rule = (state.rules || []).find(function (r) { return r.divisionCode === candidate.division; }) || {divisionCode: candidate.division || "Review", emails: []};
-      var item = {billNumber: candidate.bill, brief: candidate.evidence || "Review the linked Teams comment.", teamsLinks: [{href: candidate.commentLink, text: "Open exact comment in Teams"}]};
-      var mail = LrrTeams.buildDivisionEmail(rule, [item], {subjectPrefix: "Teams comment for review", template: {commentWindow: "Comment and figures require review; this email does not record approval."}});
+      var mail = {to:rule.emails || [], subject:"Teams comment for review — " + candidate.bill + (candidate.division ? " / " + candidate.division : ""),
+        html:"<p>Please review this Teams comment for <strong>" + esc(candidate.bill) + "</strong>.</p><p>Comment excerpt:</p><blockquote>" + esc(candidate.evidence || "Open the linked comment for the complete discussion.") + "</blockquote><p><a href=\"" + esc(candidate.commentLink) + "\">Open exact comment in Teams</a></p><p>Comment and figures require review; this email does not record approval.</p>"};
       var token = await GraphData.getToken();
       await GraphData.createDraftMessage(token, mail.to, mail.subject, mail.html);
       setStatus("info", "Email draft saved with the exact Teams comment link. Review recipients and wording in Outlook Drafts before sending.");
