@@ -130,12 +130,12 @@
     var el = byId("setupChecklist");
     if (!el) { return; }
     var st = settings();
-    var withPeople = state.rules.filter(function (r) { return (r.emails || []).length; }).length;
+    var withPeople = activeRoutingRules().filter(function (r) { return (r.emails || []).length; }).length;
     var distN = (typeof LrrReportGen !== "undefined") ? dailyReportRecipients(st).length : 0;
     var steps = [
       [!!state.signedIn, "Sign in and choose your legislature", "Sign in with your work account.", false],
       [!!(state.site && state.site.routingListId), "Connect the shared lists", "Choose a SharePoint site, then connect its lists.", false],
-      [state.rules.length > 0, "Set division destinations", "Use the legislative channel, coordinator tags, and/or division email contacts.", false],
+      [activeRoutingRules().length > 0, "Set division destinations", "Use the legislative channel, coordinator tags, and/or division email contacts.", false],
       [withPeople > 0, "Review division email contacts", "Add contacts here or use the same list in Teams.", true],
       [distN > 0, "Choose the daily report audience", "Use division contacts or a distribution list.", true],
       [!!st.lastCheckOk, "Check the connection", st.lastCheckOk ? "Last check passed " + new Date(st.lastCheckOk).toLocaleDateString() + ". Recheck after setup changes." : "Run checks; live notification tests are optional.", false],
@@ -195,12 +195,12 @@
     if (!st.siteUrl) {
       el.className = "conn-banner setup";
       el.innerHTML = "<b>First time?</b> Open Setup & contacts below to connect your shared lists and division destinations.";
-    } else if (state.rules.length) {
+    } else if (activeRoutingRules().length) {
       el.className = "conn-banner ok";
-      el.textContent = "\u2713 Setup saved \u2014 " + state.rules.length + " division route(s) connected. Find new bills or read the selected report.";
+      el.textContent = "\u2713 Setup saved \u2014 " + activeRoutingRules().length + " active division route(s) connected. Find new bills or read the selected report.";
     } else {
-      el.className = "conn-banner";
-      el.textContent = "Saved setup found \u2014 reconnecting\u2026";
+      el.className = "conn-banner setup";
+      el.textContent = state.site ? "Lists connected. Add your first division in Setup & contacts, Step 3." : "Saved setup found \u2014 reconnecting\u2026";
     }
   }
 
@@ -846,12 +846,22 @@
   // ---------- review ----------
 
   /** Active divisions appear once even when they have several channel routes. */
-  function distributedToPicker(it, idx) {
-    var id = "distributed-to-" + idx;
+  function activeRoutingRules() {
+    return state.rules.filter(function (r) { return LrrRouting.ruleActive(r) && r.divisionCode; });
+  }
+
+  function needsDivision(it) {
+    return it.routingStatus !== "excluded" && (it.routingStatus === "unmatched" || it.routingStatus === "partially-matched");
+  }
+
+  function distributedToPicker(it, idx, field) {
+    field = field || "distributedTo";
+    var caption = field === "distributedTo" ? "Distributed To" : "Comment From";
+    var id = (field === "distributedTo" ? "distributed-to-" : "comment-from-") + idx;
     var root = document.createElement("div"); root.className = "division-field"; root.id = id;
-    var title = document.createElement("span"); title.id = id + "-label"; title.textContent = "Distributed To";
+    var title = document.createElement("span"); title.id = id + "-label"; title.textContent = caption;
     root.appendChild(title);
-    var active = state.rules.filter(function (r) { return LrrRouting.ruleActive(r) && r.divisionCode; });
+    var active = activeRoutingRules();
     var choices = [];
     active.forEach(function (r) {
       var existing = choices.filter(function (c) { return c.code.toLowerCase() === r.divisionCode.toLowerCase(); })[0];
@@ -866,51 +876,62 @@
     }
     function changed(focusId, keepOpen) {
       var query = search.value;
+      var otherId = (field === "distributedTo" ? "comment-from-" : "distributed-to-") + idx;
+      var other = byId(otherId);
+      var otherOpen = other && other.querySelector("details").open;
+      var otherQuery = other ? other.querySelector('input[type="text"]').value : "";
       LrrRouting.routeItem(it, state.rules);
       refreshStats(); renderItems();
       var replacement = byId(id);
-      if (!replacement) { return; }
+      if (!replacement) { byId("onlyUnassigned").focus(); return; }
       var nextSearch = byId(id + "-search");
       nextSearch.value = query;
       var event = document.createEvent("Event"); event.initEvent("input", true, false);
       nextSearch.dispatchEvent(event);
       replacement.querySelector("details").open = keepOpen;
+      var nextOther = byId(otherId);
+      if (nextOther) {
+        nextOther.querySelector("details").open = otherOpen;
+        nextOther.querySelector('input[type="text"]').value = otherQuery;
+        var otherEvent = document.createEvent("Event"); otherEvent.initEvent("input", true, false);
+        nextOther.querySelector('input[type="text"]').dispatchEvent(otherEvent);
+      }
       var focus = byId(focusId) || byId(id + "-summary");
       focus.focus();
     }
     var tokens = document.createElement("div"); tokens.className = "division-tokens";
     tokens.setAttribute("role", "group"); tokens.setAttribute("aria-labelledby", title.id);
-    it.distributedTo.forEach(function (value, selectedIndex) {
+    it[field].forEach(function (value, selectedIndex) {
       var known = LrrRouting.rulesForDivision(value, active).length > 0;
       var token = document.createElement("span"); token.className = "division-token" + (known ? "" : " needs-setup");
       var text = document.createElement("span"); text.textContent = value + (known ? "" : " · Needs setup"); token.appendChild(text);
       var remove = document.createElement("button"); remove.type = "button"; remove.textContent = "×";
-      remove.setAttribute("aria-label", "Remove " + value + " from Distributed To for " + it.billNumber);
+      remove.setAttribute("aria-label", "Remove " + value + " from " + caption + " for " + it.billNumber);
       remove.addEventListener("click", function () {
-        it.distributedTo.splice(selectedIndex, 1); changed(id + "-summary", menu.open);
+        it[field].splice(selectedIndex, 1); changed(id + "-summary", menu.open);
       });
       token.appendChild(remove); tokens.appendChild(token);
     });
     root.appendChild(tokens);
     var menu = document.createElement("details"); menu.className = "division-picker";
     var summary = document.createElement("summary"); summary.id = id + "-summary"; summary.textContent = "Choose divisions";
-    summary.setAttribute("aria-label", "Choose Distributed To divisions for " + it.billNumber);
+    summary.setAttribute("aria-label", "Choose " + caption + " divisions for " + it.billNumber);
     menu.appendChild(summary);
     var search = document.createElement("input"); search.type = "text"; search.id = id + "-search";
     search.placeholder = "Search divisions"; search.autocomplete = "off";
-    search.setAttribute("aria-label", "Search divisions for " + it.billNumber); menu.appendChild(search);
+    search.setAttribute("aria-label", "Search " + caption + " divisions for " + it.billNumber); menu.appendChild(search);
     var options = document.createElement("div"); options.className = "division-options";
-    options.setAttribute("role", "group"); options.setAttribute("aria-label", "Available divisions for " + it.billNumber);
+    options.setAttribute("role", "group"); options.setAttribute("aria-label", "Available " + caption + " divisions for " + it.billNumber);
     choices.forEach(function (choice, choiceIndex) {
       var label = document.createElement("label"); label.className = "division-option";
       var checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.value = choice.code;
       checkbox.id = id + "-option-" + choiceIndex;
-      checkbox.checked = it.distributedTo.some(function (value) { return matches(value, choice.code); });
+      checkbox.checked = it[field].some(function (value) { return matches(value, choice.code); });
       checkbox.addEventListener("change", function () {
         if (checkbox.checked) {
-          if (!it.distributedTo.some(function (value) { return matches(value, choice.code); })) { it.distributedTo.push(choice.code); }
+          if (!it[field].some(function (value) { return matches(value, choice.code); })) { it[field].push(choice.code); }
         } else {
-          it.distributedTo = it.distributedTo.filter(function (value) { return !matches(value, choice.code); });
+          it[field] = it[field].filter(function (value) { return !matches(value, choice.code); });
         }
         changed(checkbox.id, true);
       });
@@ -931,6 +952,15 @@
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); menu.open = false; summary.focus(); }
     });
     menu.appendChild(options); menu.appendChild(empty); root.appendChild(menu);
+    if (!choices.length || it[field].some(function (value) { return !LrrRouting.rulesForDivision(value, active).length; })) {
+      var setup = document.createElement("button"); setup.type = "button"; setup.className = "linkish";
+      setup.textContent = "Set up division routes";
+      setup.addEventListener("click", function () {
+        setProp("settings", "open", true); wizShow(3, true);
+        var target = byId("rbCode"); if (target) { target.focus(); }
+      });
+      root.appendChild(setup);
+    }
     return root;
   }
 
@@ -939,33 +969,43 @@
     host.innerHTML = "";
     var bulk = byId("bulkRoute");
     bulk.innerHTML = "";
-    state.rules.forEach(function (r) {
-      var o = document.createElement("option");
-      o.value = r.id;
-      o.textContent = r.divisionCode + (r.teamsChannelName ? " → " + r.teamsChannelName : "");
-      bulk.appendChild(o);
+    var seen = {};
+    activeRoutingRules().forEach(function (r) {
+      var key = r.divisionCode.toLowerCase(); if (seen[key]) { return; } seen[key] = true;
+      var o = document.createElement("option"); o.value = r.id;
+      o.textContent = r.divisionCode + (r.divisionName ? " — " + r.divisionName : ""); bulk.appendChild(o);
     });
-
+    var shown = state.items.filter(function (it) { return !isChecked("onlyUnassigned") || needsDivision(it); });
+    setText("reviewCount", "Showing " + shown.length + " of " + state.items.length + " bills · " + included().length + " included for publication.");
+    setProp("bulkApply", "disabled", !bulk.children.length || !shown.some(function (it) { return it.routingStatus !== "excluded"; }));
+    if (!shown.length) {
+      var empty = document.createElement("p"); empty.className = "hint";
+      empty.textContent = state.items.length ? "All included bills have division routes. Turn off the filter to see the full report." : "No bills to review yet. Find new bills or read the selected Outlook report from Overview.";
+      host.appendChild(empty);
+    }
     state.items.forEach(function (it, idx) {
+      if (isChecked("onlyUnassigned") && !needsDivision(it)) { return; }
       var card = document.createElement("div");
       card.className = "item " + it.routingStatus;
 
       var head = document.createElement("div");
       head.className = "item-head";
       var inc = document.createElement("input");
-      inc.type = "checkbox";
+      inc.type = "checkbox"; inc.id = "include-bill-" + idx;
+      inc.setAttribute("aria-label", "Include " + it.billNumber + " in publication");
       inc.checked = it.routingStatus !== "excluded";
       inc.addEventListener("change", function () {
         it.routingStatus = inc.checked ? "unmatched" : "excluded";
         if (inc.checked) { LrrRouting.routeItem(it, state.rules); }
         refreshStats();
-        card.className = "item " + it.routingStatus;
-        badge.textContent = statusText(it);
+        renderItems();
+        var nextInclude = byId("include-bill-" + idx) || byId("onlyUnassigned"); nextInclude.focus();
       });
       var bill = document.createElement("input");
+      bill.type = "text"; bill.setAttribute("aria-label", "Bill number for bill " + (idx + 1));
       bill.className = "bill";
       bill.value = it.billNumber;
-      bill.addEventListener("change", function () { it.billNumber = bill.value.trim(); });
+      bill.addEventListener("input", function () { it.billNumber = bill.value.trim(); resetPublicationConfirmation(); });
       var badge = document.createElement("span");
       badge.className = "badge";
       badge.textContent = statusText(it);
@@ -975,25 +1015,17 @@
       head.appendChild(inc); head.appendChild(bill); head.appendChild(badge); head.appendChild(conf);
       card.appendChild(head);
 
-      var cf = document.createElement("input");
-      cf.value = it.commentRequestedFrom.join(", ");
-      cf.title = "Comment Requested From";
-      cf.addEventListener("change", function () {
-        it.commentRequestedFrom = LrrParser.normalizeDivisions(cf.value);
-        LrrRouting.routeItem(it, state.rules);
-        refreshStats(); renderItems();
-      });
       var lblRow = document.createElement("div");
       lblRow.className = "row2";
       var l1 = distributedToPicker(it, idx);
-      var l2 = document.createElement("label"); l2.textContent = "Comment From"; l2.appendChild(cf);
+      var l2 = distributedToPicker(it, idx, "commentRequestedFrom");
       lblRow.appendChild(l1); lblRow.appendChild(l2);
       card.appendChild(lblRow);
 
       if (it.unknownDivisions && it.unknownDivisions.length) {
         var unk = document.createElement("p");
         unk.className = "unknown";
-        unk.textContent = "No active route for: " + it.unknownDivisions.join(", ") + " — pick a route below, fix the division, or exclude this bill.";
+        unk.textContent = "Needs setup: " + it.unknownDivisions.join(", ") + ". Set up these divisions, replace them using the pickers, or exclude this bill.";
         card.appendChild(unk);
       }
       if (it.latestSourceBrief) {
@@ -1058,15 +1090,17 @@
         var tIn = document.createElement("input");
         tIn.type = "text";
         tIn.placeholder = "keyword or phrase\u2026";
+        tIn.setAttribute("aria-label", "Routing keyword for " + it.billNumber);
         var tSel = document.createElement("select");
-        state.rules.forEach(function (r) {
+        activeRoutingRules().forEach(function (r) {
           var o = document.createElement("option");
           o.value = r.id; o.textContent = r.divisionCode;
           tSel.appendChild(o);
         });
+        tSel.setAttribute("aria-label", "Division to remember for " + it.billNumber);
         var tBtn = document.createElement("button");
         tBtn.type = "button";
-        tBtn.textContent = "Teach";
+        tBtn.textContent = "Save keyword";
         tBtn.title = "Save this keyword to the division's routing rule and route matching bills";
         tBtn.addEventListener("click", function () { teachKeyword(it, tIn.value.trim(), tSel.value, tBtn); });
         teach.appendChild(tIn); teach.appendChild(tSel); teach.appendChild(tBtn);
@@ -1085,20 +1119,24 @@
           });
           teach.appendChild(wc);
         }
-        card.appendChild(teach);
+        var remember = document.createElement("details"); remember.className = "review-teach";
+        var rememberTitle = document.createElement("summary"); rememberTitle.textContent = "Remember routing keywords (optional)";
+        var rememberHelp = document.createElement("p"); rememberHelp.className = "hint";
+        rememberHelp.textContent = "Saving a keyword changes the shared routing rule for future reports and applies it to unassigned bills in this report.";
+        remember.appendChild(rememberTitle); remember.appendChild(rememberHelp); remember.appendChild(teach); card.appendChild(remember);
       }
       var routes = document.createElement("p");
       routes.className = "routes";
       routes.innerHTML = (it.routes || []).map(function (r) {
-        return '<span class="chip">' + esc(r.divisionCode) +
-          (r.teamsTagName ? " @" + esc(r.teamsTagName) : ' <span class="chip-warn">(no tag — posts without mention)</span>') + "</span>";
-      }).join(" ") || '<span class="chip-warn">No Teams route</span>';
+        return '<span class="chip">' + esc(r.divisionCode) + " → " + esc(r.teamsChannelId ? (r.teamsChannelName || "Teams channel") : "email only") +
+          (r.teamsTagName ? " @" + esc(r.teamsTagName) : r.teamsChannelId ? ' <span class="chip-warn">(no notification tag)</span>' : "") + "</span>";
+      }).join(" ") || '<span class="chip-warn">No active division route</span>';
       card.appendChild(routes);
 
       var brief = document.createElement("textarea");
-      brief.rows = 3;
+      brief.rows = 3; brief.setAttribute("aria-label", "Brief for " + it.billNumber);
       brief.value = it.brief;
-      brief.addEventListener("change", function () { it.brief = brief.value; });
+      brief.addEventListener("input", function () { it.brief = brief.value; resetPublicationConfirmation(); });
       card.appendChild(brief);
 
       host.appendChild(card);
@@ -1148,15 +1186,19 @@
 
   function bulkApply() {
     var ruleId = byId("bulkRoute").value;
-    var rule = state.rules.find(function (r) { return r.id === ruleId; });
+    var rule = activeRoutingRules().find(function (r) { return r.id === ruleId; });
     if (!rule) { return; }
+    var count = 0;
     state.items.forEach(function (it) {
-      if (it.routingStatus === "excluded") { return; }
-      it.distributedTo = [rule.divisionCode];
+      if (it.routingStatus === "excluded" || (isChecked("onlyUnassigned") && !needsDivision(it))) { return; }
+      var alreadySelected = it.distributedTo.some(function (value) {
+        return LrrRouting.rulesForDivision(value, state.rules).some(function (r) { return r.divisionCode.toLowerCase() === rule.divisionCode.toLowerCase(); });
+      });
+      if (!alreadySelected) { it.distributedTo.push(rule.divisionCode); count++; }
       LrrRouting.routeItem(it, state.rules);
     });
     refreshStats(); renderItems();
-    setStatus("info", "Route " + rule.divisionCode + " applied to all included bills.");
+    setStatus("info", rule.divisionCode + " added to " + count + " bill(s). Existing divisions kept.");
   }
 
   function resetPublicationConfirmation() {
@@ -1208,8 +1250,8 @@
   function renderRoutesSummary() {
     var el = byId("routesSummary");
     if (!el) { return; }
-    if (!state.rules.length) { el.innerHTML = "No divisions yet \u2014 add your first below."; return; }
-    el.innerHTML = state.rules.map(function (r) {
+    if (!activeRoutingRules().length) { el.textContent = "No active divisions yet \u2014 add your first below."; return; }
+    el.innerHTML = activeRoutingRules().map(function (r) {
       var chan = r.teamsChannelId ? (r.teamsChannelName || "channel set") : ((r.emails || []).length ? "email only" : "\u26a0 no destination");
       var tag = r.teamsTagId ? "\ud83c\udff7 " + (r.teamsTagName || "tag set") : "no notification tag (optional)";
       return "<b>" + esc(r.divisionCode) + "</b> → " + esc(chan) + " · " + esc(tag);
@@ -2133,18 +2175,18 @@
       state._auditCache = null;
       state.site = { siteId: site.siteId, routingListId: routingListId, auditListId: auditListId, trackerListId: trackerListId };
       refreshSharePointLinks(token);
-      byId("rulesInfo").textContent = state.rules.length + " routing rule(s) loaded from " + site.name +
-        " (" + state.rules.filter(function (r) { return r.teamsTagId; }).length + " with Teams tags).";
+      byId("rulesInfo").textContent = activeRoutingRules().length + " active routing rule(s) loaded from " + site.name +
+        " (" + (state.rules.length - activeRoutingRules().length) + " inactive; " + activeRoutingRules().filter(function (r) { return r.teamsTagId; }).length + " with Teams tags).";
       var qSel = byId("quickDivision");
       qSel.innerHTML = "";
-      state.rules.forEach(function (r) {
+      activeRoutingRules().forEach(function (r) {
         var o = document.createElement("option");
         o.value = r.id; o.textContent = r.divisionCode;
         qSel.appendChild(o);
       });
       var tpSel = byId("testPostRoute");
       tpSel.innerHTML = "";
-      state.rules.filter(function (r) { return r.teamsTeamId && r.teamsChannelId; }).forEach(function (r) {
+      activeRoutingRules().filter(function (r) { return r.teamsTeamId && r.teamsChannelId; }).forEach(function (r) {
         var o = document.createElement("option");
         o.value = r.id;
         o.textContent = r.divisionCode + " \u2192 " + (r.teamsChannelName || r.teamsChannelId.slice(0, 18) + "\u2026");
@@ -2373,8 +2415,8 @@
       if (!state.rules.length && siteOk) {
         try { await connectRules(); } catch (e) { /* reported below */ }
       }
-      if (state.rules.length) {
-        logCheck(true, "Routing rules", state.rules.length + " loaded");
+      if (activeRoutingRules().length) {
+        logCheck(true, "Routing rules", activeRoutingRules().length + " active loaded");
         LrrRouting.validateRules(state.rules).forEach(function (v) {
           logCheck(v.level === "error" ? false : "warn", "Rule check" + (v.division ? " (" + v.division + ")" : ""), v.message);
         });
@@ -2384,7 +2426,7 @@
 
       // 5. live Teams validation: channels + tags per unique team (cap 5)
       var teams = {};
-      state.rules.forEach(function (r) { if (r.teamsTeamId) { teams[r.teamsTeamId] = teams[r.teamsTeamId] || []; teams[r.teamsTeamId].push(r); } });
+      activeRoutingRules().forEach(function (r) { if (r.teamsTeamId) { teams[r.teamsTeamId] = teams[r.teamsTeamId] || []; teams[r.teamsTeamId].push(r); } });
       var teamIds = Object.keys(teams).slice(0, 5);
       for (var ti = 0; ti < teamIds.length; ti++) {
         var tid = teamIds[ti];
@@ -2844,6 +2886,12 @@
       warning.textContent = "Email-only contacts needing attention: " + sharedRecipientWarnings.join(" ");
       host.appendChild(warning);
     }
+    var unresolved = included().filter(needsDivision);
+    if (unresolved.length) {
+      var unresolvedNote = document.createElement("p"); unresolvedNote.className = "warnbox";
+      unresolvedNote.textContent = unresolved.length + " bill(s) still need division setup: " + unresolved.map(function (it) { return it.billNumber; }).join(", ") + ". Return to Review to resolve them. Unconfigured divisions receive nothing.";
+      host.appendChild(unresolvedNote);
+    }
     if (useDivisionDistribution(settings())) {
       var recipients = document.createElement("p");
       recipients.className = "hint";
@@ -2875,9 +2923,18 @@
         '<div class="preview-body">' + mail.html + "</div>";
       host.appendChild(box);
     }); }
+    if (isChecked("optOriginal")) {
+      var original = document.createElement("p"); original.className = "hint";
+      original.textContent = "The original Outlook message will be sent using its existing recipients. Review those recipients in Outlook before confirming.";
+      host.appendChild(original);
+    }
     if (isChecked("optDailyReport")) { var draft = document.createElement("p"); draft.className = "hint"; draft.textContent = "An Outlook report draft will be created for " + dailyReportRecipients().length + " recipient(s). Review and send it from Outlook separately."; host.appendChild(draft); }
     if (!host.children.length) {
-      host.innerHTML = '<p class="hint">Nothing to preview — parse a report and connect routing rules first.</p>';
+      var empty = document.createElement("p"); empty.className = "hint";
+      empty.textContent = !included().length ? "No included bills. Return to Review to include bills, or start from Overview." :
+        !hasDeliveryChoice() ? "Choose a delivery option above to preview its recipients and messages." :
+        "No destinations match the selected delivery. Check division channels and email contacts in Setup, or choose a different delivery option.";
+      host.appendChild(empty);
     }
   }
 

@@ -10,7 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
-  <link rel="stylesheet" href="taskpane.css?v=20261029picker" />
+  <link rel="stylesheet" href="taskpane.css?v=20261029ux" />
 </head>
 <body>
   <header class="app-head">
@@ -370,14 +370,17 @@
 
   <!-- Screen 2: Review -->
   <section id="screen-review" class="screen" hidden>
-    <h2 class="screen-title">Review bills and divisions</h2><p class="hint">Edit the brief, check each division, and exclude anything you do not want to publish. Outlook draft edits are not imported automatically; re-read the final selected report before publishing if it changed.</p>
-    <label class="modes" style="margin:4px 0"><input id="onlyUnassigned" type="checkbox" /> Show only bills that still need a division</label>
+    <h2 class="screen-title">Review bills and divisions</h2><p class="hint">Choose divisions, edit each brief, and uncheck bills you do not want to publish.</p>
+    <details class="review-help"><summary>How recipients and Outlook edits work</summary><p class="hint">Distributed To receives the bill. Comment From also receives it and is asked for a response. Removing a division from one list keeps it in the other.</p><p class="hint">Outlook draft edits are not imported automatically. Re-read the final selected report before publishing if it changed.</p></details>
+    <label class="confirm-check"><input id="onlyUnassigned" type="checkbox" /> Show only bills that need division setup</label>
+    <p id="reviewCount" class="hint" aria-live="polite"></p>
     <div class="bulk-row">
-      <label>Send every checked bill to
+      <label>Add a division to shown bills
         <select id="bulkRoute"></select>
       </label>
-      <button id="bulkApply">Assign</button>
+      <button id="bulkApply" type="button">Add division</button>
     </div>
+    <p class="hint">Bulk changes add to the bills shown below. Existing divisions stay selected; excluded bills are skipped.</p>
     <div id="items"></div>
     <div class="flow-actions"><button id="reviewToPreview" class="primary" type="button">Next: preview recipients and messages →</button></div>
   </section>
@@ -471,6 +474,6 @@
   <script src="../workflow.js?v=20261028c"></script>
   <script src="../workflow-store.js?v=20261028c"></script>
   <script src="../workflow-ui.js?v=20261028f"></script>
-  <script src="taskpane.js?v=20261029picker"></script>
+  <script src="taskpane.js?v=20261029ux"></script>
 </body>
 </html>
