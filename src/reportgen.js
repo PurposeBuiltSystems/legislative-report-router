@@ -140,8 +140,9 @@
       textLines.push("");
 
       h.push('<div style="border-top:1px solid #e1e1e1;padding:10px 0 6px">');
+      var label = it.documentType === "Amendment" && it.relatedBill ? it.billNumber + " filed on " + it.relatedBill : it.billNumber;
       h.push("<p style=\"margin:0\"><b>" +
-        (link ? '<a href="' + esc(link.href) + '">' + esc(it.billNumber) + "</a>" : esc(it.billNumber)) +
+        (link ? '<a href="' + esc(link.href) + '">' + esc(label) + "</a>" : esc(label)) +
         "</b></p>");
       h.push('<p style="margin:2px 0;color:#616161">Distributed To: <b>' + esc(dist) +
         "</b> · Comment Requested From: <b>" + esc(from) + "</b></p>");

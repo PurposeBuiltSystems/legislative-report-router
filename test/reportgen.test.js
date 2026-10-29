@@ -71,3 +71,28 @@ if (failures) {
   process.exit(1);
 }
 console.log("All report generator tests passed.");
+
+// Real Outlook drafts use HTML, not rep.text. Final edits and recipient lists
+// must survive that exact handoff, including unknown divisions and amendments.
+var htmlRound = P.parseReport(rep.html, { knownDivisions: ["MVD", "TDD", "SOD"] });
+check("HTML round-trip bills", htmlRound.items.map(function (i) { return i.billNumber; }), ["HF2801", "SF2110"]);
+check("HTML round-trip distribution", htmlRound.items[0].distributedTo, ["MVD"]);
+check("HTML round-trip comments", htmlRound.items[0].commentRequestedFrom, ["MVD"]);
+check("HTML round-trip brief", htmlRound.items[0].brief, items[0].brief);
+var liveCase = G.buildDailyReport([{billNumber:"HF999998",distributedTo:["SIM-MVD","New Division"],commentRequestedFrom:["SIM-MVD"],brief:"INITIAL wording",sourceLinks:[]},
+ {billNumber:"S-9998",documentType:"Amendment",relatedBill:"HF999998",distributedTo:["SIM-TDD"],commentRequestedFrom:["SIM-TDD"],brief:"Synthetic amendment",sourceLinks:[]}],
+ {sessionName:"SIMULATION ONLY",preparedBy:"Matthew Miller"});
+var finalHtml=liveCase.html.replace("INITIAL wording","FINAL OUTLOOK EDIT verified").replace(/ · /g,"&nbsp;·&nbsp;");
+var finalRound=P.parseReport(finalHtml,{knownDivisions:["SIM-MVD","SIM-TDD"]});
+check("edited HTML retains unknown division",finalRound.items[0].distributedTo,["SIM-MVD","New Division"]);
+check("edited HTML retains comment recipients",finalRound.items[0].commentRequestedFrom,["SIM-MVD"]);
+check("edited HTML retains final wording only",finalRound.items[0].brief,"FINAL OUTLOOK EDIT verified");
+check("HTML amendment identifier",finalRound.items[1].billNumber,"S-9998");
+check("HTML amendment parent",finalRound.items[1].relatedBill,"HF999998");
+check("HTML footer not a response",finalRound.items[1].brief,"Synthetic amendment");
+var separate=P.parseReport("HF9\nDistributed To: MVD\nComment Requested From: TDD\nActual bill summary",{knownDivisions:["MVD","TDD"]});
+check("separate labels distribution",separate.items[0].distributedTo,["MVD"]);
+check("separate labels comments",separate.items[0].commentRequestedFrom,["TDD"]);
+var emptyLabels=P.parseReport("HF9\nDistributed To: TBD · Comment Requested From: —\nUnassigned bill",{});
+check("unassigned report stays unassigned",emptyLabels.items[0].distributedTo,[]);
+check("unassigned comments stay unassigned",emptyLabels.items[0].commentRequestedFrom,[]);

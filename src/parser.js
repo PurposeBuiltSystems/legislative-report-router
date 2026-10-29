@@ -171,7 +171,7 @@
     var cur = null;
     for (var i = start; i < lines.length; i++) {
       var line = lines[i];
-      if (SIGNATURE_RE.test(line)) { break; } // signature onward: stop
+      if (SIGNATURE_RE.test(line) || (cur && /^Prepared by .+ with Legislative Report Router\.\s*$/i.test(line))) { break; } // signature/generated footer onward: stop
       if (LABEL_LINE_RE.test(line)) { continue; } // column-label furniture
       var m = idRe.exec(line);
       var am = AMENDMENT_LINE_RE.exec(line);
@@ -212,7 +212,27 @@
       var commentFrom = [];
       var briefStart = 0;
 
-      if (nonblank.length && looksLikeDivisionLine(nonblank[0].text, known)) {
+      // Outlook receives the HTML report, whose labelled recipients share a
+      // paragraph. Do not treat that paragraph as the bill's brief.
+      var labelled = nonblank.length && /^(?:Bill\s+)?Distributed\s+To\s*:\s*(.*)$/i.exec(nonblank[0].text);
+      var commentOnly = nonblank.length && /^(?:Bill\s+)?Comment\s+Requested\s+From\s*:\s*(.*)$/i.exec(nonblank[0].text);
+      function recipientTokens(value) {
+        return /^(?:TBD|none|—|-)\s*$/i.test(value.trim()) ? [] : normalizeDivisions(value);
+      }
+      if (labelled) {
+        var pair = /^(.*?)\s*(?:[·|]\s*)?(?:Bill\s+)?Comment\s+Requested\s+From\s*:\s*(.*)$/i.exec(labelled[1]);
+        distributedTo = recipientTokens(pair ? pair[1] : labelled[1]);
+        briefStart = nonblank[0].idx + 1;
+        if (pair) { commentFrom = recipientTokens(pair[2]); }
+        else {
+          var next = nonblank.length > 1 && /^(?:Bill\s+)?Comment\s+Requested\s+From\s*:\s*(.*)$/i.exec(nonblank[1].text);
+          if (next) { commentFrom = recipientTokens(next[1]); briefStart = nonblank[1].idx + 1; }
+          else { commentFrom = distributedTo.slice(); itemWarnings.push("Single labelled division line found; using it for both Distributed To and Comment Requested From."); confidence -= 0.1; }
+        }
+        if (!distributedTo.length && !commentFrom.length) { itemWarnings.push("No divisions selected in the report."); confidence -= 0.35; }
+      } else if (commentOnly) {
+        commentFrom = recipientTokens(commentOnly[1]); briefStart = nonblank[0].idx + 1;
+      } else if (nonblank.length && looksLikeDivisionLine(nonblank[0].text, known)) {
         distributedTo = normalizeDivisions(nonblank[0].text);
         briefStart = nonblank[0].idx + 1;
         if (nonblank.length > 1 && looksLikeDivisionLine(nonblank[1].text, known)) {

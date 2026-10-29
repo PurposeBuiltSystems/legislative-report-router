@@ -446,7 +446,7 @@
         workflowModulesPromise = (async function () {
           var modules = [[typeof LrrStaffConfig !== "undefined", "../staff-config.js?v=20261028c"], [typeof LrrWorkflow !== "undefined", "../workflow.js?v=20261028c"],
             [typeof LrrWorkflowStore !== "undefined", "../workflow-store.js?v=20261028c"],
-            [typeof LrrWorkflowUI !== "undefined", "../workflow-ui.js?v=20261028f"],
+            [typeof LrrWorkflowUI !== "undefined", "../workflow-ui.js?v=20261029simulation"],
             [typeof GraphData.authenticatedAccount === "function", "../graph.js?v=20261028c"]];
           for (var i = 0; i < modules.length; i++) {
             if (modules[i][0]) { continue; }
