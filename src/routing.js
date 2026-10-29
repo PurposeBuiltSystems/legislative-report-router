@@ -217,7 +217,7 @@
       keywords: splitList(fields.RoutingKeywords),
       mentionUserIds: splitList(fields.MentionUserIds),
       mentionUserEmails: splitList(fields.MentionUserEmails),
-      isActive: fields.IsActive !== false && fields.IsActive !== "No" && fields.IsActive !== "false",
+      isActive: !/^(false|no|0)$/i.test(String(fields.IsActive).trim()),
       priority: Number(fields.Priority) || 0,
       effectiveStartDate: fields.EffectiveStartDate || "",
       effectiveEndDate: fields.EffectiveEndDate || "",

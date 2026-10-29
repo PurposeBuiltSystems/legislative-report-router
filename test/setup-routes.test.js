@@ -41,6 +41,12 @@ function form(code='MVD',channel='channel') {
   const sample=provision.sampleRoutingRule();
   assert.equal(sample.IsActive,false); assert.ok(!sample.Emails);
   assert.equal(routing.rulesForDivision('MVD',[routing.ruleFromSharePoint(sample,'sample')]).length,0);
+  for (const value of [false,'FALSE','false','No',' no ',0,'0']) {
+    assert.equal(routing.ruleFromSharePoint({...sample,IsActive:value},'sample').isActive,false,'imported inactive flags stay inactive');
+  }
+  for (const value of [true,'TRUE','Yes',1,undefined]) {
+    assert.equal(routing.ruleFromSharePoint({...sample,IsActive:value},'sample').isActive,true);
+  }
   a.state.site={siteId:'site',routingListId:'routing'};
   rows=[{id:'legacy',fields:{...sample,IsActive:true,Emails:'coordinator@example.test'}}];
   form(); await a.addRoute();
