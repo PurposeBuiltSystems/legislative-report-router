@@ -28,8 +28,46 @@
   }
   function requests(events) { var groups=Object.create(null); events.forEach(function(e){(groups[e.request]||(groups[e.request]=[])).push(e);});var result=Object.keys(groups).map(function(k){return Workflow.project(groups[k]);});
     result.forEach(function(s){var latest=null;result.forEach(function(other){if(other.config.bill===s.config.bill && other.config.assembly===s.config.assembly && other.config.session===s.config.session && !other.conflicts.length){other.appliedEvents.forEach(function(e){if(e.kind==="legislation" && (!latest || e.order>latest.order)){latest=e;}});}});if(latest){s.legislative=latest.data.status;}});return result; }
+  /** Flat, current reminder records for a standard SharePoint/Outlook cloud flow.
+   * The newest committed workflow row ID is the freshness fence checked by the flow.
+   * Existing PublishedBy (the daily send reservation) is never overwritten by sync.
+   */
+  function reminderRecords(events) {
+    var out=[];
+    requests(events).forEach(function(state){
+      if(!state.config.due){return;}
+      var revision=String(Math.max.apply(null,state.events.map(function(e){return e.order;})));
+      Workflow.reminders([state],state.owner,state.config.due).forEach(function(group){group.items.forEach(function(item){
+        var link=item.thread||item.source||"";if(link.length>480){link="";}
+        out.push({key:state.id+"|"+item.division,fields:{Title:item.bill,Status:"reminder-pending",ReportKey:state.id,
+          IdempotencyKey:revision,Divisions:item.division,EmailRecipients:group.to,Error:item.due,
+          SourceSubject:item.label.slice(0,240),TeamId:item.task.slice(0,240),ChannelId:link.slice(0,240),TeamsMessageId:link.slice(240)}});
+      });});
+    });
+    return out;
+  }
+  function reminderControl(rows){return rows.filter(function(r){return (r.fields||{}).Status==="reminder-control";}).sort(function(a,b){return Number(b.id)-Number(a.id);})[0];}
+  async function syncReminderRecords(graph,site,token,events,rows){
+    var control=reminderControl(rows);if(!control){return {enabled:false,pending:0};}
+    var enabled=control.fields.Error==="enabled", desired=enabled?reminderRecords(events):[], current=rows.filter(function(r){return /^reminder-(pending|closed)$/.test((r.fields||{}).Status||"");});
+    var keep=Object.create(null);
+    for(var i=0;i<desired.length;i++){
+      var record=desired[i],existing=current.find(function(r){return (r.fields||{}).ReportKey===record.fields.ReportKey && (r.fields||{}).Divisions===record.fields.Divisions;});
+      if(existing){keep[existing.id]=true;var changed=Object.keys(record.fields).some(function(k){return (existing.fields[k]||"")!==(record.fields[k]||"");});if(changed){await graph.updateListItemFields(token,site.siteId,site.auditListId,existing.id,record.fields);}}
+      else{await graph.addListItem(token,site.siteId,site.auditListId,record.fields);}
+    }
+    for(var j=0;j<current.length;j++){if(!keep[current[j].id]&&current[j].fields.Status==="reminder-pending"){await graph.updateListItemFields(token,site.siteId,site.auditListId,current[j].id,{Status:"reminder-closed"});}}
+    return {enabled:enabled,pending:desired.length};
+  }
   function client(graph, site) {
-    async function read(token){return decode(await graph.listItems(token,site.siteId,site.auditListId,2000));}
+    var lastRows=[];
+    async function read(token){lastRows=await graph.listItems(token,site.siteId,site.auditListId,2000);return decode(lastRows);}
+    async function configureReminders(token,enabled){
+      await read(token);var control=reminderControl(lastRows),fields={Title:"Scheduled reminder control",Status:"reminder-control",Error:enabled?"enabled":"disabled"};
+      if(control){await graph.updateListItemFields(token,site.siteId,site.auditListId,control.id,fields);}else{await graph.addListItem(token,site.siteId,site.auditListId,fields);}
+      var events=await read(token);return syncReminderRecords(graph,site,token,events,lastRows);
+    }
+    async function refreshReminders(token){var events=await read(token);return syncReminderRecords(graph,site,token,events,lastRows);}
     async function append(token,event){
       var before=await read(token), existing=before.find(function(e){return e.id===event.id;});if(existing){return before;}
       var related=before.filter(function(e){return e.request===event.request;});
@@ -39,10 +77,12 @@
       // Recheck after writing parts; another writer may have completed meanwhile.
       var latest=await read(token);if(Workflow.revision(latest.filter(function(e){return e.request===event.request;}))!==event.base){throw new Error("Someone else saved a change. Refresh before continuing; this incomplete write was not committed.");}
       await graph.addListItem(token,site.siteId,site.auditListId,encoded.commit);
-      return read(token); // Concurrent commits are detected by the projection and block approvals.
+      var saved=await read(token); // Concurrent commits are detected by the projection and block approvals.
+      try{await syncReminderRecords(graph,site,token,saved,lastRows);}catch(e){saved.reminderWarning="Workflow saved, but the automatic reminder feed could not update: "+e.message+". The flow must skip records whose revision is no longer current.";}
+      return saved;
     }
-    return {read:read,append:append};
+    return {read:read,append:append,configureReminders:configureReminders,refreshReminders:refreshReminders};
   }
-  var api={encode:encode,decode:decode,requests:requests,client:client};
+  var api={encode:encode,decode:decode,requests:requests,client:client,reminderRecords:reminderRecords};
   if(typeof module!=="undefined" && module.exports){module.exports=api;}else{root.LrrWorkflowStore=api;}
 })(typeof self!=="undefined" ? self : this);

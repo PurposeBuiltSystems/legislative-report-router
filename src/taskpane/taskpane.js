@@ -449,8 +449,8 @@
       if (!workflowModulesPromise) {
         workflowModulesPromise = (async function () {
           var modules = [[typeof LrrStaffConfig !== "undefined", "../staff-config.js?v=20261028c"], [typeof LrrWorkflow !== "undefined", "../workflow.js?v=20261029delivery"],
-            [typeof LrrWorkflowStore !== "undefined", "../workflow-store.js?v=20261028c"],
-            [typeof LrrWorkflowUI !== "undefined", "../workflow-ui.js?v=20261029delivery"],
+            [typeof LrrWorkflowStore !== "undefined", "../workflow-store.js?v=20261029reminders"],
+            [typeof LrrWorkflowUI !== "undefined", "../workflow-ui.js?v=20261029reminders"],
             [typeof GraphData.authenticatedAccount === "function", "../graph.js?v=20261028c"]];
           for (var i = 0; i < modules.length; i++) {
             if (modules[i][0]) { continue; }
@@ -3900,7 +3900,7 @@
       var items = await GraphData.listItems(token, state.site.siteId, state.site.auditListId, 200);
       var host = byId("auditListView");
       host.innerHTML = "";
-      items.filter(function (row) { return !/^(watch-|workflow-)/.test((row.fields || {}).Status || ""); }).slice().reverse().slice(0, 100).forEach(function (i) {
+      items.filter(function (row) { return !/^(watch-|workflow-|reminder-)/.test((row.fields || {}).Status || ""); }).slice().reverse().slice(0, 100).forEach(function (i) {
         var f = i.fields || {};
         var p = document.createElement("p");
         p.className = "audit-row " + (f.Status === "failed" ? "err" : "");
