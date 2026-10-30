@@ -17,15 +17,15 @@ assert.equal(WF.reminders([reminderRequest],'unassigned@example.test','2026-11-0
 reminderRequest.divisions.MVD.director={};assert.equal(WF.reminders([reminderRequest],'owner@example.test','2026-11-01').length,0,'current approvals suppress reminders');
 const dom=new JSDOM(fs.readFileSync('src/taskpane/taskpane.html','utf8'),{runScripts:'outside-only',url:'https://router.test/'}),w=dom.window;
 Object.defineProperty(w,'crypto',{value:require('node:crypto').webcrypto});w.TextEncoder=TextEncoder;
-for(const name of ['teams','routing','deadline','workflow','workflow-store'])w.eval(fs.readFileSync('src/'+name+'.js','utf8'));
+for(const name of ['teams','routing','deadline','workflow','workflow-store','reportgen'])w.eval(fs.readFileSync('src/'+name+'.js','utf8'));
 const audits=[],posts=[],replies=[],emails=[],drafts=[],files=[];let failFiles=false,seq=0;
 w.Office={onReady(){},AsyncResultStatus:{Succeeded:'succeeded'},context:{mailbox:{userProfile:{emailAddress:'me@example.test'}},roamingSettings:{set(){},get(){return '{}';},saveAsync(cb){cb({status:'succeeded'});}}}};
 w.GraphData={getToken:async()=> 'token',authenticatedAccount:()=> 'me@example.test',listItems:async()=>structuredClone(audits),addListItem:async(t,s,l,f)=>{audits.push({id:String(++seq),fields:structuredClone(f)});},
  getAttachments:async()=>[{id:'inline',name:'logo.png',isInline:true},{id:'doc',name:'Request.docx',size:100},{id:'xlsx',name:'Data.xlsx',size:200}],getAttachmentBytes:async()=> 'aGk=',saveReportAttachment:async(t,s,k,f)=>{if(failFiles)throw Error('copy denied');files.push(f.name);return {href:'https://tenant.sharepoint.com/'+f.name,text:f.name};},
  postChannelMessage:async(t,team,channel,p)=>{posts.push({team,channel,p});return {id:'root'+posts.length};},replyChannelMessage:async(t,team,channel,root,p)=>{replies.push({root,p});return {id:'reply'+replies.length};},sendMail:async(t,to,subject,html)=>emails.push({to,subject,html}),createDraftMessage:async(t,to,subject,html)=>drafts.push({to,subject,html})};
 let raw=fs.readFileSync('src/taskpane/taskpane.js','utf8'),at=raw.lastIndexOf('})();');
-w.eval(raw.slice(0,at)+`\n settings=function(){return {sessionName:'SIMULATION 2026',stateName:'Iowa'};}; setStatus=function(kind,text){self.lastStatus=text;};
- self.api={state,publish,currentDeadline,renderPreview,draftHarvestEmail,renderHarvest,createCommentRequests,restoreTeamsLinks};\n`+raw.slice(at));
+w.eval(raw.slice(0,at)+`\n settings=function(){return {sessionName:'SIMULATION 2026',stateName:'Iowa',distList:'me@example.test',distFromDivisions:false};}; setStatus=function(kind,text){self.lastStatus=text;};
+ self.api={state,publish,currentDeadline,renderPreview,draftHarvestEmail,renderHarvest,createCommentRequests,restoreTeamsLinks,legacyEmailCovers};\n`+raw.slice(at));
 const a=w.api,el=id=>w.document.getElementById(id),rule={id:'mvd',divisionCode:'MVD',emails:['me@example.test'],teamsTeamId:'team',teamsChannelId:'channel'};
 a.state.site={siteId:'site',auditListId:'audit'};a.state.subject='SIMULATION ONLY';a.state.reportKey='report1';a.state.sourceMessageId='mail1';
 a.state.commentDeadline=DL.fromReport(original,new Date(2026,9,29));a.state.items=[{billNumber:'HF1',brief:'Test',routes:[rule],distributedTo:['MVD'],commentRequestedFrom:['MVD']}];
@@ -41,5 +41,24 @@ el('confirmBox').checked=true;
  a.state.reportKey='report3';a.state.results={};a.state.documents=[];failFiles=true;await a.publish(false);assert.equal(replies.length,1,'attachment failure stops delivery rather than silently dropping files');assert.match(w.lastStatus,/copy denied/);
  failFiles=false;a.state.items=[{billNumber:'HF2',routes:[rule]}];a.state.queueRoles={MVD:{code:'MVD',coordinator:'me@example.test',director:'director@example.test',reviewers:['reviewer@example.test']}};
  await a.createCommentRequests('token','me@example.test');await a.createCommentRequests('token','me@example.test');const events=await w.LrrWorkflowStore.decode(audits);assert.equal(events.filter(e=>e.kind==='create').length,1,'request creation is durable and idempotent');assert.equal(events[0].data.due,'2026-11-02');assert.equal(events[0].data.divisions[0].director,'director@example.test');
+ // Later filings in one report need a fresh division email and revised daily draft.
+ failFiles=false;a.state.sourceMessageId='';a.state.documents=[];a.state.reportKey='later-batch';a.state.results={};a.state._auditCache=null;a.state.publicationRows=null;
+ el('optDailyReport').checked=true;
+ const initialEmails=emails.length,initialDrafts=drafts.length;
+ a.state.items=[{billNumber:'HF20',brief:'Parent',routes:[rule],distributedTo:['MVD']}];
+ await a.publish(false);assert.equal(emails.length,initialEmails+1);assert.equal(drafts.length,initialDrafts+1);
+ a.state.items.push({billNumber:'S-2020',relatedBill:'HF20',brief:'Later amendment',routes:[rule],distributedTo:['MVD']});
+ await a.publish(false);assert.equal(emails.length,initialEmails+2,'new amendment is emailed after earlier batch');assert.match(emails.at(-1).html,/S-2020/);assert.equal(drafts.length,initialDrafts+2,'revised report draft contains later filing');assert.match(drafts.at(-1).html,/S-2020/);
+ await a.publish(false);assert.equal(emails.length,initialEmails+2);assert.equal(drafts.length,initialDrafts+2,'identical retry does not duplicate report draft');
+ a.state.results={};a.state._auditCache=null;a.state.publicationRows=null;
+ await a.publish(false);assert.equal(emails.length,initialEmails+2,'email batch dedupe survives pane restart');assert.equal(drafts.length,initialDrafts+2,'draft batch dedupe survives pane restart');
+ // An old daily division marker covers only filings posted before that email.
+ a.state.reportKey='legacy-report';a.state._auditCache=null;
+ const legacyKey=w.LrrTeams.idempotencyKey('legacy-report','EMAIL','mvd');
+ audits.push({id:'10000',fields:{Title:'HF30',Status:'published',ReportKey:'legacy-report',Divisions:'MVD'}});
+ audits.push({id:'10001',fields:{Title:'EMAIL MVD',Status:'published',ReportKey:'legacy-report',IdempotencyKey:legacyKey,EmailRecipients:'me@example.test'}});
+ assert.equal(await a.legacyEmailCovers('token',legacyKey,{rule,items:[{billNumber:'HF30'}]}),true,'legacy delivered batch remains suppressed');
+ audits.push({id:'10002',fields:{Title:'S-3030',Status:'published',ReportKey:'legacy-report',Divisions:'MVD'}});
+ assert.equal(await a.legacyEmailCovers('token',legacyKey,{rule,items:[{billNumber:'HF30'},{billNumber:'S-3030'}]}),false,'legacy marker must not swallow a later filing');
  console.log('Delivery regressions passed: preserved deadlines, linked attachments, durable parent threads/exact email links, comment-email drafts, copy failure guard, assigned queue creation, approval-aware budget.');dom.window.close();
 })().catch(e=>{console.error(e);process.exitCode=1;dom.window.close();});

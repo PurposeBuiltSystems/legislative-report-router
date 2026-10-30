@@ -3116,6 +3116,26 @@
     return documents;
   }
 
+  // A division can receive more than one reviewed filing batch in a day.
+  // Keep an identical batch idempotent, but allow newly included filings through.
+  function filingBatch(items, recipients) {
+    return JSON.stringify({bills:items.map(function(it){return it.billNumber;}).sort(),
+      to:(recipients||[]).map(function(x){return String(x).toLowerCase();}).sort()});
+  }
+  async function legacyEmailCovers(token, key, group) {
+    if (!await alreadyPublished(token,key)) { return false; }
+    var rows=await GraphData.listItems(token,state.site.siteId,state.site.auditListId,400);
+    var mails=rows.filter(function(row){var f=row.fields||{};return f.Status==="published" && f.IdempotencyKey===key;});
+    return mails.some(function(mail){
+      var addresses=String(mail.fields.EmailRecipients||"").split(";").map(function(x){return x.trim().toLowerCase();}).filter(Boolean).sort();
+      if(JSON.stringify(addresses)!==JSON.stringify((group.rule.emails||[]).map(function(x){return x.toLowerCase();}).sort())){return false;}
+      return group.items.every(function(item){return rows.some(function(row){var f=row.fields||{};
+        return Number(row.id)<Number(mail.id) && f.Status==="published" && f.Title===item.billNumber && f.ReportKey===state.reportKey &&
+          String(f.Divisions||"").split(";").map(function(x){return x.trim();}).indexOf(group.rule.divisionCode)>=0;
+      });});
+    });
+  }
+
   async function alreadyPublished(token, key) {
     if (!state.site) { return false; }
     if (state.results[key] && state.results[key].status === "published") { return true; }
@@ -3125,7 +3145,7 @@
       state._auditCache = {};
       items.forEach(function (i) {
         var f = i.fields || {};
-        if (f.IdempotencyKey && f.Status === "published") { state._auditCache[f.IdempotencyKey] = true; }
+        if (f.IdempotencyKey && (f.Status === "published" || f.Status === "report-draft")) { state._auditCache[f.IdempotencyKey] = true; }
       });
     }
     return !!state._auditCache[key];
@@ -3805,9 +3825,10 @@
         for (var mI = 0; mI < mailGroups.length; mI++) {
           var mg = mailGroups[mI];
           if (!(mg.rule.emails || []).length) { continue; }
-          var mkey = LrrTeams.idempotencyKey(state.reportKey, "EMAIL", mg.rule.id);
+          var legacyMailKey = LrrTeams.idempotencyKey(state.reportKey, "EMAIL", mg.rule.id);
+          var mkey = LrrTeams.idempotencyKey(state.reportKey, "EMAIL-BATCH", mg.rule.id + filingBatch(mg.items,mg.rule.emails));
           if (retryOnly && (!state.results[mkey] || state.results[mkey].status !== "failed")) { continue; }
-          if (await alreadyPublished(token, mkey)) { logLine("✉ " + mg.rule.divisionCode + ": email already sent — skipped.", "warn"); continue; }
+          if (await alreadyPublished(token, mkey) || await legacyEmailCovers(token,legacyMailKey,mg)) { logLine("✉ " + mg.rule.divisionCode + ": this filing batch was already emailed — skipped.", "warn"); continue; }
           try {
             var mail = LrrTeams.buildDivisionEmail(mg.rule, mg.items, opts);
             await GraphData.sendMail(token, mail.to, mail.subject, mail.html);
@@ -3831,11 +3852,11 @@
         try { await createCommentRequests(token, queueActor); }
         catch (queueError) { failures++; logLine("Comment request creation failed: " + queueError.message + ". Reopen Preview, then Publish again; delivery duplicates will be skipped.", "err"); }
       }
-      var reportDraftKey = LrrTeams.idempotencyKey(state.reportKey, "DAILY-DRAFT", "mail");
+      var reportDraftKey = LrrTeams.idempotencyKey(state.reportKey, "DAILY-DRAFT-BATCH", filingBatch(included(),dailyReportRecipients()));
       var originalKey = LrrTeams.idempotencyKey(state.reportKey, "ORIGINAL", "mail");
       if (isChecked("optDailyReport") &&
           (retryOnly ? state.results[reportDraftKey] && state.results[reportDraftKey].status === "failed"
-                     : !state.results[reportDraftKey] || state.results[reportDraftKey].status !== "published")) {
+                     : !(await alreadyPublished(token,reportDraftKey)))) {
         try {
           var st2 = settings();
           var recips = dailyReportRecipients(st2);
@@ -3851,6 +3872,8 @@
             });
             var reportDraft = await GraphData.createDraftMessage(token, recips, rep.subject, rep.html);
             state.results[reportDraftKey] = { status: "published", messageId: reportDraft.id };
+            await writeAudit(token,{Title:"Daily Bill Report draft",ReportKey:state.reportKey,IdempotencyKey:reportDraftKey,Status:"report-draft",EmailRecipients:recips.join("; "),PublishedBy:(me && me.emailAddress)||""});
+            if(state._auditCache){state._auditCache[reportDraftKey]=true;}
             // Drafting does not mark versions reviewed or delivered.
             logLine("\u2713 Daily Bill Report draft created — " + rep.count + " bills, " + recips.length +
               " recipients. Review it in your Drafts folder and send.");
