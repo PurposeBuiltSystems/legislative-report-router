@@ -2939,7 +2939,7 @@
       events = await client.append(token, event); created++;
       logLine("✓ " + item.billNumber + ": assigned comment request created.");
     }
-    var saved = settings().workflowRoles || {}; saved[state.site.siteId] = state.queueRoles; saveSettings({workflowRoles:saved});
+    var saved = settings().workflowRoles || {}; saved[state.site.siteId] = Object.assign({}, saved[state.site.siteId] || {}, state.queueRoles); saveSettings({workflowRoles:saved});
     if (workflowView) { workflowView.invalidate(); }
     return created;
   }
