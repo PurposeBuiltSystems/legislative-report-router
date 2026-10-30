@@ -23,9 +23,11 @@
     function busyState(v){busy=v;host.querySelectorAll('button').forEach(function(b){b.disabled=v;});el('wfNew').disabled=v||!writable;el('wfReminders').disabled=v||!writable;el('wfAutoReminders').disabled=v||!writable;el('wfPauseReminders').disabled=v||!writable;}
     function validSite(){if(!writable||loadedSite!==context.site()){throw new Error("Connection changed or queue is stale. Load shared work again.");}return loadedSite;}
     async function setAutomaticReminders(enabled){
-      if(busy||!writable){return;}busyState(true);
-      try{var s=validSite(),token=await context.graph.getToken(),a=identity(token);if(a!==actor){throw new Error("Account changed. Load shared work again.");}
-        var result=await LrrWorkflowStore.client(context.graph,s).configureReminders(token,enabled);
+      if(busy||!writable){return;}var generation=epoch;busyState(true);
+      try{var s=validSite(),token=await context.graph.getToken(),a=identity(token);if(a!==actor||s!==context.site()||generation!==epoch){throw new Error("Account or site changed. Load shared work again.");}
+        var guarded={};["listItems","addListItem","updateListItemFields"].forEach(function(name){guarded[name]=async function(){if(generation!==epoch||s!==context.site()||identity(arguments[0])!==a){throw new Error("Connection or account changed. Reload shared work.");}return context.graph[name].apply(context.graph,arguments);};});
+        var result=await LrrWorkflowStore.client(guarded,s).configureReminders(token,enabled);
+        if(generation!==epoch||s!==context.site()){throw new Error("Connection changed. Reload the previous site to check its reminder setting.");}
         info(enabled?'Automatic reminder feed connected: '+result.pending+' pending assignment(s). The installed Power Automate flow checks current workflow revisions before sending; its schedule and connections are managed in Power Automate.':'Automatic reminders paused for this shared queue.');
       }catch(e){info('Automatic reminders could not connect: '+e.message);}finally{busyState(false);}
     }

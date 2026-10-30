@@ -1,0 +1,466 @@
+{
+  "metadata": {
+    "description": "Weekday reminders; current revision fence; one recipient attempt per day."
+  },
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "$authentication": {
+      "defaultValue": {},
+      "type": "SecureObject"
+    },
+    "$connections": {
+      "defaultValue": {},
+      "type": "Object"
+    },
+    "SharePointSite": {
+      "type": "String",
+      "defaultValue": "https://YOUR-TENANT.sharepoint.com/sites/YOUR-SITE"
+    },
+    "AuditListId": {
+      "type": "String",
+      "defaultValue": "YOUR-LEGISLATIVE-AUDIT-LIST-GUID"
+    }
+  },
+  "triggers": {
+    "Recurrence": {
+      "type": "Recurrence",
+      "recurrence": {
+        "frequency": "Week",
+        "interval": 1,
+        "timeZone": "Central Standard Time",
+        "startTime": "2026-10-30T08:00:00",
+        "schedule": {
+          "weekDays": [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday"
+          ],
+          "hours": [
+            8
+          ],
+          "minutes": [
+            0
+          ]
+        }
+      },
+      "runtimeConfiguration": {
+        "concurrency": {
+          "runs": 1
+        }
+      }
+    }
+  },
+  "actions": {
+    "Today": {
+      "type": "Compose",
+      "inputs": "@formatDateTime(convertTimeZone(utcNow(),'UTC','Central Standard Time'),'yyyy-MM-dd')",
+      "runAfter": {}
+    },
+    "Reminder_cutoff": {
+      "type": "Compose",
+      "inputs": "@formatDateTime(addDays(convertTimeZone(utcNow(),'UTC','Central Standard Time'),2),'yyyy-MM-dd')",
+      "runAfter": {
+        "Today": [
+          "Succeeded"
+        ]
+      }
+    },
+    "Initialize_email_rows": {
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "EmailRows",
+            "type": "string",
+            "value": ""
+          }
+        ]
+      },
+      "runAfter": {
+        "Reminder_cutoff": [
+          "Succeeded"
+        ]
+      }
+    },
+    "Read_reminder_control": {
+      "type": "OpenApiConnection",
+      "inputs": {
+        "parameters": {
+          "dataset": "@parameters('SharePointSite')",
+          "table": "@parameters('AuditListId')",
+          "$filter": "Status eq 'reminder-control'",
+          "$top": 1,
+          "$orderby": "ID desc"
+        },
+        "host": {
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+          "connectionName": "shared_sharepointonline",
+          "operationId": "GetItems"
+        },
+        "authentication": "@parameters('$authentication')"
+      },
+      "runAfter": {
+        "Initialize_email_rows": [
+          "Succeeded"
+        ]
+      }
+    },
+    "Control_exists": {
+      "type": "If",
+      "expression": "@greater(length(body('Read_reminder_control')?['value']),0)",
+      "actions": {
+        "Reminders_enabled": {
+          "type": "If",
+          "expression": "@equals(first(body('Read_reminder_control')?['value'])?['Error'],'enabled')",
+          "actions": {
+            "Read_pending_assignments": {
+              "type": "OpenApiConnection",
+              "inputs": {
+                "parameters": {
+                  "dataset": "@parameters('SharePointSite')",
+                  "table": "@parameters('AuditListId')",
+                  "$filter": "Status eq 'reminder-pending'"
+                },
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                  "connectionName": "shared_sharepointonline",
+                  "operationId": "GetItems"
+                },
+                "authentication": "@parameters('$authentication')"
+              },
+              "runAfter": {},
+              "runtimeConfiguration": {
+                "paginationPolicy": {
+                  "minimumItemCount": 5000
+                }
+              }
+            },
+            "Due_assignments": {
+              "type": "Query",
+              "inputs": {
+                "from": "@body('Read_pending_assignments')?['value']",
+                "where": "@and(not(empty(item()?['Error'])),lessOrEquals(coalesce(item()?['Error'],'9999-12-31'),outputs('Reminder_cutoff')),not(equals(item()?['PublishedBy'],outputs('Today'))),not(empty(item()?['EmailRecipients'])))"
+              },
+              "runAfter": {
+                "Read_pending_assignments": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Recipient_addresses": {
+              "type": "Select",
+              "inputs": {
+                "from": "@body('Due_assignments')",
+                "select": "@item()?['EmailRecipients']"
+              },
+              "runAfter": {
+                "Due_assignments": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "For_each_recipient": {
+              "type": "Foreach",
+              "foreach": "@union(body('Recipient_addresses'),body('Recipient_addresses'))",
+              "actions": {
+                "Existing_daily_attempt": {
+                  "type": "OpenApiConnection",
+                  "inputs": {
+                    "parameters": {
+                      "dataset": "@parameters('SharePointSite')",
+                      "table": "@parameters('AuditListId')",
+                      "$filter": "@concat('Status eq ''reminder-attempt'' and ReportKey eq ''reminder:',outputs('Today'),':',replace(items('For_each_recipient'),'''',''''''),'''')",
+                      "$top": 1,
+                      "$orderby": "ID desc"
+                    },
+                    "host": {
+                      "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                      "connectionName": "shared_sharepointonline",
+                      "operationId": "GetItems"
+                    },
+                    "authentication": "@parameters('$authentication')"
+                  },
+                  "runAfter": {}
+                },
+                "Not_already_attempted_today": {
+                  "type": "If",
+                  "expression": "@equals(length(body('Existing_daily_attempt')?['value']),0)",
+                  "actions": {
+                    "Reset_email_rows": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "EmailRows",
+                        "value": "@string('')"
+                      },
+                      "runAfter": {}
+                    },
+                    "Assignments_for_recipient": {
+                      "type": "Query",
+                      "inputs": {
+                        "from": "@body('Due_assignments')",
+                        "where": "@equals(item()?['EmailRecipients'],items('For_each_recipient'))"
+                      },
+                      "runAfter": {
+                        "Reset_email_rows": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "For_each_assignment": {
+                      "type": "Foreach",
+                      "foreach": "@body('Assignments_for_recipient')",
+                      "actions": {
+                        "Read_current_assignment": {
+                          "type": "OpenApiConnection",
+                          "inputs": {
+                            "parameters": {
+                              "dataset": "@parameters('SharePointSite')",
+                              "table": "@parameters('AuditListId')",
+                              "id": "@items('For_each_assignment')?['ID']"
+                            },
+                            "host": {
+                              "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                              "connectionName": "shared_sharepointonline",
+                              "operationId": "GetItem"
+                            },
+                            "authentication": "@parameters('$authentication')"
+                          },
+                          "runAfter": {}
+                        },
+                        "Latest_committed_revision": {
+                          "type": "OpenApiConnection",
+                          "inputs": {
+                            "parameters": {
+                              "dataset": "@parameters('SharePointSite')",
+                              "table": "@parameters('AuditListId')",
+                              "$filter": "@concat('Status eq ''workflow-event'' and ReportKey eq ''',replace(body('Read_current_assignment')?['ReportKey'],'''',''''''),'''')",
+                              "$top": 1,
+                              "$orderby": "ID desc"
+                            },
+                            "host": {
+                              "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                              "connectionName": "shared_sharepointonline",
+                              "operationId": "GetItems"
+                            },
+                            "authentication": "@parameters('$authentication')"
+                          },
+                          "runAfter": {
+                            "Read_current_assignment": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Revision_exists": {
+                          "type": "If",
+                          "expression": "@greater(length(body('Latest_committed_revision')?['value']),0)",
+                          "actions": {
+                            "Still_current_and_due": {
+                              "type": "If",
+                              "expression": "@and(equals(body('Read_current_assignment')?['Status'],'reminder-pending'),equals(body('Read_current_assignment')?['EmailRecipients'],items('For_each_recipient')),not(equals(body('Read_current_assignment')?['PublishedBy'],outputs('Today'))),lessOrEquals(coalesce(body('Read_current_assignment')?['Error'],'9999-12-31'),outputs('Reminder_cutoff')),equals(string(first(body('Latest_committed_revision')?['value'])?['ID']),body('Read_current_assignment')?['IdempotencyKey']))",
+                              "actions": {
+                                "Reserve_assignment": {
+                                  "type": "OpenApiConnection",
+                                  "inputs": {
+                                    "parameters": {
+                                      "dataset": "@parameters('SharePointSite')",
+                                      "parameters/method": "POST",
+                                      "parameters/uri": "@concat('_api/web/lists(guid''',parameters('AuditListId'),''')/items(',string(body('Read_current_assignment')?['ID']),')')",
+                                      "parameters/headers": {
+                                        "Accept": "application/json;odata=nometadata",
+                                        "Content-Type": "application/json;odata=nometadata",
+                                        "X-HTTP-Method": "MERGE",
+                                        "IF-MATCH": "@body('Read_current_assignment')?['@odata.etag']"
+                                      },
+                                      "parameters/body": "@string(setProperty(json('{}'),'PublishedBy',outputs('Today')))"
+                                    },
+                                    "host": {
+                                      "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                                      "connectionName": "shared_sharepointonline",
+                                      "operationId": "HttpRequest"
+                                    },
+                                    "authentication": "@parameters('$authentication')",
+                                    "retryPolicy": {
+                                      "type": "none"
+                                    }
+                                  },
+                                  "runAfter": {}
+                                },
+                                "Include_assignment": {
+                                  "type": "AppendToStringVariable",
+                                  "inputs": {
+                                    "name": "EmailRows",
+                                    "value": "@concat('<tr><td>',replace(replace(replace(replace(string(coalesce(body('Read_current_assignment')?['Title'],'')),'&','&amp;'),'<','&lt;'),'>','&gt;'),'\"','&quot;'),'</td><td>',replace(replace(replace(replace(string(coalesce(body('Read_current_assignment')?['Divisions'],'')),'&','&amp;'),'<','&lt;'),'>','&gt;'),'\"','&quot;'),'</td><td>',replace(replace(replace(replace(string(coalesce(body('Read_current_assignment')?['Error'],'')),'&','&amp;'),'<','&lt;'),'>','&gt;'),'\"','&quot;'),'</td><td>',replace(replace(replace(replace(string(coalesce(body('Read_current_assignment')?['TeamId'],'')),'&','&amp;'),'<','&lt;'),'>','&gt;'),'\"','&quot;'),'</td><td>',if(startsWith(concat(coalesce(body('Read_current_assignment')?['ChannelId'],''),coalesce(body('Read_current_assignment')?['TeamsMessageId'],'')),'https://'),concat('<a href=\"',replace(replace(replace(replace(string(coalesce(concat(coalesce(body('Read_current_assignment')?['ChannelId'],''),coalesce(body('Read_current_assignment')?['TeamsMessageId'],'')),'')),'&','&amp;'),'<','&lt;'),'>','&gt;'),'\"','&quot;'),'\">Open request</a>'),''),'</td></tr>')"
+                                  },
+                                  "runAfter": {
+                                    "Reserve_assignment": [
+                                      "Succeeded"
+                                    ]
+                                  }
+                                }
+                              },
+                              "else": {
+                                "actions": {}
+                              },
+                              "runAfter": {}
+                            }
+                          },
+                          "else": {
+                            "actions": {}
+                          },
+                          "runAfter": {
+                            "Latest_committed_revision": [
+                              "Succeeded"
+                            ]
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Assignments_for_recipient": [
+                          "Succeeded"
+                        ]
+                      },
+                      "runtimeConfiguration": {
+                        "concurrency": {
+                          "repetitions": 1
+                        }
+                      }
+                    },
+                    "Has_current_assignments": {
+                      "type": "If",
+                      "expression": "@not(empty(variables('EmailRows')))",
+                      "actions": {
+                        "Recheck_enabled": {
+                          "type": "OpenApiConnection",
+                          "inputs": {
+                            "parameters": {
+                              "dataset": "@parameters('SharePointSite')",
+                              "table": "@parameters('AuditListId')",
+                              "$filter": "Status eq 'reminder-control'",
+                              "$top": 1,
+                              "$orderby": "ID desc"
+                            },
+                            "host": {
+                              "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                              "connectionName": "shared_sharepointonline",
+                              "operationId": "GetItems"
+                            },
+                            "authentication": "@parameters('$authentication')"
+                          },
+                          "runAfter": {}
+                        },
+                        "Still_enabled": {
+                          "type": "If",
+                          "expression": "@equals(first(body('Recheck_enabled')?['value'])?['Error'],'enabled')",
+                          "actions": {
+                            "Reserve_recipient_day": {
+                              "type": "OpenApiConnection",
+                              "inputs": {
+                                "parameters": {
+                                  "dataset": "@parameters('SharePointSite')",
+                                  "table": "@parameters('AuditListId')",
+                                  "item/Title": "Scheduled reminder attempt",
+                                  "item/Status": "reminder-attempt",
+                                  "item/ReportKey": "@concat('reminder:',outputs('Today'),':',items('For_each_recipient'))",
+                                  "item/EmailRecipients": "@items('For_each_recipient')",
+                                  "item/PublishedBy": "@outputs('Today')"
+                                },
+                                "host": {
+                                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                                  "connectionName": "shared_sharepointonline",
+                                  "operationId": "PostItem"
+                                },
+                                "authentication": "@parameters('$authentication')",
+                                "retryPolicy": {
+                                  "type": "none"
+                                }
+                              },
+                              "runAfter": {}
+                            },
+                            "Send_reminder_email": {
+                              "type": "OpenApiConnection",
+                              "inputs": {
+                                "parameters": {
+                                  "emailMessage/To": "@items('For_each_recipient')",
+                                  "emailMessage/Subject": "@concat('Legislative Router — assignments due soon or overdue (',outputs('Today'),')')",
+                                  "emailMessage/Body": "@concat('<p>Please review these legislative assignments. Deadlines shown come from the confirmed requests.</p><table border=\"1\" cellpadding=\"6\" style=\"border-collapse:collapse\"><tr><th>Bill</th><th>Division</th><th>Due</th><th>Next action</th><th>Request</th></tr>',variables('EmailRows'),'</table><p>Open the request to review the current status before acting. This reminder does not approve or submit a response.</p>')",
+                                  "emailMessage/Importance": "Normal"
+                                },
+                                "host": {
+                                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+                                  "connectionName": "shared_office365",
+                                  "operationId": "SendEmailV2"
+                                },
+                                "authentication": "@parameters('$authentication')",
+                                "retryPolicy": {
+                                  "type": "none"
+                                }
+                              },
+                              "runAfter": {
+                                "Reserve_recipient_day": [
+                                  "Succeeded"
+                                ]
+                              }
+                            }
+                          },
+                          "else": {
+                            "actions": {}
+                          },
+                          "runAfter": {
+                            "Recheck_enabled": [
+                              "Succeeded"
+                            ]
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {}
+                      },
+                      "runAfter": {
+                        "For_each_assignment": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  },
+                  "runAfter": {
+                    "Existing_daily_attempt": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              },
+              "runAfter": {
+                "Recipient_addresses": [
+                  "Succeeded"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              }
+            }
+          },
+          "else": {
+            "actions": {}
+          },
+          "runAfter": {}
+        }
+      },
+      "else": {
+        "actions": {}
+      },
+      "runAfter": {
+        "Read_reminder_control": [
+          "Succeeded"
+        ]
+      }
+    }
+  }
+}
