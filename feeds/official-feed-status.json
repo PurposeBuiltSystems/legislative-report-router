@@ -1,26 +1,26 @@
 {
   "wisconsin-introduced": {
     "ok": true,
-    "checkedAt": "2026-11-02T21:23:20.050264+00:00",
-    "fetchedAt": "2026-11-02T21:23:20.050264+00:00",
+    "checkedAt": "2026-11-03T02:59:34.130598+00:00",
+    "fetchedAt": "2026-11-03T02:59:34.130598+00:00",
     "items": 100
   },
   "kansas-bills": {
     "ok": true,
-    "checkedAt": "2026-11-02T21:23:20.422343+00:00",
-    "fetchedAt": "2026-11-02T21:23:20.422343+00:00",
+    "checkedAt": "2026-11-03T02:59:34.355019+00:00",
+    "fetchedAt": "2026-11-03T02:59:34.355019+00:00",
     "items": 200
   },
   "texas-house": {
-    "ok": true,
-    "checkedAt": "2026-11-02T21:23:20.653518+00:00",
+    "ok": false,
+    "checkedAt": "2026-11-03T02:59:34.552573+00:00",
     "fetchedAt": "2026-11-02T21:23:20.653518+00:00",
-    "items": 1
+    "error": "<urlopen error [Errno 111] Connection refused>"
   },
   "texas-senate": {
-    "ok": true,
-    "checkedAt": "2026-11-02T21:23:23.902296+00:00",
+    "ok": false,
+    "checkedAt": "2026-11-03T02:59:34.766878+00:00",
     "fetchedAt": "2026-11-02T21:23:23.902296+00:00",
-    "items": 1
+    "error": "<urlopen error [Errno 111] Connection refused>"
   }
 }
