@@ -2926,6 +2926,7 @@
     var codes = Array.from(new Set((item.routes || []).map(function (r) { return r.divisionCode; })));
     var year = new Date(currentDeadline().date).getFullYear();
     return LrrWorkflow.config({bill:parentNumber(item),assembly:String(91 + Math.floor((year - 2025) / 2)),session:conversationScope(),
+      summary:[item.title,item.brief].filter(Boolean).join("\n").slice(0,5000), related:[item.relatedBill].concat(item.referencedBills || []).filter(Boolean).join(", "),
       label:item.billNumber + " — " + state.subject, type:"Comment", due:LrrDeadline.ymd(currentDeadline().date),dueSource:"Comment deadline confirmed in final report / Preview", source:(state.documents[0] || {}).href || "", thread:((item.teamsLinks || [])[0] || {}).href || "",submitter:actor,
       divisions:codes.map(function (code) { return state.queueRoles[code] || {code:code}; })});
   }

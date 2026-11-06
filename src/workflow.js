@@ -14,6 +14,7 @@
     if (["Comment", "Fiscal data"].indexOf(d.type) < 0) { fail("Choose Comment or Fiscal data."); }
     d.due = date(d.due); d.dueSource = text(d.dueSource); d.source = url(d.source); d.thread = url(d.thread);
     if (d.due && !d.dueSource) { fail("Describe the source of the confirmed deadline."); }
+    d.summary = text(d.summary);
     d.related = text(d.related); d.cfo = d.cfo ? email(d.cfo) : ""; d.submitter = email(d.submitter);
     var seen = {};
     if (!Array.isArray(d.divisions) || !d.divisions.length) { fail("Assign at least one division."); }
@@ -128,6 +129,43 @@
     });
     return Object.keys(groups).sort().map(function(k){return groups[k];});
   }
-  var api={reminders:reminders,config:config, finance:finance, artifact:artifact, project:project, plan:plan, revision:revision, due:due, email:email, financialSummary:financialSummary};
+  // Local suggestions over the already-loaded shared queue. No document fetching.
+  function historyText(c) { return [c.label,c.summary,c.related].filter(Boolean).join(" "); }
+  function keywords(value) {
+    var stop = new Set("about after again also amendment assembly before being bill bills chapter comment comments could daily data division fiscal from general have into legislative note notes report request response review session shall should staff state such than that their them there these they this those through under upon version were what when where which will with would".split(" "));
+    var clean=text(value).toLowerCase().replace(/https?:\/\/\S+/g," ").replace(/\b(?:hf|sf|hsb|ssb|hjr|sjr|hr|sr|hcr|scr)\s*\d+\b/g," ");
+    return Array.from(new Set((clean.match(/[a-z]{3,}/g)||[]).map(function(w){return w.length>4&&w.endsWith('s')&&!w.endsWith('ss')?w.slice(0,-1):w;}).filter(function(w){return !stop.has(w);}))).sort();
+  }
+  function billRefs(value) { return Array.from(new Set((text(value).toUpperCase().match(/\b(?:HSB|SSB|HJR|SJR|HCR|SCR|HF|SF|HR|SR)\s*\d+\b/g)||[]).map(function(v){return v.replace(/\s/g,"");}))); }
+  function chapterRefs(value) { return Array.from(new Set(Array.from(text(value).matchAll(/\b(?:chapter|section|§)\s*(\d+[a-z]?(?:\.\d+)?)/gi),function(m){return m[1].toUpperCase();}))); }
+  function relevantResponses(current, requests, actor, scope) {
+    var c=current.config, query=historyText(c), words=keywords(query), refs=billRefs(c.bill+' '+c.related), chapters=chapterRefs(query), ownDivisions=c.divisions.filter(function(r){return r.coordinator===actor||r.director===actor||r.reviewers.indexOf(actor)>=0;}).map(function(r){return r.code;}), out=[];
+    requests.forEach(function(s){
+      if(s.id===current.id||s.conflicts.length){return;}
+      // Keep one latest applied response per division; discarded concurrent edits never qualify.
+      var latest=Object.create(null);
+      s.appliedEvents.forEach(function(e){if(e.kind==='artifact'){latest[e.division]=e;}});
+      Object.keys(latest).forEach(function(division){
+        var e=latest[division],d=e.data,n=d.narrative||{}, content=[historyText(s.config),d.note,n.summary,n.background,n.assumptions,n.impact,n.sources].filter(Boolean).join(' ');
+        if(scope==='mine'&&e.actor!==actor){return;}if(scope==='division'&&ownDivisions.indexOf(division)<0){return;}
+        var reasons=[],score=0, sameAssembly=c.assembly===s.config.assembly, sameSession=c.session===s.config.session;
+        if(c.bill===s.config.bill&&sameAssembly){reasons.push(sameSession?'Same bill, assembly and session':'Same bill and assembly; different session label');score+=sameSession?100:85;}
+        var related=refs.filter(function(r){return billRefs(s.config.bill+' '+s.config.related).indexOf(r)>=0;});
+        if(related.length&&!(c.bill===s.config.bill&&sameAssembly)){
+          if(sameAssembly){reasons.push('Related bill reference: '+related.join(', '));score+=65;}
+          else{reasons.push('Bill number repeats in a different assembly: '+related.join(', '));}
+        }
+        var contentWords=keywords(content), matched=words.filter(function(w){return contentWords.indexOf(w)>=0;}), sharedChapters=chapters.filter(function(ch){return chapterRefs(content).indexOf(ch)>=0;});
+        // A reused bill number alone across assemblies is not evidence of relevance.
+        if(matched.length>=2){reasons.push('Shared keywords: '+matched.slice(0,8).join(', '));score+=Math.min(matched.length,10)*4;}
+        if(sharedChapters.length){reasons.push('Shared code chapter / section: '+sharedChapters.join(', '));score+=30;}
+        if(!score){return;}
+        if(e.actor===actor){score+=8;reasons.push('Your registered response');}if(ownDivisions.indexOf(division)>=0){score+=4;reasons.push('Your division');}
+        out.push({request:s,event:e,division:division,reasons:reasons,score:score,excerpt:[d.note,n.summary,n.impact,n.background,n.assumptions].filter(Boolean).join(' ').slice(0,500)});
+      });
+    });
+    return out.sort(function(a,b){return b.score-a.score||b.event.at.localeCompare(a.event.at)||a.event.id.localeCompare(b.event.id);}).slice(0,10);
+  }
+  var api={relevantResponses:relevantResponses,reminders:reminders,config:config, finance:finance, artifact:artifact, project:project, plan:plan, revision:revision, due:due, email:email, financialSummary:financialSummary};
   if (typeof module!=="undefined" && module.exports) { module.exports=api; } else { root.LrrWorkflow=api; }
 })(typeof self!=="undefined" ? self : this);
