@@ -156,6 +156,23 @@
     return snapped;
   }
 
+  /**
+   * Fiscal notes get seven days. Calendar mode includes weekends and
+   * holidays; business mode uses the same agency calendar as comments.
+   * Date arithmetic preserves local wall-clock time across DST changes.
+   */
+  function fiscalNoteDeadline(start, basis, holidays, dueTime) {
+    if (basis === "business") { return deadlineFor(start, 7 * 24, holidays, dueTime); }
+    var d = new Date(start);
+    d.setDate(d.getDate() + 7);
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(dueTime || "").trim());
+    if (!m) { return d; }
+    var snapped = new Date(d);
+    snapped.setHours(Number(m[1]), Number(m[2]), 0, 0);
+    if (snapped.getTime() < d.getTime()) { snapped.setDate(snapped.getDate() + 1); }
+    return snapped;
+  }
+
   var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -190,6 +207,7 @@
 
   var api = {
     deadlineFor: deadlineFor,
+    fiscalNoteDeadline: fiscalNoteDeadline,
     nthWeekday: nthWeekday,
     observed: observed,
     holidayDates: holidayDates,

@@ -9,7 +9,7 @@
 /* global Office, GraphData, document,
    LrrScreening, LrrParser, LrrRouting, LrrTeams, LrrDocx, LrrXlsx, LrrPresets, LrrProvision,
    LrrChapters, LrrContacts, LrrFeed, LrrReportGen, LrrDeadline, LrrFiscal, LrrBillStatus, LrrHarvest,
-   LrrInvite, LrrRecipients, LrrBudget, LrrWorkflowBudget, LrrWatch, LrrAmendments, LrrWorkflow, LrrWorkflowStore, LrrWorkflowUI, LrrStaffConfig, window */
+   LrrInvite, LrrRecipients, LrrBudget, LrrWorkflowBudget, LrrWatch, LrrAmendments, LrrWorkflow, LrrWorkflowStore, LrrWorkflowUI, LrrStaffConfig, LrrFiscalIntake, window */
 (function () {
   "use strict";
 
@@ -186,6 +186,9 @@
   }
   function saveSettings(patch) {
     var s = settings();
+    if (Object.keys(patch).some(function (k) { return SETTING_KEYS.indexOf(k) !== -1 && s[k] !== patch[k]; })) {
+      s.lastCheckOk = "";
+    }
     Object.keys(patch).forEach(function (k) { s[k] = patch[k]; });
     Office.context.roamingSettings.set(SETTINGS_KEY, JSON.stringify(s));
     persistSettings("your settings");
@@ -448,9 +451,11 @@
     try {
       if (!workflowModulesPromise) {
         workflowModulesPromise = (async function () {
-          var modules = [[typeof LrrStaffConfig !== "undefined", "../staff-config.js?v=20261028c"], [typeof LrrWorkflow !== "undefined", "../workflow.js?v=20261029delivery"],
+          var modules = [[typeof LrrStaffConfig !== "undefined", "../staff-config.js?v=20261028c"], [typeof LrrWorkflow !== "undefined", "../workflow.js?v=20261111intake"],
             [typeof LrrWorkflowStore !== "undefined", "../workflow-store.js?v=20261029reminders"],
-            [typeof LrrWorkflowUI !== "undefined", "../workflow-ui.js?v=20261029reminders2"],
+            [typeof LrrWorkflowUI !== "undefined", "../workflow-ui.js?v=20261111intake"],
+            [typeof LrrHarvest !== "undefined", "../harvest.js?v=43"],
+            [typeof LrrFiscalIntake !== "undefined", "../fiscal-intake.js?v=20261111intake"],
             [typeof GraphData.authenticatedAccount === "function", "../graph.js?v=20261028c"]];
           for (var i = 0; i < modules.length; i++) {
             if (modules[i][0]) { continue; }
@@ -467,7 +472,18 @@
       await workflowModulesPromise;
       if (!workflowView) {
         GraphData.setCloud(val("cloud") || "commercial");
-        workflowView = LrrWorkflowUI.mount(byId("workflowHost"), { graph: GraphData, site: function () { return state.site; }, cloud: function () { return val("cloud") || "commercial"; } });
+        workflowView = LrrWorkflowUI.mount(byId("workflowHost"), {
+          graph: GraphData, site: function () { return state.site; }, cloud: function () { return val("cloud") || "commercial"; },
+          prepareFiscalResponse:function(candidate,request,division,actor){return LrrFiscalIntake.prepare(candidate,request,division,actor);},
+          collectFiscalResponses: async function (token, actor, check, progress) {
+            var site = state.site;
+            check();var rows = await GraphData.listItems(token, site.siteId, site.auditListId, 2000);check();
+            return LrrFiscalIntake.collect({graph:GraphData,token:token,rows:rows,actor:actor,check:check,progress:progress,
+              commentLink:function(t,id){return LrrTeams.commentLink(t.teamId,t.channelId,id,t.messageId,val("cloud"));},
+              extract:async function(b64,name,size){return /\.docx$/i.test(name)?(await LrrDocx.extractText(b64,name,"",size)).text:await LrrXlsx.extractText(b64,name,size);}});
+          },
+          onSaved:function(){fiscalSnapshot=null;setProp("budgetPublish","disabled",true);setText("budgetDashboard","Shared work changed. Load the fiscal rollup again to view current responses and approvals.");}
+        });
       }
     } catch (e) {
       var host = byId("workflowHost"); host.textContent = e.message;
@@ -475,7 +491,7 @@
     }
   }
 
-  var SETTING_KEYS = ["sharedRecipients", "cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "responseHours", "dueTime", "holidays", "sessionEnd",
+  var SETTING_KEYS = ["sharedRecipients", "cloud", "siteUrl", "routingList", "auditList", "trackerList", "commentWindow", "responseHours", "fiscalNoteDayBasis", "dueTime", "holidays", "sessionEnd",
     "obsMlk", "obsPresidents", "obsJuneteenth", "obsColumbus", "obsVeterans", "obsDayAfterThanksgiving", "watchTerms", "watchDays", "stateName", "customFeedUrl", "identifiers", "trackedChapters", "sessionName", "distFromDivisions", "distList", "autoDaily", "autoDailyTime"];
   var PROFILE_KEYS = SETTING_KEYS.concat([]);
 
@@ -487,6 +503,9 @@
   async function renderAuthState() {
     var who = null;
     try { who = await GraphData.currentAccount(); } catch (e) { who = null; }
+    if (!who && GraphData.trySilentSignIn && !GraphData.isSignedOut()) {
+      try { who = await GraphData.trySilentSignIn(); } catch (e) { who = null; }
+    }
     setText("authWho", who ? ("Signed in as " + who) : "Not signed in");
     setProp("signOut", "hidden", !who);
     setProp("signIn", "hidden", !!who);
@@ -533,7 +552,7 @@
     SETTING_KEYS.forEach(function (k) {
       var el = byId(k);
       if (!el) { return; }                       // stale cached page
-      if (el.type === "checkbox") {
+      if (el.type === "checkbox" && s[k] != null) {
         el.checked = (s[k] === true || s[k] === "true");
       } else if (s[k] != null && s[k] !== "") { el.value = s[k]; }
     });
@@ -605,6 +624,8 @@
     });
 
     on("rbTeam", "change", loadChannelsAndTags);
+    on("rbTag", "change", loadTagMembers);
+    on("tagMembersRefresh", "click", loadTagMembers);
     on("rbAdd", "click", addRoute);
     on("onlyUnassigned", "change", function () { renderItems(); });
     on("contactPreview", "click", contactPreview);
@@ -661,6 +682,13 @@
     });
     startAutoDraftTimer();
     on("lookupTags", "click", lookupTags);
+    on("requestType", "change", function () {
+      setProp("confirmBox", "checked", false);
+      setProp("publishGo", "disabled", true);
+      setStatus("info", val("requestType") === "fiscal-note"
+        ? responseWindowText() + " Preview the updated deadline before publishing."
+        : "Bill comment response window selected. Preview before publishing.");
+    });
     on("bulkApply", "click", bulkApply);
     on("confirmBox", "change", function () {
       setProp("publishGo", "disabled", !isChecked("confirmBox") || !hasDeliveryChoice());
@@ -688,10 +716,10 @@
         var el = byId(k);
         if (!el) { return; }
         var p = {}; p[k] = el.type === "checkbox" ? el.checked : el.value; saveSettings(p);
-        if (k === "distFromDivisions" || k === "distList") {
-          resetPublicationConfirmation(); updateDistInfo(); updateSetupChecklist();
-        }
-        if (k === "cloud") { GraphData.setCloud(el.value); state.site = null; clearSharePointLinks(); }
+        resetPublicationConfirmation();
+        saveSettings({ lastCheckOk: "" });
+        updateSetupChecklist();
+        if (k === "cloud") { GraphData.setCloud(el.value); state.site = null; clearSharePointLinks(); teamsCache = null; siteCache = null; }
         if (k === "siteUrl" || k === "routingList" || k === "auditList" || k === "trackerList") { state.site = null; clearSharePointLinks(); }
       });
     });
@@ -730,7 +758,7 @@
             var el = byId("connBanner");
             if (el) {
               el.className = "conn-banner setup";
-              el.textContent = "Saved setup found \u2014 click \u2699\ufe0f Setup \u2192 \u201cConnect & load routing rules\u201d to sign in on this device (one time).";
+              el.textContent = "Saved setup found \u2014 click \u2699\ufe0f Setup \u2192 \u201cConnect\u201d to sign in on this device (one time).";
             }
           }
         });
@@ -780,6 +808,7 @@
   // ---------- parse ----------
 
   async function parseReport() {
+    resetPublicationConfirmation();
     byId("parse").disabled = true;
     try {
       setStatus("work", "Reading the report…");
@@ -977,6 +1006,7 @@
   }
 
   function renderItems() {
+    resetPublicationConfirmation();
     var host = byId("items");
     host.innerHTML = "";
     var bulk = byId("bulkRoute");
@@ -1213,6 +1243,11 @@
     setStatus("info", rule.divisionCode + " added to " + count + " bill(s). Existing divisions kept.");
   }
 
+  // ---------- setup wizard ----------
+
+  var wizStep = 1;
+  var WIZ_MAX = 6;
+
   function resetPublicationConfirmation() {
     sharedRecipientsReady = false;
     divisionDistributionReady = false;
@@ -1221,16 +1256,47 @@
     setProp("publishGo", "disabled", true);
   }
 
-  // ---------- setup wizard ----------
-
-  var wizStep = 1;
-  var WIZ_MAX = 6;
+  async function advanceSetup() {
+    if (wizStep === 1) {
+      try { await GraphData.getToken(); saveSettings({ stateName: val("stateName") || "Iowa" }); renderAuthState(); updateSetupChecklist(); }
+      catch (e) { setText("wizHelp", "Sign in before continuing: " + friendly(e)); return; }
+    }
+    if (wizStep === 2 && !(state.site && state.site.routingListId && state.site.auditListId)) {
+      setText("wizHelp", "Choose your SharePoint site, then Create my lists or Connect before continuing."); return;
+    }
+    if (wizStep === 3 && !state.rules.some(function (r) {
+      return r.isActive !== false && ((r.teamsTeamId && r.teamsChannelId) || (r.emails || []).length);
+    })) {
+      setText("wizHelp", "Save at least one active division route before continuing."); return;
+    }
+    if (wizStep === 5 && isChecked("autoDaily") && !dailyReportRecipients(distributionFormSettings()).length) {
+      setText("wizHelp", "Add daily report recipients, or turn off morning drafting before continuing."); return;
+    }
+    if (wizStep === 5) { saveSettings({ setupDeadlinesReviewed: true }); updateSetupChecklist(); }
+    if (wizStep === WIZ_MAX) {
+      if (!settings().lastCheckOk) { setText("wizHelp", "Run all checks and resolve failures before finishing."); return; }
+      setProp("settings", "open", false);
+      show("overview");
+      if (byId("startFindBills") && byId("startFindBills").focus) { byId("startFindBills").focus(); }
+      setStatus("info", "Setup complete. Choose the request type, then read a report email or use New bills.");
+      return;
+    }
+    wizShow(wizStep + 1, true);
+  }
 
   function wizShow(n, persist) {
     wizStep = Math.max(1, Math.min(WIZ_MAX, n));
     document.querySelectorAll(".wiz-step").forEach(function (el) {
       el.hidden = Number(el.getAttribute("data-wiz")) !== wizStep;
     });
+    setText("wizHelp", [
+      "Choose the cloud, sign in, then choose your legislature.",
+      "Choose a SharePoint site, then create or connect the lists.",
+      "Save division routes and check the people assigned to each Teams tag.",
+      "Add division email recipients if you will send targeted emails.",
+      "Check comment and fiscal note deadlines, then optional daily report recipients.",
+      "Choose optional test messages, run checks, then Finish setup."
+    ][wizStep - 1]);
     byId("wizPos").textContent = "Step " + wizStep + " of " + WIZ_MAX;
     byId("wizPrev").disabled = wizStep === 1;
     byId("wizNext").textContent = wizStep === WIZ_MAX ? "Finish setup" : "Next →";
@@ -1238,13 +1304,6 @@
     if (wizStep === 2) { loadSitesPicker(); loadTeamSitePicker(); }
     if (wizStep === 3) { loadTeamsPicker(); renderRoutesSummary(); }
     if (wizStep === 4 || wizStep === 6) { /* dropdowns already refreshed on connect */ }
-  }
-
-  function advanceSetup() {
-    if (wizStep < WIZ_MAX) { wizShow(wizStep + 1, true); return; }
-    setProp("settings", "open", false);
-    setStatus("info", state.site ? "Setup closed. Find bills or read the selected Outlook report, then Review → Preview → Publish." : "Setup closed. You can read a report now; connect your shared lists before publishing.");
-    var start = byId("startFindBills") || byId("parse"); if (start) { start.focus(); }
   }
 
   function openContactsSetup() {
@@ -1270,6 +1329,36 @@
     }).join("<br>");
   }
 
+  var tagMemberRead = 0;
+
+  async function loadTagMembers() {
+    var version = ++tagMemberRead;
+    var teamId = val("rbTeam"), tagId = val("rbTag");
+    var host = byId("tagMembersList");
+    if (!host) { return; }
+    host.innerHTML = "";
+    if (!teamId || !tagId) {
+      setText("tagMembersInfo", "Select a tag to see who will be notified."); return;
+    }
+    setText("tagMembersInfo", "Loading tag members...");
+    try {
+      var token = await GraphData.getToken();
+      var members = await GraphData.listTeamTagMembers(token, teamId, tagId);
+      if (version !== tagMemberRead || teamId !== val("rbTeam") || tagId !== val("rbTag")) { return; }
+      setText("tagMembersInfo", members.length ? members.length + " member(s) assigned to this tag."
+        : "This tag has no members. Add reviewers in Teams before relying on this mention.");
+      members.forEach(function (member) {
+        var li = document.createElement("li");
+        li.textContent = member.displayName || member.userId || "Unnamed member";
+        host.appendChild(li);
+      });
+    } catch (e) {
+      if (version === tagMemberRead) {
+        setText("tagMembersInfo", "Could not verify tag members: " + friendly(e) + " Check the tag in Teams, then refresh.");
+      }
+    }
+  }
+
   async function createDivisionTag() {
     var teamId = byId("rbTeam").value;
     var code = byId("rbCode").value.trim();
@@ -1287,7 +1376,8 @@
       sel.appendChild(o);
       sel.value = tag.id;
       byId("rbInfo").textContent = '\u2713 Tag \u201c' + name + '\u201d created with you as its first member \u2014 add the division\u2019s people to it in Teams (Manage team \u2192 Tags).';
-      setStatus("info", "Tag created and selected.");
+      setStatus("info", "Tag created and selected. Check its members below.");
+      await loadTagMembers();
     } catch (e) {
       byId("rbInfo").textContent = "Couldn't create the tag: " + friendly(e) +
         " (You can also create it in Teams: Manage team \u2192 Tags.)";
@@ -1356,7 +1446,7 @@
                  ((invite.from || {}).emailAddress || {}).address || "the coordinator";
       profileApply(LrrInvite.extractSetupCode(invite.body));
       setStatus("info", "Settings applied from " + from + "'s invitation \u2014 now click " +
-        "\u201cConnect & load routing rules\u201d to sign in on this device.");
+        "\u201cConnect\u201d to sign in on this device.");
     } catch (e) {
       setStatus("error", "Couldn't read your setup: " + friendly(e));
     }
@@ -1403,7 +1493,7 @@
       });
       if (patch.cloud) { GraphData.setCloud(patch.cloud); }
       state.site = null; clearSharePointLinks(); renderOfficialFeeds();
-      setStatus("info", "Profile applied — click \"Connect & load routing rules\" to finish.");
+      setStatus("info", "Profile applied — click \"Connect\" to finish.");
     } catch (e) {
       setStatus("error", "That doesn't look like a valid profile code.");
     }
@@ -1832,8 +1922,8 @@
       });
       renderSiteList(siteCache);
       var lbl = sel.previousElementSibling || sel.parentElement;
-      setStatus("info", siteCache.length ? siteCache.length + " site(s) found \u2014 pick one, or use your OneDrive." :
-        "No sites listed \u2014 use your OneDrive, paste a URL, or type a search below.");
+      setStatus("info", siteCache.length ? siteCache.length + " site(s) found \u2014 pick a SharePoint site, or paste its URL." :
+        "No sites listed \u2014 paste a SharePoint site URL or type a search below.");
     } catch (e) {
       setStatus("error", "Couldn't list your sites: " + friendly(e));
     }
@@ -1932,6 +2022,7 @@
     var chSel = byId("rbChannel");
     var tagSel = byId("rbTag");
     chSel.innerHTML = ""; tagSel.innerHTML = "";
+    loadTagMembers();
     if (!teamId) { return; }
     try {
       var token = await GraphData.getToken();
@@ -2042,6 +2133,7 @@
       rule.emails = merged;
       updateDistInfo();
       resetPublicationConfirmation();
+      saveSettings({ lastCheckOk: "" });
       saveRulesCache();
       byId("quickEmail").value = "";
       updateSetupChecklist();
@@ -2104,6 +2196,7 @@
           created++;
         }
       }
+      saveSettings({ lastCheckOk: "" });
       contactPlanCache = null;
       byId("contactRows").value = "";
       byId("contactPlan").innerHTML = "";
@@ -2282,6 +2375,7 @@
     try {
       var st = settings();
       if (!(st.autoDaily === true || st.autoDaily === "true") || autoDraftRan) { return; }
+      if (state.publishing || state.items.length || val("requestType") === "fiscal-note") { return; }
       if (st.lastAutoDraftDay === todayKey()) { return; } // already drafted today
       var t = String(st.autoDailyTime || byId("autoDailyTime").value || "07:30");
       var parts = t.split(":");
@@ -2346,12 +2440,11 @@
       var rep = LrrReportGen.buildDailyReport(items, {
         sessionName: st.sessionName || "",
         stateName: st.stateName || "Iowa",
-        commentWindow: byId("commentWindow").value,
+        commentWindow: responseWindowText(),
         deadlineLabel: currentDeadline().label,
         preparedBy: ((Office.context.mailbox.userProfile || {}).displayName) || "",
       });
       await GraphData.createDraftMessage(token, recips, rep.subject, rep.html);
-      // Drafting does not mark versions reviewed or delivered.
       saveSettings({ lastAutoDraftDay: todayKey() });
       var unrouted = items.filter(function (it) { return it.routingStatus !== "matched"; }).length;
       setStatus("info", "\u2600\ufe0f Today's Daily Bill Report is drafted \u2014 " + rep.count + " bill(s), " +
@@ -2382,6 +2475,7 @@
     byId("checkResults").innerHTML = "";
     byId("copyChecks").hidden = true;
     checkLog = [];
+    saveSettings({ lastCheckOk: "" });
     try {
       // 1. sign-in
       var token;
@@ -2575,6 +2669,7 @@
       reportKey: state.reportKey,
       commentDeadline: state.commentDeadline,
       sourceMessageId: state.sourceMessageId,
+      requestType: val("requestType") || "comments",
       items: (state.items || []).map(draftItem),
       savedAt: new Date().toISOString(),
     };
@@ -2607,6 +2702,7 @@
       state.commentDeadline = d.commentDeadline || null;
       state.sourceMessageId = d.sourceMessageId || "";
       state.documents = [];
+      setVal("requestType", d.requestType === "fiscal-note" ? "fiscal-note" : "comments");
       annotateChapters();
       if (state.rules.length) { LrrRouting.routeAll(state.items, state.rules); }
       refreshStats(); renderItems();
@@ -2862,11 +2958,18 @@
 
   /** The comment deadline for anything published right now: settings-driven
    *  business-hours math (48 by default), weekend- and holiday-aware. */
+  function responseWindowText() {
+    return val("requestType") === "fiscal-note"
+      ? "Fiscal note requested within 7 " + (val("fiscalNoteDayBasis") === "business" ? "business" : "calendar") + " days."
+      : val("commentWindow");
+  }
+
+  function publicationReportKey() {
+    return state.reportKey + (val("requestType") === "fiscal-note" ? "|fiscal-note" : "");
+  }
+
   function currentDeadline() {
-    if (state.commentDeadline && Number.isFinite(Date.parse(state.commentDeadline.iso))) {
-      var pinned = new Date(state.commentDeadline.iso);
-      return { date: pinned, label: LrrDeadline.formatDeadline(pinned) };
-    }
+    if (state.commentDeadline && (state.commentDeadline.kind || "comments") === (val("requestType") || "comments") && Number.isFinite(Date.parse(state.commentDeadline.iso))) { var pinned = new Date(state.commentDeadline.iso); return {date:pinned,label:LrrDeadline.formatDeadline(pinned)}; }
     var hours = Math.max(1, Math.min(240, Number(byId("responseHours").value) || 48));
     // Weekends and the six near-universal holidays are automatic; the rest
     // are whatever this agency said it closes for.
@@ -2881,8 +2984,11 @@
       extra: val("holidays"),
       years: [now, now + 1],
     });
-    var d = LrrDeadline.deadlineFor(new Date(), hours, holidays, byId("dueTime").value || "17:00");
-    state.commentDeadline = { iso: d.toISOString(), source: "Calculated once for this report" };
+    var dueTime = byId("dueTime").value || "17:00";
+    var d = val("requestType") === "fiscal-note"
+      ? LrrDeadline.fiscalNoteDeadline(new Date(), val("fiscalNoteDayBasis"), holidays, dueTime)
+      : LrrDeadline.deadlineFor(new Date(), hours, holidays, dueTime);
+    state.commentDeadline = {iso:d.toISOString(),kind:val("requestType") || "comments",source:"Calculated once for this report"};
     return { date: d, label: LrrDeadline.formatDeadline(d) };
   }
 
@@ -2934,7 +3040,7 @@
   async function createCommentRequests(token, actor) {
     var client = LrrWorkflowStore.client(GraphData, state.site), events = await client.read(token), created = 0;
     for (var i = 0; i < included().length; i++) {
-      var item = included()[i], request = LrrTeams.idempotencyKey(state.reportKey, item.billNumber, "COMMENT-QUEUE");
+      var item = included()[i], request = LrrTeams.idempotencyKey(publicationReportKey(), item.billNumber, "COMMENT-QUEUE");
       if (events.some(function (e) { return e.request === request; })) { logLine(item.billNumber + ": comment request already exists — skipped."); continue; }
       var event = LrrWorkflow.plan([], "create", {config:commentRequestConfig(item, actor)}, actor, {id:request + "-create",request:request,at:new Date().toISOString()});
       events = await client.append(token, event); created++;
@@ -2991,7 +3097,7 @@
       recipients.textContent = "Daily report distribution (all active divisions + extras): " + dailyReportRecipients().join("; ");
       host.appendChild(recipients);
     }
-    var opts = { template: { commentWindow: byId("commentWindow").value }, deadlineLabel: currentDeadline().label };
+    var opts = { template: { commentWindow: responseWindowText() }, deadlineLabel: currentDeadline().label };
     if (isChecked("optTeams")) { included().forEach(function (it) {
       channelGroups(it).forEach(function (g) {
         var payload = LrrTeams.buildChannelMessage(it, g.rules, opts);
@@ -3009,7 +3115,7 @@
     }); }
     if (isChecked("optEmail")) { divisionEmailGroups(included()).forEach(function (g) {
       if (!(g.rule.emails || []).length) { return; }
-      var mail = LrrTeams.buildDivisionEmail(g.rule, g.items, { template: { commentWindow: byId("commentWindow").value }, deadlineLabel: currentDeadline().label });
+      var mail = LrrTeams.buildDivisionEmail(g.rule, g.items, { template: { commentWindow: responseWindowText() }, deadlineLabel: currentDeadline().label });
       var box = document.createElement("div");
       box.className = "preview-post email";
       box.innerHTML = '<p class="hint">✉ ' + esc(mail.subject) + " → " + esc(mail.to.join(", ")) + "</p>" +
@@ -3046,9 +3152,9 @@
       (g.rule.emails || []).forEach(function (e) { recipients[e] = 1; });
     });
     var lines = [];
+    if (hasDeliveryChoice()) { lines.push("<strong>" + esc(val("requestType") === "fiscal-note" ? "Fiscal note request" : "Bill comments") + "</strong>"); }
     if (isChecked("optTeams")) { lines.push("<strong>" + posts + "</strong> Teams post(s); <strong>" + Object.keys(tags).length + "</strong> notification tag(s)."); }
     if (isChecked("optEmail")) { lines.push("<strong>" + Object.keys(recipients).length + "</strong> targeted email recipient(s)."); }
-    if (isChecked("optQueue")) { lines.push("Assigned comment requests will be created for the included items with the reviewed coordinator/director roles."); }
     if (isChecked("optOriginal")) { lines.push("The selected Outlook message will be sent."); }
     if (isChecked("optDailyReport")) { lines.push("An Outlook report draft will be created for <strong>" + dailyReportRecipients().length + "</strong> recipient(s). It is not sent by this action."); }
     byId("publishSummary").innerHTML = lines.length ? lines.join("<br>") : "Choose at least one delivery option.";
@@ -3087,10 +3193,10 @@
     var rows = await publicationRows(token);
     included().forEach(function (item) {
       item.teamsLinks = [];
-      var hasExact = rows.some(function (row) { var f = row.fields || {}; return f.Status === "delivery-link" && f.Title === item.billNumber && f.ReportKey === state.reportKey; });
+      var hasExact = rows.some(function (row) { var f = row.fields || {}; return f.Status === "delivery-link" && f.Title === item.billNumber && f.ReportKey === publicationReportKey(); });
       rows.forEach(function (row) {
         var f = row.fields || {};
-        if ((!hasExact || f.Status === "delivery-link") && (f.Status === "delivery-link" || f.Status === "published") && f.Title === item.billNumber && f.ReportKey === state.reportKey && f.TeamsMessageId && f.TeamId && f.ChannelId) {
+        if ((!hasExact || f.Status === "delivery-link") && (f.Status === "delivery-link" || f.Status === "published") && f.Title === item.billNumber && f.ReportKey === publicationReportKey() && f.TeamsMessageId && f.TeamId && f.ChannelId) {
           item.teamsLinks.push({href: LrrTeams.commentLink(f.TeamId, f.ChannelId, f.TeamsMessageId, f.Status === "delivery-link" ? f.IdempotencyKey : f.TeamsMessageId, val("cloud")), text: f.Status === "delivery-link" ? "Open this update in Teams" : "Open bill conversation in Teams"});
         }
       });
@@ -3131,7 +3237,7 @@
       var addresses=String(mail.fields.EmailRecipients||"").split(";").map(function(x){return x.trim().toLowerCase();}).filter(Boolean).sort();
       if(JSON.stringify(addresses)!==JSON.stringify((group.rule.emails||[]).map(function(x){return x.toLowerCase();}).sort())){return false;}
       return group.items.every(function(item){return rows.some(function(row){var f=row.fields||{};
-        return Number(row.id)<Number(mail.id) && f.Status==="published" && f.Title===item.billNumber && f.ReportKey===state.reportKey &&
+        return Number(row.id)<Number(mail.id) && f.Status==="published" && f.Title===item.billNumber && f.ReportKey===publicationReportKey() &&
           String(f.Divisions||"").split(";").map(function(x){return x.trim();}).indexOf(group.rule.divisionCode)>=0;
       });});
     });
@@ -3183,94 +3289,8 @@
   }
 
   async function harvestFiscal() {
-    if (!state.site) { setStatus("error", "Connect the SharePoint lists in Settings first."); return; }
-    byId("fiscalHarvest").disabled = true;
-    harvestCandidates = []; harvestComplete = "";
-    try {
-      var token = await GraphData.getToken();
-      setStatus("work", "Reading the publish history…");
-      var audit = await GraphData.listItems(token, state.site.siteId, state.site.auditListId, 2000);
-      var threads = {};
-      audit.forEach(function (it) {
-        var f = it.fields || {};
-        if (f.Status !== "published" || !f.TeamsMessageId || !f.TeamId) { return; }
-        var codes = resolveDivisionCodes(f.Divisions);
-        var prior = threads[f.TeamsMessageId];
-        if (prior) { codes = Array.from(new Set(prior.divisionChoices.concat(codes))); }
-        var threadRecord = audit.find(function (row) { var tf = row.fields || {}; return tf.Status === "bill-thread" && tf.TeamId === f.TeamId && tf.ChannelId === f.ChannelId && tf.TeamsMessageId === f.TeamsMessageId; });
-        threads[f.TeamsMessageId] = {
-          bill: threadRecord ? threadRecord.fields.Title : f.Title, teamId: f.TeamId, channelId: f.ChannelId,
-          messageId: f.TeamsMessageId,
-          // One division on the post -> attribute it. Several (a shared
-          // channel) -> leave blank; the coordinator picks in review rather
-          // than the add-in guessing and mis-filing the cost.
-          division: codes.length === 1 ? codes[0] : "",
-          divisionChoices: codes,
-        };
-      });
-      var list = Object.keys(threads).map(function (k) { return threads[k]; });
-      var CAP = 120;
-      var capNote = "";
-      if (list.length > CAP) {
-        capNote = " Capped at " + CAP + " of " + list.length + " threads (newest first).";
-        list = list.slice(-CAP);
-      }
-      var raw = [];
-      var errors = 0;
-      for (var i = 0; i < list.length; i++) {
-        var t = list[i];
-        setStatus("work", "Replies " + (i + 1) + "/" + list.length + ": " + t.bill);
-        var replies;
-        try { replies = await GraphData.listReplies(token, t.teamId, t.channelId, t.messageId); }
-        catch (e) { errors++; continue; }
-        for (var r = 0; r < replies.length; r++) {
-          var rep = replies[r];
-          var author = ((rep.from || {}).user || {}).displayName || "";
-          var text = LrrHarvest.htmlToText((rep.body || {}).content || "");
-          var cand = LrrHarvest.analyzeSource({
-            bill: t.bill, division: t.division, source: "Teams reply",
-            text: text, author: author, date: rep.createdDateTime || "",
-          });
-          var replyLink = rep.webUrl || LrrTeams.commentLink(t.teamId, t.channelId, rep.id, t.messageId, val("cloud"));
-          if (cand) { cand.divisionChoices = t.divisionChoices; cand.commentLink = replyLink; }
-          raw.push(cand);
-          var atts = (rep.attachments || []).filter(function (a) {
-            return a.contentUrl && /\.(docx|xlsx)$/i.test(a.name || "");
-          }).slice(0, 3);
-          for (var a = 0; a < atts.length; a++) {
-            try {
-              var item = await GraphData.driveItemFromUrl(token, atts[a].contentUrl);
-              var b64 = await GraphData.driveItemContentB64(token, item.parentReference.driveId, item.id);
-              var docText = /\.docx$/i.test(atts[a].name)
-                ? (await LrrDocx.extractText(b64, atts[a].name, "", item.size)).text
-                : await LrrXlsx.extractText(b64, atts[a].name, item.size);
-              var acand = LrrHarvest.analyzeSource({
-                bill: t.bill, division: t.division, source: atts[a].name,
-                kind: "attachment",
-                text: docText, author: author, date: rep.createdDateTime || "",
-              });
-              if (acand) { acand.divisionChoices = t.divisionChoices; acand.commentLink = replyLink; }
-              raw.push(acand);
-            } catch (e2) { errors++; }
-          }
-        }
-      }
-      harvestCandidates = LrrHarvest.mergeCandidates(raw).map(function (c) {
-        c.checked = c.cost !== null && !!c.division;
-        if (!c.fy) { c.fy = LrrFiscal.defaultFy(new Date()); }
-        if (!c.severity) { c.severity = "Unknown"; }
-        return c;
-      });
-      renderHarvest();
-      setStatus(harvestCandidates.length ? "info" : "info",
-        harvestCandidates.length + " fiscal candidate(s) from " + list.length + " threads" +
-        (errors ? " (" + errors + " skipped on errors)" : "") + capNote +
-        ". Review, edit, then apply to the tracker.");
-    } catch (e) {
-      setStatus("error", "Harvest failed: " + friendly(e));
-    } finally {
-      byId("fiscalHarvest").disabled = false;
-    }
+    show("workflow");await prepareWorkflowView();
+    if (workflowView) { await workflowView.load();await workflowView.collectFiscal(); }
   }
 
   async function draftHarvestEmail(candidate) {
@@ -3724,10 +3744,15 @@
     if (!hasDeliveryChoice()) { setStatus("error", "Choose at least one delivery option before publishing."); return; }
     if (!isChecked("confirmBox")) { setStatus("error", "Confirm the reviewed distribution before publishing."); return; }
     if (!state.site) { setStatus("error", "Connect the SharePoint routing/audit lists in Settings first."); return; }
+    if (!included().length) { setStatus("error", "Read a report or add bills before publishing."); return; }
+    if (included().some(function (it) { return it.routingStatus === "unmatched" || it.routingStatus === "partially-matched"; })) {
+      setStatus("error", "Resolve every unmatched division in Review, or exclude that bill, then Preview again."); return;
+    }
     var doTeams = byId("optTeams").checked;
     var doEmail = byId("optEmail").checked;
     var doOriginal = byId("optOriginal").checked;
     state.publishing = true;
+    setProp("requestType", "disabled", true);
     state._auditCache = null; // refresh durable publication records for this run
     state.publicationRows = null;
     byId("publishGo").disabled = true;
@@ -3746,7 +3771,7 @@
       }
       var documents = (doTeams || doEmail) ? await prepareSourceDocuments(token) : [];
       await restoreTeamsLinks(token);
-      var opts = { template: { commentWindow: byId("commentWindow").value }, deadlineLabel: currentDeadline().label, documents: documents };
+      var opts = { template: { commentWindow: responseWindowText() }, deadlineLabel: currentDeadline().label, documents: documents };
 
       if (doTeams) {
         for (var i = 0; i < included().length; i++) {
@@ -3755,7 +3780,7 @@
           if (!groups.length) { logLine(it.billNumber + ": no Teams route — skipped.", "warn"); continue; }
           for (var gI = 0; gI < groups.length; gI++) {
             var g = groups[gI];
-            var key = LrrTeams.idempotencyKey(state.reportKey, it.billNumber, g.channelId);
+            var key = LrrTeams.idempotencyKey(publicationReportKey(), it.billNumber, g.channelId);
             if (retryOnly && (!state.results[key] || state.results[key].status !== "failed")) { continue; }
             if (await alreadyPublished(token, key)) {
               logLine(it.billNumber + " → " + g.channelId.slice(0, 12) + "…: already published — skipped (idempotent).", "warn");
@@ -3776,12 +3801,12 @@
               }
               it.teamsLinks = it.teamsLinks || [];
               it.teamsLinks.push({href: msg.webUrl || LrrTeams.commentLink(g.teamId, g.channelId, msg.id, rootId, val("cloud")), text: rootId === msg.id ? "Open bill conversation in Teams" : "Open this update in Teams"});
-              await writeAudit(token, {Title:it.billNumber,ReportKey:state.reportKey,Status:"delivery-link",TeamId:g.teamId,ChannelId:g.channelId,TeamsMessageId:msg.id,IdempotencyKey:rootId,PublishedBy:(me && me.emailAddress) || ""});
+              await writeAudit(token, {Title:it.billNumber,ReportKey:publicationReportKey(),Status:"delivery-link",TeamId:g.teamId,ChannelId:g.channelId,TeamsMessageId:msg.id,IdempotencyKey:rootId,PublishedBy:(me && me.emailAddress) || ""});
               state.results[key] = { status: "published", messageId: msg.id };
               if (state._auditCache) { state._auditCache[key] = true; }
               logLine("✓ " + it.billNumber + " posted (" + g.rules.map(function (r) { return r.divisionCode; }).join(", ") + ")");
               await writeAudit(token, {
-                Title: it.billNumber, ReportKey: state.reportKey, IdempotencyKey: key,
+                Title: it.billNumber, ReportKey: publicationReportKey(), IdempotencyKey: key,
                 TeamId: g.teamId, ChannelId: g.channelId, TeamsMessageId: rootId || "",
                 Status: "published", Divisions: (it.distributedTo || []).join("; "),
                 PublishedBy: (me && me.emailAddress) || "", SourceSubject: state.subject,
@@ -3798,8 +3823,8 @@
                       Status: "Pending review",
                       DueDate: LrrDeadline.ymd(due),
                       BillLink: ((it.sourceLinks || [])[0] || {}).href || "",
-                      Brief: String(it.title || it.brief || "").slice(0, 250),
-                      ReportKey: state.reportKey,
+                      Brief: (val("requestType") === "fiscal-note" ? "Fiscal note: " : "") + String(it.title || it.brief || "").slice(0, 230),
+                      ReportKey: publicationReportKey(),
                       FiscalYear: LrrFiscal.defaultFy(new Date()),
                       ImpactSeverity: "Unknown",
                     });
@@ -3811,7 +3836,7 @@
               state.results[key] = { status: "failed", error: e.message };
               logLine("✗ " + it.billNumber + ": " + e.message, "err");
               await writeAudit(token, {
-                Title: it.billNumber, ReportKey: state.reportKey, IdempotencyKey: key,
+                Title: it.billNumber, ReportKey: publicationReportKey(), IdempotencyKey: key,
                 TeamId: g.teamId, ChannelId: g.channelId, Status: "failed",
                 Error: String(e.message).slice(0, 500),
                 PublishedBy: (me && me.emailAddress) || "", SourceSubject: state.subject,
@@ -3826,8 +3851,8 @@
         for (var mI = 0; mI < mailGroups.length; mI++) {
           var mg = mailGroups[mI];
           if (!(mg.rule.emails || []).length) { continue; }
-          var legacyMailKey = LrrTeams.idempotencyKey(state.reportKey, "EMAIL", mg.rule.id);
-          var mkey = LrrTeams.idempotencyKey(state.reportKey, "EMAIL-BATCH", mg.rule.id + filingBatch(mg.items,mg.rule.emails));
+          var legacyMailKey = LrrTeams.idempotencyKey(publicationReportKey(), "EMAIL", mg.rule.id);
+          var mkey = LrrTeams.idempotencyKey(publicationReportKey(), "EMAIL-BATCH", mg.rule.id + filingBatch(mg.items,mg.rule.emails));
           if (retryOnly && (!state.results[mkey] || state.results[mkey].status !== "failed")) { continue; }
           if (await alreadyPublished(token, mkey) || await legacyEmailCovers(token,legacyMailKey,mg)) { logLine("✉ " + mg.rule.divisionCode + ": this filing batch was already emailed — skipped.", "warn"); continue; }
           try {
@@ -3837,7 +3862,7 @@
             if (state._auditCache) { state._auditCache[mkey] = true; }
             logLine("✓ Email to " + mg.rule.divisionCode + " (" + mail.to.join(", ") + ")");
             await writeAudit(token, {
-              Title: "EMAIL " + mg.rule.divisionCode, ReportKey: state.reportKey, IdempotencyKey: mkey,
+              Title: "EMAIL " + mg.rule.divisionCode, ReportKey: publicationReportKey(), IdempotencyKey: mkey,
               Status: "published", EmailRecipients: mail.to.join("; "),
               PublishedBy: (me && me.emailAddress) || "", SourceSubject: state.subject,
             });
@@ -3853,8 +3878,8 @@
         try { await createCommentRequests(token, queueActor); }
         catch (queueError) { failures++; logLine("Comment request creation failed: " + queueError.message + ". Reopen Preview, then Publish again; delivery duplicates will be skipped.", "err"); }
       }
-      var reportDraftKey = LrrTeams.idempotencyKey(state.reportKey, "DAILY-DRAFT-BATCH", filingBatch(included(),dailyReportRecipients()));
-      var originalKey = LrrTeams.idempotencyKey(state.reportKey, "ORIGINAL", "mail");
+      var reportDraftKey = LrrTeams.idempotencyKey(publicationReportKey(), "DAILY-DRAFT-BATCH", filingBatch(included(),dailyReportRecipients()));
+      var originalKey = LrrTeams.idempotencyKey(publicationReportKey(), "ORIGINAL", "mail");
       if (isChecked("optDailyReport") &&
           (retryOnly ? state.results[reportDraftKey] && state.results[reportDraftKey].status === "failed"
                      : !(await alreadyPublished(token,reportDraftKey)))) {
@@ -3867,15 +3892,16 @@
             var rep = LrrReportGen.buildDailyReport(included(), {
               sessionName: st2.sessionName || "",
               stateName: st2.stateName || "Iowa",
-              commentWindow: byId("commentWindow").value,
+              commentWindow: responseWindowText(),
               deadlineLabel: currentDeadline().label,
               preparedBy: (me && me.displayName) || "",
             });
             var reportDraft = await GraphData.createDraftMessage(token, recips, rep.subject, rep.html);
             state.results[reportDraftKey] = { status: "published", messageId: reportDraft.id };
-            await writeAudit(token,{Title:"Daily Bill Report draft",ReportKey:state.reportKey,IdempotencyKey:reportDraftKey,Status:"report-draft",EmailRecipients:recips.join("; "),PublishedBy:(me && me.emailAddress)||""});
+            await writeAudit(token,{Title:"Daily Bill Report draft",ReportKey:publicationReportKey(),IdempotencyKey:reportDraftKey,Status:"report-draft",EmailRecipients:recips.join("; "),PublishedBy:(me && me.emailAddress)||""});
             if(state._auditCache){state._auditCache[reportDraftKey]=true;}
-            // Drafting does not mark versions reviewed or delivered.
+            // A saved draft may be edited, deleted, or never sent. Keep its
+            // bills visible in future feed checks; drafting is not delivery.
             logLine("\u2713 Daily Bill Report draft created — " + rep.count + " bills, " + recips.length +
               " recipients. Review it in your Drafts folder and send.");
           }
@@ -3909,6 +3935,7 @@
       setStatus("error", "Publish failed: " + friendly(e));
     } finally {
       state.publishing = false;
+      setProp("requestType", "disabled", false);
       byId("retryFailed").disabled = false;
       byId("publishGo").disabled = !byId("confirmBox").checked;
     }

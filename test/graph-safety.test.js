@@ -60,6 +60,7 @@ function load(fetcher) {
                      g => g.api.joinedTeams("token"),
                      g => g.api.listChannels("token", "team"),
                      g => g.api.listTeamTags("token", "team"),
+                     g => g.api.listTeamTagMembers("token", "team", "tag/a+b"),
                      g => g.api.getAttachments("token", "message")]) {
     const g = load((url, opts, n) => response(200, n === 1 ?
       { value: [], "@odata.nextLink": "https://graph.microsoft.com/v1.0/next?opaque=a%2Bb" } :

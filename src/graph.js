@@ -41,6 +41,8 @@
 
   var cloudKey = "commercial";
   var pcaPromise = null;
+  var authEpoch = 0;
+  var authenticatedAs = null;
   var workflowSession = null;
   var workflowEpoch = 0;
   function rememberSession(result) {
@@ -50,16 +52,35 @@
   function authenticatedAccount(token) { return !signedOut && workflowSession && workflowSession.token === token ? workflowSession.username : null; }
 
   function setCloud(key) {
-    if (CLOUDS[key] && key !== cloudKey) { cloudKey = key; pcaPromise = null; workflowSession = null; workflowEpoch++; }
+    if (CLOUDS[key] && key !== cloudKey) { authEpoch++; authenticatedAs = null; workflowSession = null; workflowEpoch++; cloudKey = key; pcaPromise = null; }
   }
 
   function graphBase() { return CLOUDS[cloudKey].graph + "/v1.0"; }
 
   function getPca() {
     if (!pcaPromise) {
-      pcaPromise = msal.createNestablePublicClientApplication({
-        auth: { clientId: CLIENT_ID, authority: CLOUDS[cloudKey].authority },
+      var epoch = authEpoch;
+      var authority = CLOUDS[cloudKey].authority;
+      var pending = (async function () {
+        for (var attempt = 0; attempt < 2; attempt++) {
+          if (epoch !== authEpoch) { throw new Error("Sign-in cancelled because the add-in session changed."); }
+          try {
+            return await msal.createNestablePublicClientApplication({
+              auth: { clientId: CLIENT_ID, authority: authority },
+            });
+          } catch (err) {
+            if (attempt > 0 || epoch !== authEpoch) { throw err; }
+            await new Promise(function (resolve) { setTimeout(resolve, 250); });
+          }
+        }
+      })();
+      var cached = pending.catch(function (err) {
+        // Do not retain a rejected startup promise, or clear a newer session
+        // when an old sign-in finishes after sign-out/a cloud change.
+        if (pcaPromise === cached) { pcaPromise = null; }
+        throw err;
       });
+      pcaPromise = cached;
     }
     return pcaPromise;
   }
@@ -81,23 +102,67 @@
     ]);
   }
 
+  function accountLabel(result) {
+    if (result.account) { return result.account.username || result.account.name || "signed in"; }
+    try { return Office.context.mailbox.userProfile.emailAddress || "signed in"; }
+    catch (e) { return "signed in"; }
+  }
+
   async function getToken() {
+    var epoch = authEpoch;
+    function checkSession() {
+      if (epoch !== authEpoch) { throw new Error("Sign-in cancelled because the add-in session changed."); }
+    }
     var pca = await withTimeout(getPca(), 20000,
       "Sign-in didn't start. Fully quit Outlook (Cmd+Q) and reopen, then try again.");
+    checkSession();
     try {
       // Signed out means signed out: skip the silent path so the user must
       // actually re-authenticate, otherwise the button would be decorative.
       if (signedOut) { throw new Error("signed out of the add-in"); }
-      return rememberSession(await withTimeout(pca.acquireTokenSilent({ scopes: SCOPES }), 20000, "silent timeout"));
+      var silent = await withTimeout(pca.acquireTokenSilent({ scopes: SCOPES }), 20000, "silent timeout");
+      checkSession();
+      authenticatedAs = accountLabel(silent);
+      return rememberSession(silent);
     } catch (e) {
-      var interactive = await withTimeout(
-        pca.acquireTokenPopup({ scopes: SCOPES }), 120000,
-        "Sign-in didn't finish. A Microsoft sign-in window may have opened behind Outlook — " +
-        "check for it (or Mission Control), finish signing in, and click again. If no window " +
-        "appeared at all, fully quit Outlook (Cmd+Q), reopen, and retry.");
+      checkSession();
+      // Actions that need a token at the same moment share ONE sign-in
+      // window; otherwise each opened its own and the user signed in twice.
+      if (!interactivePromise) {
+        interactivePromise = withTimeout(
+          pca.acquireTokenPopup({ scopes: SCOPES }), 120000,
+          "Sign-in didn't finish. A Microsoft sign-in window may have opened behind Outlook — " +
+          "check for it (or Mission Control), finish signing in, and click again. If no window " +
+          "appeared at all, fully quit Outlook (Cmd+Q), reopen, and retry.");
+        interactivePromise.then(clearInteractive, clearInteractive);
+      }
+      var interactive = await interactivePromise;
+      checkSession();
+      authenticatedAs = accountLabel(interactive);
       setSignedOut(false);   // a real interactive sign-in ends the signed-out state
       return rememberSession(interactive);
     }
+  }
+
+  var interactivePromise = null;
+  function clearInteractive() { interactivePromise = null; }
+
+  /**
+   * Sign in without any window, or report null. A freshly opened pane starts
+   * with an empty MSAL cache, so it used to show "Not signed in" and a Sign
+   * in button every time, even though Outlook would hand over a token with
+   * no prompt at all. Never opens a popup, and honours the add-in sign-out.
+   */
+  async function trySilentSignIn() {
+    if (signedOut) { return null; }
+    var epoch = authEpoch;
+    try {
+      var pca = await withTimeout(getPca(), 20000, "auth unavailable");
+      var silent = await withTimeout(pca.acquireTokenSilent({ scopes: SCOPES }), 20000, "silent timeout");
+      if (epoch !== authEpoch || signedOut) { return null; }
+      authenticatedAs = accountLabel(silent);
+      return authenticatedAs;
+    } catch (e) { return null; }
   }
 
   /** Staff Teams tab: same app registration, only the existing SharePoint scope. */
@@ -149,6 +214,7 @@
   /** Signed-in account, or null. Reports null while signed out, by design. */
   async function currentAccount() {
     if (signedOut) { return null; }
+    if (authenticatedAs) { return authenticatedAs; }
     try {
       var pca = await withTimeout(getPca(), 20000, "auth unavailable");
       var accts = (pca.getAllAccounts && pca.getAllAccounts()) || [];
@@ -164,9 +230,12 @@
    * makes this real.
    */
   function signOut() {
-    setSignedOut(true);
+    authEpoch++;
+    authenticatedAs = null;
     workflowSession = null;
     workflowEpoch++;
+    interactivePromise = null;     // a window opened before sign-out must not count after it
+    setSignedOut(true);
     var pending = pcaPromise;      // only clear what already exists; never start a handshake here
     pcaPromise = null;
     if (!pending) { return Promise.resolve(true); }
@@ -201,15 +270,26 @@
   }
 
   async function getAdditionalScopeToken(scope, action) {
+    var epoch = authEpoch;
+    function checkSession() {
+      if (epoch !== authEpoch) { throw new Error("Sign-in cancelled because the add-in session changed."); }
+    }
     var pca = await withTimeout(getPca(), 20000,
       "Sign-in didn't start. Fully quit Outlook and reopen, then try again.");
     var scopes = SCOPES.concat([scope]);
+    checkSession();
     try {
       if (signedOut) { throw new Error("signed out of the add-in"); }
-      return (await withTimeout(pca.acquireTokenSilent({ scopes: scopes }), 20000, "silent timeout")).accessToken;
+      var silent = await withTimeout(pca.acquireTokenSilent({ scopes: scopes }), 20000, "silent timeout");
+      checkSession();
+      authenticatedAs = accountLabel(silent);
+      return rememberSession(silent);
     } catch (e) {
+      checkSession();
       var interactive = await withTimeout(pca.acquireTokenPopup({ scopes: scopes }), 120000,
         "Sign-in for " + action + " didn't finish — look for a Microsoft window behind Outlook.");
+      checkSession();
+      authenticatedAs = accountLabel(interactive);
       setSignedOut(false);
       return rememberSession(interactive);
     }
@@ -474,6 +554,7 @@
   }
 
   async function listTeamTagMembers(token, teamId, tagId) {
+    if (!teamId || !tagId) { throw new Error("Choose a Team and tag first."); }
     return collection(token, "/teams/" + encodeURIComponent(teamId) + "/tags/" + encodeURIComponent(tagId) + "/members");
   }
 
@@ -548,7 +629,7 @@
   async function driveItemFromUrl(token, webUrl) {
     var b64 = btoa(unescape(encodeURIComponent(webUrl)))
       .replace(/=+$/, "").replace(/\//g, "_").replace(/\+/g, "-");
-    return graphJson(token, "GET", "/shares/u!" + b64 + "/driveItem?$select=id,name,size,parentReference");
+    return graphJson(token, "GET", "/shares/u!" + b64 + "/driveItem?$select=id,name,size,parentReference,eTag,lastModifiedDateTime");
   }
 
   /** driveItem content as base64 (feeds the DOCX/XLSX extractors). */
@@ -597,6 +678,7 @@
     getToken: getToken,
     signOut: signOut,
     currentAccount: currentAccount,
+    trySilentSignIn: trySilentSignIn,
     isSignedOut: isSignedOut,
     getTagWriteToken: getTagWriteToken,
     getListCreateToken: getListCreateToken,

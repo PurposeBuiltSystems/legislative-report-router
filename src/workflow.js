@@ -41,6 +41,11 @@
     d.note = text(d.note); d.narrative = d.narrative || {};
     ["summary","background","assumptions","impact","sources"].forEach(function (k) { d.narrative[k] = text(d.narrative[k]); });
     d.finance = finance(d.financialText); d.financialText = text(d.financialText);
+    d.requestReview = d.requestReview === true;
+    if (d.intake) {
+      d.intake = {key:text(d.intake.key),fingerprint:text(d.intake.fingerprint),commentLink:url(d.intake.commentLink),date:text(d.intake.date)};
+      if (!d.intake.key || !/^[a-f0-9]{64}$/.test(d.intake.fingerprint) || !d.intake.commentLink || !Number.isFinite(Date.parse(d.intake.date))) { fail("Invalid collected response source. Collect the response again."); }
+    }
     return d;
   }
   function financialSummary(s) {
@@ -68,7 +73,7 @@
         Object.keys(s.divisions).forEach(function (k) { s.divisions[k].coordinator=null; s.divisions[k].director=null; s.divisions[k].stage=s.divisions[k].artifact ? "Drafting" : "Assigned"; });
       }
       var v = s.divisions[e.division];
-      if (e.kind === "artifact" && v) { v.artifact={ id:e.id, data:d, actor:e.actor, at:e.at }; v.stage="Drafting"; v.coordinator=null; v.director=null; s.cfo=null; s.submitted=null; }
+      if (e.kind === "artifact" && v) { v.artifact={ id:e.id, data:d, actor:e.actor, at:e.at }; v.stage=d.requestReview ? "Review requested" : "Drafting"; v.coordinator=null; v.director=null; s.cfo=null; s.submitted=null; }
       if (["start","review","changes"].indexOf(e.kind) >= 0 && v) {
         v.stage={start:"Drafting", review:"Review requested", changes:"Changes requested"}[e.kind];
         v.coordinator=null; v.director=null; s.cfo=null; s.submitted=null;
@@ -96,7 +101,7 @@
     var coordinator=!!(r && r.coordinator===actor), director=!!(r && r.director===actor), writer=!!(r && (coordinator || r.reviewers.indexOf(actor)>=0));
     if (kind === "create") { d=config(input.config); }
     else if (kind === "config") { if (actor!==s.owner) { fail("Only the request owner can change assignments and request details."); } d=config(input.config); if (d.bill!==s.config.bill || d.assembly!==s.config.assembly || d.session!==s.config.session || d.type!==s.config.type) { fail("Bill, assembly, session and request type cannot change; create a separate request."); } }
-    else if (kind === "artifact") { if (!writer) { fail("Only assigned reviewers or the division coordinator can register a response version."); } d=artifact(input); }
+    else if (kind === "artifact") { if (!writer) { fail("Only assigned reviewers or the division coordinator can register a response version."); } d=artifact(input); if(d.intake && s.appliedEvents.some(function(e){return e.kind==="artifact" && e.data.intake && e.data.intake.key===d.intake.key && e.data.intake.fingerprint===d.intake.fingerprint;})){fail("This collected reply was already registered for this request. Check history; collect again for an edited reply.");} }
     else if (kind === "start") { if (!writer) { fail("Only assigned reviewers or the coordinator can start division work."); } }
     else if (kind === "review") { if (!writer || !v.artifact) { fail("An assigned reviewer must register a response version before requesting review."); } if (v.stage === "Changes requested") { fail("Register a revised response version before requesting review again."); } }
     else if (kind === "changes") { if (!(coordinator || director || (s.config.type === "Fiscal data" && actor===s.config.cfo)) || !v || !v.artifact) { fail("Only an assigned coordinator, director or CFO can request changes to a response."); } d.note=text(input.note); if (!d.note) { fail("Describe the changes needed."); } }

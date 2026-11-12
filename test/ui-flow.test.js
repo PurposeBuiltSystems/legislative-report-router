@@ -8,7 +8,7 @@ vm.runInNewContext(raw.slice(0,end)+'\nself.api={state,wizShow,advanceSetup,upda
 const a=context.self.api,el=id=>document.getElementById(id);
 a.updateSetupChecklist();assert.equal(el('setupChecklist').querySelectorAll('button').length,6);
 el('setupChecklist').querySelector('[data-setup-step="4"]').click();assert.equal(el('settings').open,true);assert.equal(el('wizPos').textContent,'Step 4 of 6');assert.equal(saved.setupStep,4);assert.equal(el('legacySharedContacts').open,false,'broad Teams matching remains an explicit optional path');
-a.wizShow(6,true);assert.equal(el('wizNext').textContent,'Finish setup');const before=writes;a.advanceSetup();assert.equal(el('settings').open,false,'Finish leaves setup');assert.equal(document.activeElement.id,'startFindBills');assert.equal(writes,before,'Finish does not silently certify checks or provision lists');assert.equal(saved.lastCheckOk,undefined);
+saved.lastCheckOk='2026-10-28T12:00:00Z';a.wizShow(6,true);assert.equal(el('wizNext').textContent,'Finish setup');const before=writes;a.advanceSetup();assert.equal(el('settings').open,false,'Finish leaves setup');assert.equal(document.activeElement.id,'startFindBills');assert.equal(writes,before,'Finish does not silently certify checks or provision lists');assert.equal(saved.lastCheckOk,'2026-10-28T12:00:00Z');
 a.updateFlowNavigation();assert.equal(el('reviewToPreview').disabled,true);
 a.state.items=[{billNumber:'HF1',routes:[{divisionCode:'MVD',emails:['division@example.test'],teamsTeamId:'team',teamsChannelId:'channel'}]}];a.updateFlowNavigation();assert.equal(el('reviewToPreview').disabled,false);
 for(const id of ['optTeams','optEmail','optOriginal','optDailyReport'])el(id).checked=false;

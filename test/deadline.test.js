@@ -137,6 +137,57 @@ check("without the holidays it would have landed Friday",
   DL.formatDeadline(DL.deadlineFor(new Date(2026, 10, 25, 15, 0, 0), 48, {}, "17:00")),
   "Fri, Nov 27, 5:00 PM");
 
+
+/* Fiscal-note deadlines are independent of the standard comment window. */
+check("seven calendar days include the weekend",
+  iso(DL.fiscalNoteDeadline(fri3pm, "calendar", {}, "17:00")), "2026-8-7 17:00");
+check("calendar deadline includes a holiday",
+  iso(DL.fiscalNoteDeadline(fri3pm, "calendar", {"2026-08-07":true}, "17:00")), "2026-8-7 17:00");
+check("seven business days skip weekends",
+  iso(DL.fiscalNoteDeadline(fri3pm, "business", {}, "17:00")), "2026-8-11 17:00");
+check("seven business days skip agency holidays",
+  iso(DL.fiscalNoteDeadline(fri3pm, "business", {"2026-08-03":true}, "17:00")), "2026-8-12 17:00");
+check("calendar window is never shortened by due time",
+  iso(DL.fiscalNoteDeadline(new Date(2026,6,31,18), "calendar", {}, "17:00")), "2026-8-8 17:00");
+check("calendar days retain local time across DST",
+  iso(DL.fiscalNoteDeadline(new Date(2026,9,30,15), "calendar", {}, "")), "2026-11-6 15:00");
+
+/* Exercise actual pane policy and templates, rather than only date helpers. */
+var fs = require("fs"), vm = require("vm"), path = require("path");
+var paneRaw = fs.readFileSync(path.join(__dirname, "../src/taskpane/taskpane.js"), "utf8");
+var at = paneRaw.lastIndexOf("})();");
+var paneSource = paneRaw.slice(0,at) +
+  "self.policy = { currentDeadline: currentDeadline, responseWindowText: responseWindowText, publicationReportKey: publicationReportKey, state: state };\n" + paneRaw.slice(at);
+var el = {
+  requestType: {value:"fiscal-note"}, fiscalNoteDayBasis:{value:"calendar"},
+  commentWindow:{value:"Review comments requested within 48 business hours."},
+  responseHours:{value:"48"},dueTime:{value:"17:00"},holidays:{value:""}
+};
+var ctx = {self:{},Office:{onReady:function(){}},
+  document:{getElementById:function(id){return el[id] || null;}},LrrDeadline:DL};
+vm.runInNewContext(paneSource,ctx);
+var policy=ctx.self.policy;
+policy.state.reportKey="daily-report";
+check("fiscal note text replaces the 48-hour instruction",
+  policy.responseWindowText(),"Fiscal note requested within 7 calendar days.");
+check("fiscal-note publications have their own dedupe identity",
+  policy.publicationReportKey(),"daily-report|fiscal-note");
+var fiscalLabel=policy.currentDeadline().label;
+check("pane uses fiscal calendar deadline", fiscalLabel, DL.formatDeadline(DL.fiscalNoteDeadline(new Date(), "calendar", {}, "17:00")));
+var fiscalOpts={deadlineLabel:fiscalLabel,template:{commentWindow:policy.responseWindowText()}};
+var fiscalPost=Teams.buildChannelMessage(item,[rule],fiscalOpts);
+var fiscalMail=Teams.buildDivisionEmail(rule,[item],fiscalOpts);
+var fiscalReport=Gen.buildDailyReport([item],{deadlineLabel:fiscalLabel,commentWindow:policy.responseWindowText()});
+[fiscalPost.body.content,fiscalMail.html,fiscalReport.html].forEach(function(html,i){
+  check("fiscal output "+i+" shows seven-day instruction",html.indexOf("7 calendar days")!==-1,true);
+  check("fiscal output "+i+" omits stale 48-hour instruction",html.indexOf("48 business hours")===-1,true);
+});
+el.fiscalNoteDayBasis.value="business";
+check("fiscal note business-day text",policy.responseWindowText(),"Fiscal note requested within 7 business days.");
+el.requestType.value="comments";
+check("ordinary comment text is preserved",policy.responseWindowText(),el.commentWindow.value);
+check("existing comment dedupe keys are preserved",policy.publicationReportKey(),"daily-report");
+
 if (failures) {
   console.error("\n" + failures + " deadline test(s) FAILED");
   process.exit(1);

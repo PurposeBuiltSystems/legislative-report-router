@@ -54,6 +54,7 @@
       <summary>Setup &amp; contacts</summary>
       <p class="hint">Connect the shared lists, set each division’s destination, and add email contacts. Return here when people or routing rules change. Settings are saved to your account.</p>
       <details class="setup-progress"><summary>Setup progress — jump to a step</summary><div id="setupChecklist"></div></details>
+      <p id="wizHelp" class="hint" aria-live="polite"></p>
 
       <div class="wiz-nav">
         <button id="wizPrev">← Back</button>
@@ -64,6 +65,14 @@
       <!-- Step 1: sign in + state -->
       <div class="wiz-step" data-wiz="1">
         <h3 class="wiz-h">1 · Sign in &amp; choose your legislature</h3>
+      <label>Cloud environment
+        <select id="cloud">
+          <option value="commercial">Commercial</option>
+          <option value="gcc">GCC</option>
+          <option value="gcchigh">GCC High</option>
+          <option value="dod">DoD</option>
+        </select>
+      </label>
         <div class="row2">
           <label>State / legislature
             <select id="stateName"></select>
@@ -84,7 +93,17 @@
         <button id="testCustomFeed" type="button">Test feed</button>
         <p id="customFeedInfo" class="hint" aria-live="polite">No custom feed selected.</p>
         <button id="wizSignIn" class="primary">Sign in to Microsoft 365</button>
-        <p id="wizSignInInfo" class="hint">Sign in with your work account. Microsoft may ask you to sign in again when your session expires.</p>
+        <p id="wizSignInInfo" class="hint">Choose your cloud before signing in. Use the Microsoft 365 account that can access your legislative Team and SharePoint site.</p>
+      <details class="options">
+        <summary>Already invited or given a setup code</summary>
+        <p class="hint"><b>Been sent an invitation?</b> You don't need a code:</p>
+        <button id="findMySetup" class="primary">Find my setup</button>
+        <p class="hint" style="margin-top:10px">Given a raw code instead? Paste it here:</p>
+        <textarea id="profileBlobIn" rows="3" placeholder="Paste a setup code"></textarea>
+        <button id="profileApply">Use this code</button>
+        <p class="hint">After loading the shared setup, continue through the steps to verify it for your account.</p>
+      </details>
+
       </div>
 
       <!-- Step 2: site + lists -->
@@ -120,6 +139,7 @@
           <button id="createLists" class="primary">Create my lists</button>
           <button id="connectRules">Connect</button>
         </div>
+        <p class="hint">New setup: choose the site, then Create my lists (this also connects). Existing setup: choose the site and select Connect. Continue after the connection succeeds.</p>
         <p id="rulesInfo" class="hint"></p>
         <div id="rawError" class="warnbox" hidden></div>
       </div>
@@ -141,6 +161,13 @@
           <label>Coordinator notification tag <select id="rbTag"><option value="">Pick a team first</option></select></label>
         </div>
         <button id="tagCreate">Create a notification tag (optional)</button>
+        <div class="options" aria-live="polite">
+          <p id="tagMembersInfo" class="hint">Select a tag to see who will be notified.</p>
+          <ul id="tagMembersList"></ul>
+          <button id="tagMembersRefresh" type="button">Refresh members</button>
+          <a href="https://teams.microsoft.com" target="_blank" rel="noopener">Manage members in Teams</a>
+          <p class="hint">In Teams, open the selected Team → Manage team → Tags. Edit the division tag there, then refresh here. Step 4 can combine tag members and email contacts for delivery; it does not change tag membership.</p>
+        </div>
         <label>Division email contacts (optional; also editable in Step 4)
           <input id="rbEmails" type="text" placeholder="mvd-leg@agency.gov" />
         </label>
@@ -152,7 +179,7 @@
             <input id="rbKeywords" type="text" placeholder="motor vehicle; driver; CDL" />
           </label>
         </div>
-        <button id="rbAdd" class="primary">Add this division</button>
+        <button id="rbAdd" class="primary">Save division route</button>
         <p id="rbInfo" class="hint"></p>
       </div>
 
@@ -162,7 +189,7 @@
         <p class="hint">These addresses receive division emails. Add one person, paste rows from Excel, or edit the same SharePoint list in Teams. Adding an email here does not join a Team or change a notification tag.</p>
         <button id="contactsFromSetup" type="button">Open the shared contact list / Teams setup</button>
         <div class="row2">
-          <label>Quick add one person
+          <label>Quick add one email recipient
             <input id="quickEmail" type="text" placeholder="jane.doe@iowadot.us" />
           </label>
           <label>to division
@@ -196,7 +223,48 @@
 
       <!-- Step 5: the daily report -->
       <div class="wiz-step" data-wiz="5" hidden>
-        <h3 class="wiz-h">5 · Choose the daily report audience (optional)</h3>
+        <h3 class="wiz-h">5 · Set deadlines and the daily report</h3>
+      <label>Fiscal note day counting
+        <select id="fiscalNoteDayBasis">
+          <option value="calendar">7 calendar days — includes weekends and holidays</option>
+          <option value="business">7 business days — skips weekends and agency holidays</option>
+        </select>
+      </label>
+      <p class="hint">Fiscal notes use a separate seven-day window. Bill comments keep the response window below. The due time never shortens either window.</p>
+      <label>Bill comment window text
+        <input id="commentWindow" type="text" value="Review comments requested within 48 business hours." />
+      </label>
+      <div class="row2">
+        <label>Bill comment response window (business hours)
+          <input id="responseHours" type="number" min="1" max="240" value="48" />
+        </label>
+        <label>Due time (end of business)
+          <input id="dueTime" type="time" value="17:00" />
+        </label>
+      </div>
+      <p class="hint" style="margin-top:6px"><b>For business-day windows, weekends and the six holidays every US public
+         employer closes for</b> — New Year's, Memorial, Independence, Labor, Thanksgiving and
+         Christmas — are skipped automatically, with the federal Saturday&rarr;Friday /
+         Sunday&rarr;Monday rule applied. No dates to maintain.</p>
+      <details class="options">
+        <summary>Which other holidays does your agency close for?</summary>
+        <p class="hint">These genuinely differ between agencies, so they're asked rather than
+           assumed. Defaults are the federal list — a state agency's is usually shorter.</p>
+        <div class="modes">
+          <label><input id="obsMlk" type="checkbox" checked /> Martin Luther King Jr. Day</label>
+          <label><input id="obsPresidents" type="checkbox" checked /> Presidents Day</label>
+          <label><input id="obsJuneteenth" type="checkbox" checked /> Juneteenth</label>
+          <label><input id="obsColumbus" type="checkbox" checked /> Columbus / Indigenous Peoples' Day</label>
+          <label><input id="obsVeterans" type="checkbox" checked /> Veterans Day</label>
+          <label><input id="obsDayAfterThanksgiving" type="checkbox" /> Day after Thanksgiving</label>
+        </div>
+        <label>Any other closures (YYYY-MM-DD, comma separated) — furlough days, local holidays
+          <input id="holidays" type="text" placeholder="2026-12-24, 2027-01-02" />
+        </label>
+      </details>
+
+        <h4>Daily Bill Report recipients and schedule</h4>
+        <p class="hint">Optional: leave this blank if you do not need a consolidated report draft. Scheduling drafts requires a distribution list.</p>
         <label>Session name (report header)
           <input id="sessionName" type="text" placeholder="Leave blank to use the current legislative session" />
         </label>
@@ -221,10 +289,7 @@
       <!-- Step 6: test everything -->
       <div class="wiz-step" data-wiz="6" hidden>
         <h3 class="wiz-h">6 · Check the connection</h3>
-        <button id="runChecks" class="primary">Check my setup</button>
-        <div id="checkResults" class="publog"></div>
         <details class="options"><summary>Optional live tests — can send notifications</summary>
-        <p class="hint">Leave these off for a check without messages or email.</p>
         <div class="modes" style="margin-top:8px">
           <label><input id="optTestPost" type="checkbox" /> Also send a TEST POST to a channel:</label>
           <select id="testPostRoute"><option value="">(connect rules first)</option></select>
@@ -232,7 +297,11 @@
           <label><input id="optTestEmail" type="checkbox" /> Also email a test message to me (only to my own address)</label>
         </div>
         </details>
+        <p class="hint">Choose any optional test messages above, then run checks. Checks also create and remove a temporary tracker row. Test posts and emails are sent only when selected.</p>
+        <button id="runChecks" class="primary">Check my setup</button>
+        <div id="checkResults" class="publog"></div>
         <button id="copyChecks" hidden>Copy results</button>
+        <p class="hint">Resolve failed checks, rerun them, then select Done. Pin BillTracker as a Lists tab in your Teams channel so divisions can update their review status.</p>
       </div>
 
       <details class="options">
@@ -254,56 +323,14 @@
         <button id="profileCopy" class="primary">Generate &amp; copy setup code</button>
         <textarea id="profileBlob" rows="3" readonly placeholder="Your code appears here"></textarea>
         <hr style="border:none;border-top:1px solid var(--line);margin:12px 0" />
-        <p class="hint"><b>Been sent an invitation?</b> You don't need a code:</p>
-        <button id="findMySetup" class="primary">Find my setup</button>
-        <p class="hint" style="margin-top:10px">Given a raw code instead? Paste it here:</p>
-        <textarea id="profileBlobIn" rows="3" placeholder="Paste a setup code"></textarea>
-        <button id="profileApply">Use this code</button>
+
       </details>
       <label>Tracked Code chapters (comma/space separated; from your agency's tracking list)
         <textarea id="trackedChapters" rows="3"></textarea>
       </label>
-      <label>Comment window text
-        <input id="commentWindow" type="text" value="Review comments requested within 48 business hours." />
-      </label>
-      <div class="row2">
-        <label>Response window (business hours)
-          <input id="responseHours" type="number" min="1" max="240" value="48" />
-        </label>
-        <label>Due time (end of business)
-          <input id="dueTime" type="time" value="17:00" />
-        </label>
-      </div>
-      <p class="hint" style="margin-top:6px"><b>Weekends and the six holidays every US public
-         employer closes for</b> — New Year's, Memorial, Independence, Labor, Thanksgiving and
-         Christmas — are skipped automatically, with the federal Saturday&rarr;Friday /
-         Sunday&rarr;Monday rule applied. No dates to maintain.</p>
-      <details class="options">
-        <summary>Which other holidays does your agency close for?</summary>
-        <p class="hint">These genuinely differ between agencies, so they're asked rather than
-           assumed. Defaults are the federal list — a state agency's is usually shorter.</p>
-        <div class="modes">
-          <label><input id="obsMlk" type="checkbox" checked /> Martin Luther King Jr. Day</label>
-          <label><input id="obsPresidents" type="checkbox" checked /> Presidents Day</label>
-          <label><input id="obsJuneteenth" type="checkbox" checked /> Juneteenth</label>
-          <label><input id="obsColumbus" type="checkbox" checked /> Columbus / Indigenous Peoples' Day</label>
-          <label><input id="obsVeterans" type="checkbox" checked /> Veterans Day</label>
-          <label><input id="obsDayAfterThanksgiving" type="checkbox" /> Day after Thanksgiving</label>
-        </div>
-        <label>Any other closures (YYYY-MM-DD, comma separated) — furlough days, local holidays
-          <input id="holidays" type="text" placeholder="2026-12-24, 2027-01-02" />
-        </label>
-      </details>
       <div class="row2" hidden>
       </div>
-      <label>Cloud environment
-        <select id="cloud">
-          <option value="commercial">Commercial</option>
-          <option value="gcc">GCC</option>
-          <option value="gcchigh">GCC High</option>
-          <option value="dod">DoD</option>
-        </select>
-      </label>
+
       <details class="options">
         <summary>Teams tag ID lookup</summary>
         <label>Team ID <input id="lookupTeamId" type="text" placeholder="paste the whole &ldquo;Get link to team&rdquo; link, or a GUID" /></label>
@@ -324,6 +351,9 @@
       <div class="stat"><span id="stSaved" class="stat-big">never</span><span>Last saved</span></div>
     </div>
 
+    <label>Request type
+      <select id="requestType"><option value="comments">Bill comments</option><option value="fiscal-note">Fiscal note — 7 days</option></select>
+    </label><p class="hint">Applies to every bill in this report. Choose Fiscal note before previewing or publishing.</p>
     <label>Selected Outlook report — read from
       <select id="source">
         <option value="body">Email body</option>
@@ -418,6 +448,7 @@
   <section id="screen-workflow" class="screen" hidden><p class="hint">Track division responses here after intake. In Preview, choose Create assigned comment requests to start comment work during publication. Use New request for a separate fiscal-data request with its actual confirmed deadline.</p><div id="workflowHost"></div></section>
 
   <section id="screen-audit" class="screen" hidden>
+    <p class="hint">After publishing: collect responses to issued fiscal requests → confirm and request review in Work queue → complete approvals → reload the rollup → export. Reviewers mark Commented or No comment needed on their BillTracker rows; a reply alone does not update an existing review status.</p>
     <h3 class="wiz-h">💰 Fiscal impact — running totals for budget requests</h3>
     <label>Session adjourned (leave blank while the session is running)
       <input id="sessionEnd" type="date" />
@@ -425,12 +456,12 @@
     <p class="hint">Until this is set nothing is reported as dead: "we haven't seen it pass" and "it failed" only mean the same thing once the session is over.</p>
     <p class="hint">Divisions report estimated costs and impact severity on the BillTracker rows (the Teams Lists tab is the entry form). This rolls them up per fiscal year.</p>
     <div class="actions-row">
-      <button id="fiscalLoad" class="primary">Load fiscal rollup</button>
-      <button id="fiscalHarvest">Harvest from Teams replies</button>
+      <button id="fiscalHarvest" class="primary">Collect fiscal responses</button>
+      <button id="fiscalLoad">Load fiscal rollup</button>
       <button id="fiscalCsv" hidden>Export CSV</button>
       <button id="statusRefresh">Check which bills are still alive</button>
     </div>
-    <p class="hint">Harvest sweeps the reply threads of published bill posts — prose costs, attached .docx and .xlsx included — and proposes tracker updates you review before anything is written.</p>
+    <p class="hint">Collection opens Work queue and reads only existing fiscal requests with dated successful fiscal publications recorded by this router. Confirm the request, division and exact response version before saving. DOCX/XLSX figures are clues for review; choose current workflow or CFO-approved responses in the dashboard.</p>
     <div id="harvestView"></div>
     <button id="harvestApply" class="primary" hidden>Apply checked to tracker</button>
     <h3 class="wiz-h">Budget dashboard</h3>
@@ -455,7 +486,7 @@
   <script src="../routing.js?v=20261029picker"></script>
   <script src="../teams.js?v=20261029delivery"></script>
   <script src="../docx.js?v=43"></script>
-  <script src="../graph.js?v=20261029delivery"></script>
+  <script src="../graph.js?v=20261111intake"></script>
   <script src="../presets.js?v=46"></script>
   <script src="../provision.js?v=20261029picker"></script>
   <script src="../contacts.js?v=43"></script>
@@ -474,10 +505,11 @@
   <script src="../harvest.js?v=43"></script>
   <script src="../xlsx.js?v=43"></script>
   <script src="../staff-config.js?v=20261028c"></script>
-  <script src="../workflow.js?v=20261029delivery"></script>
+  <script src="../workflow.js?v=20261111intake"></script>
   <script src="../workflow-store.js?v=20261029reminders"></script>
   <script src="../workflow-budget.js?v=20261029delivery"></script>
-  <script src="../workflow-ui.js?v=20261029reminders2"></script>
-  <script src="taskpane.js?v=20261029laterfilings"></script>
+  <script src="../fiscal-intake.js?v=20261111intake"></script>
+  <script src="../workflow-ui.js?v=20261111intake"></script>
+  <script src="taskpane.js?v=20261111intake"></script>
 </body>
 </html>

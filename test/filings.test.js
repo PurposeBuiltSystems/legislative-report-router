@@ -40,7 +40,7 @@ function load(failAmendments, fullText) {
 (async () => {
   const manual = load(false);
   await manual.test.loadFilings();
-  assert.equal(manual.elements.filingsList.children.length, 3, "all bills and amendments visible, including unmatched: "+JSON.stringify(manual.context.self.statuses));
+  assert.equal(manual.elements.filingsList.children.length, 3, "all bills and amendments visible, including unmatched");
   manual.test.routeFilings();
   assert.equal(manual.test.state.items.length, 3);
   assert(manual.test.state.items.some(i=>i.billNumber==="S-5210" && i.relatedBill==="SF2472"));
@@ -54,12 +54,19 @@ function load(failAmendments, fullText) {
   assert(enriched.test.state.items.find(i=>i.billNumber==="HF2500").screening.reasons.includes("Research and intellectual property"), "per-document full text reaches actual screening workflow");
   assert(enriched.requests.some(u=>u.includes("iowa-text/91/HF2500.json")));
   const morning = load(false);
-  morning.test.state.rules[0].keywords=["contracts"];
   await morning.test.maybeAutoDraft();
   assert.equal(morning.test.state.items.length, 3, "morning uses the same screening");
   assert.equal(morning.drafts.length, 1);
   assert(morning.drafts[0].html.includes("S-5210"));
-  assert.equal(morning.test.reportedBills().length,0,"draft creation never marks review or delivery complete");
+  const inProgress = load(false);
+  inProgress.test.state.items = [{billNumber:"HF935"}];
+  await inProgress.test.maybeAutoDraft();
+  assert.equal(inProgress.drafts.length,0,"auto-draft never replaces an active report");
+  const fiscalMode = load(false);
+  fiscalMode.elements.requestType = {value:"fiscal-note"};
+  await fiscalMode.test.maybeAutoDraft();
+  assert.equal(fiscalMode.drafts.length,0,"morning drafting does not turn into a fiscal note request");
+  assert.equal(morning.context.Office.context.roamingSettings.get("lrr.reported"),undefined,"an unsent morning draft is not recorded as published");
   const failed = load(true);
   await failed.test.loadFilings();
   assert.equal(failed.elements.filingsList.children.length, 0);

@@ -10,7 +10,6 @@ const at = raw.lastIndexOf("})();");
 const source = raw.slice(0, at) + `
   settings = function () { return { distList: "review@example.gov" }; };
   currentDeadline = function () { return { label: "Friday", date: new Date(2026, 9, 16) }; };
-  markReported = function () {};
   restMessageId = async function () { return "original"; };
   setStatus = function (kind, text) { self.statuses.push({kind, text}); };
   self.test = { state: state, publish: publish };
@@ -20,10 +19,11 @@ function load(options = {}) {
   for (const id of ["confirmBox", "optTeams", "optEmail", "optOriginal", "optDailyReport", "publishGo", "retryFailed", "publishLog", "commentWindow"]) {
     elements[id] = { checked: id === "confirmBox" || id === "optEmail", value: "48 business hours", innerHTML: "", lines: [], appendChild(n) { this.lines.push(n.textContent); } };
   }
+  const saved = { "lrr.reported": JSON.stringify({bills:["HF0"]}) };
   const calls = { sends: [], drafts: 0, originals: 0, audits: 0, posts: 0 };
   let fail = true;
   const context = {
-    self: { statuses: [] }, Office: { onReady() {}, context: { mailbox: { userProfile: {} } } },
+    self: { statuses: [] }, Office: { onReady() {}, AsyncResultStatus: {Succeeded:"ok"}, context: { mailbox: { userProfile: {} }, roamingSettings: { get:key=>saved[key], set:(key,value)=>{saved[key]=value;}, saveAsync:cb=>cb({status:"ok"}) } } },
     document: { getElementById: id => elements[id], createElement: () => ({}) },
     GraphData: {
       getToken: options.getToken || (async () => "token"),
@@ -41,9 +41,20 @@ function load(options = {}) {
   state.site = { siteId: "site", auditListId: "audit" };
   state.reportKey = "report";
   state.items = [{ billNumber: "HF 1", brief: "Bill", routes: rules }];
-  return { publish, state, elements, calls, statuses: context.self.statuses, succeed: () => { fail = false; } };
+  return { publish, state, elements, calls, saved, statuses: context.self.statuses, succeed: () => { fail = false; } };
 }
 (async () => {
+  const draftOnly = load();
+  draftOnly.succeed();
+  draftOnly.elements.optEmail.checked = false;
+  draftOnly.elements.optDailyReport.checked = true;
+  await draftOnly.publish(false);
+  assert.equal(draftOnly.calls.drafts, 1);
+  assert.equal(draftOnly.calls.sends.length, 0);
+  assert.equal(draftOnly.saved["lrr.reported"], JSON.stringify({bills:["HF0"]}),
+    "an unsent report draft must not add bills to the reported record");
+  await draftOnly.publish(false);
+  assert.equal(draftOnly.calls.drafts, 1, "preserve same-session draft deduplication");
   const g = load();
   g.elements.optTeams.checked = g.elements.optDailyReport.checked = g.elements.optOriginal.checked = true;
   await g.publish(false);
