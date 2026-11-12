@@ -451,9 +451,9 @@
     try {
       if (!workflowModulesPromise) {
         workflowModulesPromise = (async function () {
-          var modules = [[typeof LrrStaffConfig !== "undefined", "../staff-config.js?v=20261028c"], [typeof LrrWorkflow !== "undefined", "../workflow.js?v=20261111intake"],
-            [typeof LrrWorkflowStore !== "undefined", "../workflow-store.js?v=20261029reminders"],
-            [typeof LrrWorkflowUI !== "undefined", "../workflow-ui.js?v=20261111intake"],
+          var modules = [[typeof LrrStaffConfig !== "undefined", "../staff-config.js?v=20261028c"], [typeof LrrWorkflow !== "undefined", "../workflow.js?v=20261112reviewers"],
+            [typeof LrrWorkflowStore !== "undefined", "../workflow-store.js?v=20261112reviewers"],
+            [typeof LrrWorkflowUI !== "undefined", "../workflow-ui.js?v=20261112reviewers"],
             [typeof LrrHarvest !== "undefined", "../harvest.js?v=43"],
             [typeof LrrFiscalIntake !== "undefined", "../fiscal-intake.js?v=20261111intake"],
             [typeof GraphData.authenticatedAccount === "function", "../graph.js?v=20261028c"]];

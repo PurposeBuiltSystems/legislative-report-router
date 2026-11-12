@@ -90,3 +90,13 @@ Each reply retains its source comment, author/date and attachment links. Up to f
 5. The coordinator consolidates, directors explicitly approve, and the CFO reviews only after every required division is ready. Refresh **Budget & history → Load fiscal rollup** and choose **Current fiscal responses — all stages** or **CFO-approved fiscal responses**. This action does not overwrite legacy tracker estimates or automatically publish a dashboard snapshot.
 
 Collection is explicit and runs while the Outlook router is open. It adds no Outlook manifest, Teams package, permission scope, audit columns or Power Automate flow. The Teams staff tab keeps its SharePoint-only authentication and can act on the same saved review stage. Deployment of the hosted code and an agency pilot are separate from local implementation and offline checks.
+
+## Individual reviewer completion
+
+Each division response shows the assigned reviewers with a completion count, their status and the time of each saved checkoff. Open the request in Teams or Outlook, select your division, choose **Mark my work complete**, review the current registered response, tick the confirmation and save. This records your own completion against the current document version and assignments. Existing **Request coordinator review** actions and confirmed fiscal collection also record the acting assigned reviewer's completion.
+
+During drafting and reviewer work, scheduled reminders target the assigned reviewers whose checkoffs are pending. Each reviewer has their own reminder record. After every reviewer finishes, the response moves to **Review requested** and the coordinator receives the next reminder. The coordinator can advance an available response using the existing consolidation action and the visible completion list. Director, CFO and submission handoffs continue through their saved workflow actions.
+
+A new registered response, requested changes or updated assignments require fresh checkoffs for the affected division. **Reopen my work** records the reason, returns that division to drafting and resets its approval readiness. Previous completion records remain in History. Earlier explicit reviewer handoffs are recognised from existing saved events. Older responses that already passed coordinator review show any unrecorded individual checkoffs alongside their saved approval stage.
+
+Every saved action refreshes an enabled reminder feed. **Connect automatic reminders** also refreshes existing pending assignments using the current reviewer statuses. The installed flow consumes the same SharePoint fields and recipient/day reservations.

@@ -39,7 +39,7 @@
       var revision=String(Math.max.apply(null,state.events.map(function(e){return e.order;})));
       Workflow.reminders([state],state.owner,state.config.due).forEach(function(group){group.items.forEach(function(item){
         var link=item.thread||item.source||"";if(link.length>480){link="";}
-        out.push({key:state.id+"|"+item.division,fields:{Title:item.bill,Status:"reminder-pending",ReportKey:state.id,
+        out.push({key:state.id+"|"+item.division+"|"+group.to,fields:{Title:item.bill,Status:"reminder-pending",ReportKey:state.id,
           IdempotencyKey:revision,Divisions:item.division,EmailRecipients:group.to,Error:item.due,
           SourceSubject:item.label.slice(0,240),TeamId:item.task.slice(0,240),ChannelId:link.slice(0,240),TeamsMessageId:link.slice(240)}});
       });});
@@ -51,8 +51,21 @@
     var control=reminderControl(rows);if(!control){return {enabled:false,pending:0};}
     var enabled=control.fields.Error==="enabled", desired=enabled?reminderRecords(events):[], current=rows.filter(function(r){return /^reminder-(pending|closed)$/.test((r.fields||{}).Status||"");});
     var keep=Object.create(null);
+    var desiredCounts = Object.create(null);
+    desired.forEach(function (record) {
+      var group = record.fields.ReportKey + "|" + record.fields.Divisions;
+      desiredCounts[group] = (desiredCounts[group] || 0) + 1;
+    });
     for(var i=0;i<desired.length;i++){
-      var record=desired[i],existing=current.find(function(r){return (r.fields||{}).ReportKey===record.fields.ReportKey && (r.fields||{}).Divisions===record.fields.Divisions;});
+      var record = desired[i];
+      var candidates = current.filter(function (row) {
+        var fields = row.fields || {};
+        return !keep[row.id] && fields.ReportKey === record.fields.ReportKey && fields.Divisions === record.fields.Divisions;
+      });
+      var existing = candidates.find(function (row) { return row.fields.EmailRecipients === record.fields.EmailRecipients; });
+      var group = record.fields.ReportKey + "|" + record.fields.Divisions;
+      // Preserve a legacy single-recipient row when its role passes to the next person.
+      if (!existing && desiredCounts[group] === 1 && candidates.length === 1) { existing = candidates[0]; }
       if(existing){keep[existing.id]=true;var changed=Object.keys(record.fields).some(function(k){return (existing.fields[k]||"")!==(record.fields[k]||"");});if(changed){await graph.updateListItemFields(token,site.siteId,site.auditListId,existing.id,record.fields);}}
       else{await graph.addListItem(token,site.siteId,site.auditListId,record.fields);}
     }

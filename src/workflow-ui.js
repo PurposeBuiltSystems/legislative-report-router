@@ -133,6 +133,21 @@
     function configInput(){return {bill:val('wfBill'),assembly:val('wfAssembly'),session:val('wfSession'),label:val('wfLabel'),summary:val('wfBillSummary'),type:val('wfKind'),due:val('wfDeadline'),dueSource:val('wfDeadlineSource'),source:val('wfSource'),thread:val('wfThread'),related:val('wfRelated'),cfo:val('wfCfo'),submitter:val('wfSubmitter'),divisions:val('wfAssignments').split(/\r?\n/).filter(function(x){return x.trim();}).map(function(line){var a=line.split('|').map(function(x){return x.trim();});if(a.length!==4){throw new Error('Each assignment line needs four fields separated by |.');}return {code:a[0],coordinator:a[1],director:a[2],reviewers:a[3]?a[3].split(',').map(function(x){return x.trim();}):[]};})};}
     function bindConfig(s){bind('wfSaveConfig',function(){try{save(s?'config':'create',{config:configInput()});}catch(e){info(e.message);}});}
     function newRequest(){if(busy||!writable){return;}if(editing){info('Save or discard your edits before creating another request.');return;}selected='';el('wfDetail').innerHTML=configForm(null);bindConfig(null);}
+    function reviewerStatus(state, assignment) {
+      var response = state.divisions[assignment.code];
+      var progress = LrrWorkflow.reviewerProgress(state, assignment.code);
+      if (!progress.reviewers.length) { return ''; }
+      var active = ['Assigned', 'Drafting', 'Review requested', 'Changes requested'].indexOf(response.stage) >= 0;
+      var html = '<section aria-label="Individual reviewer completion"><h5>Reviewer completion</h5><p>' +
+        progress.complete.length + ' of ' + progress.reviewers.length + ' complete for the current response version.</p><ul>';
+      progress.reviewers.forEach(function (person) {
+        var event = (response.reviewerCompletions || {})[person];
+        var complete = progress.complete.indexOf(person) >= 0;
+        var status = complete ? 'Complete — ' + event.at : active ? 'Pending' : 'Checkoff not recorded';
+        html += '<li>' + esc(person) + ' · ' + esc(status) + '</li>';
+      });
+      return html + '</ul></section>';
+    }
     function actionOptions(s,division) {
       var r=s.config.divisions.find(function(row){return row.code===division;}),v=s.divisions[division],out=[];
       var coordinator=r.coordinator===actor,director=r.director===actor,writer=coordinator||r.reviewers.indexOf(actor)>=0,cfo=s.config.type==='Fiscal data'&&s.config.cfo===actor;
@@ -140,6 +155,14 @@
       if(coordinator&&v.stage==='Review requested'){out.push(['coordinator','Consolidate response for director review']);}
       if(cfo&&s.ready&&!s.cfo&&!s.submitted){out.push(['cfo','Approve all division responses as CFO']);}
       if(s.config.type==='Fiscal data'&&s.config.submitter===actor&&s.ready&&s.cfo&&!s.submitted){out.push(['submitted','Record completed LSA submission']);}
+      var progress = LrrWorkflow.reviewerProgress(s, division);
+      if (r.reviewers.indexOf(actor) >= 0 && v.artifact) {
+        if (progress.complete.indexOf(actor) >= 0) {
+          out.push(['reviewer-reopen', 'Reopen my work']);
+        } else if (['Drafting', 'Review requested'].indexOf(v.stage) >= 0) {
+          out.push(['reviewer-done', 'Mark my work complete']);
+        }
+      }
       if(writer){out.push(['artifact','Register a draft or revised response']);if(v.stage==='Assigned'){out.push(['start','Start drafting']);}if(v.artifact&&v.stage==='Drafting'){out.push(['review','Request coordinator review']);}}
       if(v.artifact&&(coordinator||director||cfo)){out.push(['changes','Request changes to this response']);}
       out.push(['note','Add an FYI or consultation note']);if(s.owner===actor){out.push(['legislation','Record legislative progress']);}
@@ -173,12 +196,18 @@
       html+='<section aria-label="Relevant past responses"><h4>Relevant past responses</h4><p>Suggested automatically from saved bill references, keywords and code chapters across sessions. Review the original response against the current bill before reusing it. Linked document contents are not searched.</p><label>Show <select id="wfHistoryScope"><option value="all">All shared responses</option><option value="mine">My responses</option><option value="division">My divisions</option></select></label><div id="wfSuggestions"></div></section><h4>Division responses</h4>';
       c.divisions.forEach(function(r){var v=s.divisions[r.code];html+='<article class="options"><strong>'+esc(r.code)+' · '+esc(v.stage)+'</strong><p>Coordinator: '+esc(r.coordinator)+'<br>Director: '+esc(r.director)+'<br>Reviewers: '+esc(r.reviewers.join(', ')||'Coordinator only')+'</p>';
         if(v.artifact){html+='<p>Response '+esc(v.artifact.data.version)+' · registered by '+esc(v.artifact.actor)+' at '+esc(v.artifact.at)+'</p>'+v.artifact.data.links.map(function(u,i){return link(u,'Document '+(i+1));}).join(' · ');}
-        var next=v.stage==='Director review'?r.director:v.stage==='Review requested'?r.coordinator:v.stage==='Division approved'?(s.submitted?'Complete':s.ready?(c.type==='Fiscal data'?(s.cfo?c.submitter+' (record completed LSA submission)':c.cfo+' (CFO review)'):'Complete'):'Waiting for other divisions'):(r.reviewers.join(', ')||r.coordinator);html+='<p>Next: '+esc(next||'Assignment needed')+'</p></article>';});
+        html += reviewerStatus(s, r);
+        var next=v.stage==='Director review'?r.director:v.stage==='Review requested'?r.coordinator:v.stage==='Division approved'?(s.submitted?'Complete':s.ready?(c.type==='Fiscal data'?(s.cfo?c.submitter+' (record completed LSA submission)':c.cfo+' (CFO review)'):'Complete'):'Waiting for other divisions'):(r.reviewers.join(', ')||r.coordinator);
+        var progress = LrrWorkflow.reviewerProgress(s, r.code);
+        if (['Assigned', 'Drafting', 'Review requested', 'Changes requested'].indexOf(v.stage) >= 0 && progress.pending.length) {
+          next = progress.pending.join(', ');
+        }
+        html+='<p>Next: '+esc(next||'Assignment needed')+'</p></article>';});
       if(c.type==='Fiscal data'){var f=LrrWorkflow.financialSummary(s);html+='<h4>Registered fiscal detail</h4><p>Staff-entered response figures; approval stage is shown above. Revenue and expenditure changes are separate. Missing detail is not zero.</p>';Object.keys(f.groups).sort().forEach(function(key){var g=f.groups[key];html+='<p>'+esc(key)+': $'+esc(g.total.toLocaleString())+' known'+(g.unknown?' + '+g.unknown+' unknown line(s)':'')+'</p>';});html+='<p>'+f.missingDivisions+' division(s) without structured fiscal lines. Full analysis may be in the linked written response.</p>'; }
       html+='<h4>Record a workflow action</h4><label>Division <select id="wfActionDivision">'+c.divisions.map(function(r){return '<option>'+esc(r.code)+'</option>';}).join('')+'</select></label><label>Action <select id="wfAction">'+actionOptions(s,c.divisions[0].code)+'</select></label><div id="wfActionFields"></div><label><input type="checkbox" id="wfConfirm" /> I reviewed this action and the current document version(s).</label>'+button('wfSaveAction','Save action')+'<h4>History</h4><p>Intent notes and filename labels do not constitute assignment or approval.</p><div id="wfEvents"></div>';
       el('wfDetail').innerHTML=html;el('wfDetail').setAttribute('data-request',s.id);el('wfDetail').setAttribute('data-actor',actor);if(s.owner===actor){bindConfig(s);}
       el('wfHistoryScope').addEventListener('change',suggestions);suggestions();
-      var actionNames={create:'Request created',config:'Assignments or request details updated',artifact:'Response version registered',start:'Drafting started',review:'Review requested',changes:'Changes requested',coordinator:'Coordinator consolidation',director:'Director approval',cfo:'CFO approval',submitted:'Submission recorded',note:'Context note',legislation:'Legislative progress'};
+      var actionNames={create:'Request created',config:'Assignments or request details updated',artifact:'Response version registered',start:'Drafting started',review:'Review requested','reviewer-done':'Reviewer completed their work','reviewer-reopen':'Reviewer reopened their work',changes:'Changes requested',coordinator:'Coordinator consolidation',director:'Director approval',cfo:'CFO approval',submitted:'Submission recorded',note:'Context note',legislation:'Legislative progress'};
       el('wfEvents').innerHTML=s.events.slice().reverse().map(function(e){return '<details><summary>'+esc(e.at)+' · '+esc(actionNames[e.kind]||e.kind)+(s.ignoredIds.indexOf(e.id)>=0?' [not applied: concurrent edit]':'')+' · '+esc(e.division)+' · '+esc(e.actor)+'</summary>'+eventDetails(e,s)+'</details>';}).join('');
       var assigned=c.divisions.find(function(r){return r.coordinator===actor||r.director===actor||r.reviewers.indexOf(actor)>=0;});if(c.divisions.some(function(r){return r.code===remembered;})){el('wfActionDivision').value=remembered;}else if(assigned){el('wfActionDivision').value=assigned.code;}
       el('wfAction').innerHTML=actionOptions(s,val('wfActionDivision'));if(intake){el('wfAction').value='artifact';}
@@ -196,6 +225,13 @@
       if(kind==='artifact'){
         html=(intake?'<p><strong>Confirm the existing request, responding division, exact source/version and fiscal detail. Saving registers this response and requests coordinator review; no approval is inferred.</strong></p><label><input type="checkbox" id="wfIntakeNotify" checked /> Prepare an Outlook notification draft for the assigned coordinator (review and send it separately)</label>':'')+field('wfVersion','Document version label',a.version||'')+area('wfDocs','Exact document-version links (one per line)',(a.links||[]).join('\n'))+area('wfNote','Response / revision description',a.note||'');
         if(s.config.type==='Fiscal data'){html+='<details><summary>Fiscal response detail (or keep full analysis in linked form)</summary>'+area('wfSummary','Bill summary',n.summary)+area('wfBackground','Background / implementation',n.background)+area('wfAssumptions','Assumptions, including reason for no impact',n.assumptions)+area('wfImpact','Fiscal / operational impact, funds, FTE and local impacts',n.impact)+area('wfSources','Related data and sources',n.sources)+area('wfFinance','Optional financial lines — paste seven tab-separated columns: FY2027, Revenue/Expenditure, Increase/Decrease, amount or Unknown, fund, One-time/Ongoing, description',a.financialText||'')+'<p>Do not paste template zeros as confirmed estimates. Revenue and expenditure changes stay separate; these entries do not replace the required written response.</p></details>';}
+      } else if (kind === 'reviewer-done') {
+        html = '<p>Confirm that your contribution is complete for response ' + esc(a.version) +
+          '. Your checkoff will show your name and time. When every assigned reviewer finishes, the coordinator becomes next responsible.</p>' +
+          area('wfNote', 'Optional completion note', '');
+      } else if (kind === 'reviewer-reopen') {
+        html = '<p>Reopening your work returns this division response to drafting and resets its coordinator, director and CFO readiness. Earlier decisions stay in History.</p>' +
+          area('wfNote', 'Work you need to revise', '');
       }else if(kind==='note'){html='<label>Intent <select id="wfIntent"><option>FYI</option><option>Consultation</option><option>Action requested</option><option>Review requested</option><option>Approval requested</option></select></label>'+area('wfNote','Note','');}
       else if(kind==='changes'){html=area('wfNote','Changes required','');}
       else if(kind==='submitted'){html=field('wfSubmittedAt','Actual completed submission time (local time)','','datetime-local')+field('wfEvidence','Submission receipt or source message link','')+area('wfNote','Documents actually submitted','');}

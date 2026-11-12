@@ -55,6 +55,33 @@
   }
   function ordered(events) { return events.slice().sort(function (a,b) { return Number(a.order)-Number(b.order) || a.id.localeCompare(b.id); }); }
   function revision(events) { return events.map(function (e) { return e.id; }).sort().join(","); }
+  function reviewerProgress(state, division) {
+    var assignment = state.config.divisions.find(function (row) { return row.code === division; });
+    var response = state.divisions[division];
+    var reviewers = Array.from(new Set(assignment.reviewers));
+    var completions = response.reviewerCompletions || {};
+    var complete = reviewers.filter(function (person) {
+      var event = completions[person];
+      return event && response.artifact && event.data.artifact === response.artifact.id && event.data.config === state.configId;
+    });
+    return {
+      reviewers: reviewers,
+      complete: complete,
+      pending: reviewers.filter(function (person) { return complete.indexOf(person) < 0; })
+    };
+  }
+  function completeReviewer(state, division, event) {
+    var assignment = state.config.divisions.find(function (row) { return row.code === division; });
+    var response = state.divisions[division];
+    if (assignment && response.artifact && assignment.reviewers.indexOf(event.actor) >= 0) {
+      response.reviewerCompletions[event.actor] = {
+        id: event.id,
+        actor: event.actor,
+        at: event.at,
+        data: { artifact: response.artifact.id, config: state.configId, note: event.data.note || "" }
+      };
+    }
+  }
   function project(events) {
     events = ordered(events);
     var s = null, visited = [], applied = [], ignored = [];
@@ -70,13 +97,29 @@
       if (e.kind === "config") { s.config=d; s.configId=e.id; s.cfo=null; s.submitted=null; s.conflicts=[]; }
       if (e.kind === "create" || e.kind === "config") {
         s.config.divisions.forEach(function (r) { if (!s.divisions[r.code]) { s.divisions[r.code]={ stage:"Assigned", artifact:null, coordinator:null, director:null }; } });
-        Object.keys(s.divisions).forEach(function (k) { s.divisions[k].coordinator=null; s.divisions[k].director=null; s.divisions[k].stage=s.divisions[k].artifact ? "Drafting" : "Assigned"; });
+        Object.keys(s.divisions).forEach(function (k) { s.divisions[k].coordinator=null; s.divisions[k].director=null; s.divisions[k].reviewerCompletions={}; s.divisions[k].stage=s.divisions[k].artifact ? "Drafting" : "Assigned"; });
       }
       var v = s.divisions[e.division];
-      if (e.kind === "artifact" && v) { v.artifact={ id:e.id, data:d, actor:e.actor, at:e.at }; v.stage=d.requestReview ? "Review requested" : "Drafting"; v.coordinator=null; v.director=null; s.cfo=null; s.submitted=null; }
+      if (e.kind === "artifact" && v) { v.artifact={ id:e.id, data:d, actor:e.actor, at:e.at }; v.stage=d.requestReview ? "Review requested" : "Drafting"; v.reviewerCompletions={}; v.coordinator=null; v.director=null; s.cfo=null; s.submitted=null; }
       if (["start","review","changes"].indexOf(e.kind) >= 0 && v) {
         v.stage={start:"Drafting", review:"Review requested", changes:"Changes requested"}[e.kind];
         v.coordinator=null; v.director=null; s.cfo=null; s.submitted=null;
+      }
+      if (e.kind === "changes" && v) { v.reviewerCompletions = {}; }
+      if ((e.kind === "review" || (e.kind === "artifact" && d.requestReview)) && v) {
+        completeReviewer(s, e.division, e);
+      }
+      if (e.kind === "reviewer-done" && v && v.artifact && d.artifact === v.artifact.id && d.config === s.configId) {
+        completeReviewer(s, e.division, e);
+        if (!reviewerProgress(s, e.division).pending.length) { v.stage = "Review requested"; }
+      }
+      if (e.kind === "reviewer-reopen" && v) {
+        delete v.reviewerCompletions[e.actor];
+        v.stage = "Drafting";
+        v.coordinator = null;
+        v.director = null;
+        s.cfo = null;
+        s.submitted = null;
       }
       if (e.kind === "coordinator" && v) { v.coordinator=e; v.director=null; v.stage="Director review"; s.cfo=null; s.submitted=null; }
       if (e.kind === "director" && v) { v.director=e; v.stage="Division approved"; s.cfo=null; s.submitted=null; }
@@ -104,6 +147,23 @@
     else if (kind === "artifact") { if (!writer) { fail("Only assigned reviewers or the division coordinator can register a response version."); } d=artifact(input); if(d.intake && s.appliedEvents.some(function(e){return e.kind==="artifact" && e.data.intake && e.data.intake.key===d.intake.key && e.data.intake.fingerprint===d.intake.fingerprint;})){fail("This collected reply was already registered for this request. Check history; collect again for an edited reply.");} }
     else if (kind === "start") { if (!writer) { fail("Only assigned reviewers or the coordinator can start division work."); } }
     else if (kind === "review") { if (!writer || !v.artifact) { fail("An assigned reviewer must register a response version before requesting review."); } if (v.stage === "Changes requested") { fail("Register a revised response version before requesting review again."); } }
+    else if (kind === "reviewer-done" || kind === "reviewer-reopen") {
+      if (!r || r.reviewers.indexOf(actor) < 0 || !v.artifact) {
+        fail("An assigned reviewer must open a registered response version before recording their own completion.");
+      }
+      var progress = reviewerProgress(s, division);
+      var finished = progress.complete.indexOf(actor) >= 0;
+      if (kind === "reviewer-done") {
+        if (finished) { fail("Your work is already marked complete for this response version."); }
+        if (["Drafting", "Review requested"].indexOf(v.stage) < 0) {
+          fail("Record completion while the response is being drafted or reviewed. Register a revised response after changes are requested.");
+        }
+      } else {
+        if (!finished) { fail("Your work is already pending for this response version."); }
+        if (!text(input.note)) { fail("Describe the work you need to revise."); }
+      }
+      d = { artifact: v.artifact.id, config: s.configId, note: text(input.note) };
+    }
     else if (kind === "changes") { if (!(coordinator || director || (s.config.type === "Fiscal data" && actor===s.config.cfo)) || !v || !v.artifact) { fail("Only an assigned coordinator, director or CFO can request changes to a response."); } d.note=text(input.note); if (!d.note) { fail("Describe the changes needed."); } }
     else if (kind === "coordinator") { if (!coordinator || v.stage!=="Review requested" || !v.artifact) { fail("The assigned coordinator must consolidate the current response after review is requested."); } d={ artifact:v.artifact.id, config:s.configId }; }
     else if (kind === "director") { if (!director || !v.coordinator || v.stage!=="Director review" || !v.artifact) { fail("The assigned director can approve only the current consolidated response."); } d={ artifact:v.artifact.id, config:s.configId, coordinator:v.coordinator.id }; }
@@ -128,6 +188,13 @@
       if(s.config.type==="Fiscal data"&&s.ready){if(actor===s.owner||actor===s.config.cfo){add(s.cfo?s.config.submitter:s.config.cfo,s,"All divisions",s.cfo?"Record completed LSA submission when actually submitted":"Review current division responses for CFO approval");}return;}
       s.config.divisions.forEach(function(r){
         var v=s.divisions[r.code];if(v.director||!(actor===s.owner||actor===r.coordinator)){return;}
+        var progress = reviewerProgress(s, r.code);
+        if (v.stage !== "Director review" && progress.pending.length) {
+          progress.pending.forEach(function (person) {
+            add(person, s, r.code, v.stage === "Changes requested" ? "Revise your contribution and confirm the updated response" : "Complete your contribution and mark your work complete");
+          });
+          return;
+        }
         var to=v.stage==="Director review"?r.director:r.coordinator;
         add(to,s,r.code,v.stage==="Director review"?"Review the current consolidated response":"Coordinate the current division response");
       });
@@ -171,6 +238,6 @@
     });
     return out.sort(function(a,b){return b.score-a.score||b.event.at.localeCompare(a.event.at)||a.event.id.localeCompare(b.event.id);}).slice(0,10);
   }
-  var api={relevantResponses:relevantResponses,reminders:reminders,config:config, finance:finance, artifact:artifact, project:project, plan:plan, revision:revision, due:due, email:email, financialSummary:financialSummary};
+  var api={reviewerProgress:reviewerProgress,relevantResponses:relevantResponses,reminders:reminders,config:config, finance:finance, artifact:artifact, project:project, plan:plan, revision:revision, due:due, email:email, financialSummary:financialSummary};
   if (typeof module!=="undefined" && module.exports) { module.exports=api; } else { root.LrrWorkflow=api; }
 })(typeof self!=="undefined" ? self : this);
